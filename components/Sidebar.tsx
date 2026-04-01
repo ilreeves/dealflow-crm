@@ -27,12 +27,12 @@ export default function Sidebar({ user }: SidebarProps) {
   ]
 
   return (
-    <aside className="w-56 flex flex-col bg-slate-900 text-slate-300 shrink-0">
+    <aside className="w-56 flex flex-col text-slate-300 shrink-0" style={{ backgroundColor: '#023a51' }}>
       {/* Logo */}
-      <div className="px-4 py-5 border-b border-slate-800">
+      <div className="px-4 py-5 border-b" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-white flex items-center justify-center shrink-0">
-            <TrendingUp className="w-4 h-4 text-slate-900" />
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: '#e98925' }}>
+            <TrendingUp className="w-4 h-4 text-white" />
           </div>
           <span className="font-semibold text-white text-sm">Solas Dealflow</span>
         </div>
@@ -47,9 +47,10 @@ export default function Sidebar({ user }: SidebarProps) {
             className={cn(
               'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition',
               pathname === href
-                ? 'bg-slate-800 text-white'
-                : 'hover:bg-slate-800 hover:text-white'
+                ? 'text-white'
+                : 'hover:text-white'
             )}
+            style={pathname === href ? { backgroundColor: 'rgba(233, 137, 37, 0.15)', color: '#e98925' } : undefined}
           >
             <Icon className="w-4 h-4" />
             {label}
@@ -58,7 +59,7 @@ export default function Sidebar({ user }: SidebarProps) {
       </nav>
 
       {/* User */}
-      <div className="px-4 py-4 border-t border-slate-800">
+      <div className="px-4 py-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
         <div className="mb-2">
           <p className="text-xs font-medium text-white truncate">{user.name || user.email}</p>
           <p className="text-xs text-slate-500 truncate">{user.email}</p>

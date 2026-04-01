@@ -68,19 +68,22 @@ export default function PipelineBoard({ initialDeals }: Props) {
             placeholder="Search deals…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 w-52"
+            className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 w-52"
+            style={{ '--tw-ring-color': '#e98925' } as React.CSSProperties}
           />
           <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
             <button
               onClick={() => setView('board')}
-              className={`p-1.5 ${view === 'board' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+              className={`p-1.5 ${view === 'board' ? 'text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+              style={view === 'board' ? { backgroundColor: '#e98925' } : undefined}
               title="Board view"
             >
               <Columns3 className="w-4 h-4" />
             </button>
             <button
               onClick={() => setView('list')}
-              className={`p-1.5 ${view === 'list' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+              className={`p-1.5 ${view === 'list' ? 'text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+              style={view === 'list' ? { backgroundColor: '#e98925' } : undefined}
               title="List view"
             >
               <LayoutList className="w-4 h-4" />
@@ -88,7 +91,8 @@ export default function PipelineBoard({ initialDeals }: Props) {
           </div>
           <button
             onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg transition hover:opacity-90"
+            style={{ backgroundColor: '#e98925' }}
           >
             <Plus className="w-4 h-4" />
             Add Deal

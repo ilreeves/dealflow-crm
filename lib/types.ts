@@ -21,12 +21,12 @@ export const DEAL_STAGES: DealStage[] = [
 
 export const STAGE_COLORS: Record<DealStage, { bg: string; text: string; border: string }> = {
   'Sourced':       { bg: 'bg-slate-100',   text: 'text-slate-700',  border: 'border-slate-300' },
-  'Screening':     { bg: 'bg-blue-100',    text: 'text-blue-700',   border: 'border-blue-300' },
+  'Screening':     { bg: 'bg-[#023a51]/10', text: 'text-[#023a51]',  border: 'border-[#023a51]/30' },
   'First Meeting': { bg: 'bg-indigo-100',  text: 'text-indigo-700', border: 'border-indigo-300' },
   'Diligence':     { bg: 'bg-purple-100',  text: 'text-purple-700', border: 'border-purple-300' },
-  'IC':            { bg: 'bg-orange-100',  text: 'text-orange-700', border: 'border-orange-300' },
+  'IC':            { bg: 'bg-[#e98925]/15', text: 'text-[#e98925]',  border: 'border-[#e98925]/30' },
   'Term Sheet':    { bg: 'bg-yellow-100',  text: 'text-yellow-700', border: 'border-yellow-300' },
-  'Closed Won':    { bg: 'bg-green-100',   text: 'text-green-700',  border: 'border-green-300' },
+  'Closed Won':    { bg: 'bg-[#5ba200]/15', text: 'text-[#5ba200]',  border: 'border-[#5ba200]/30' },
   'Passed':        { bg: 'bg-red-100',     text: 'text-red-700',    border: 'border-red-300' },
 }
 

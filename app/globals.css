@@ -3,6 +3,9 @@
 :root {
   --background: #f8fafc;
   --foreground: #0f172a;
+  --brand-green: #5ba200;
+  --brand-orange: #e98925;
+  --brand-blue: #023a51;
 }
 
 body {
