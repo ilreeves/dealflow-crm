@@ -5,7 +5,7 @@ export type DealStage =
   | 'Diligence'
   | 'IC'
   | 'Term Sheet'
-  | 'Closed Won'
+  | 'Invested'
   | 'Passed'
 
 export const DEAL_STAGES: DealStage[] = [
@@ -15,7 +15,7 @@ export const DEAL_STAGES: DealStage[] = [
   'Diligence',
   'IC',
   'Term Sheet',
-  'Closed Won',
+  'Invested',
   'Passed',
 ]
 
@@ -26,7 +26,7 @@ export const STAGE_COLORS: Record<DealStage, { bg: string; text: string; border:
   'Diligence':     { bg: 'bg-purple-100',  text: 'text-purple-700', border: 'border-purple-300' },
   'IC':            { bg: 'bg-orange-100',  text: 'text-orange-700', border: 'border-orange-300' },
   'Term Sheet':    { bg: 'bg-yellow-100',  text: 'text-yellow-700', border: 'border-yellow-300' },
-  'Closed Won':    { bg: 'bg-green-100',   text: 'text-green-700',  border: 'border-green-300' },
+  'Invested':    { bg: 'bg-green-100',   text: 'text-green-700',  border: 'border-green-300' },
   'Passed':        { bg: 'bg-red-100',     text: 'text-red-700',    border: 'border-red-300' },
 }
 
