@@ -248,7 +248,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
           <button
             onClick={handleSubmit as unknown as React.MouseEventHandler}
             disabled={loading}
-            className="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 disabled:opacity-50 transition"
+            className="px-4 py-2 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition" style={{backgroundColor: "#023a51"}}
           >
             {loading ? 'Saving…' : deal ? 'Save Changes' : 'Add Deal'}
           </button>

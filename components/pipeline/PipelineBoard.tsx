@@ -71,8 +71,9 @@ export default function PipelineBoard({ initialDeals }: Props) {
               <button
                 key={cat}
                 onClick={() => setCategory(cat)}
+                style={category === cat ? {color: '#5ba200'} : {}}
                 className={`px-3 py-1 text-sm font-medium rounded-md transition ${
-                  category === cat ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  category === cat ? 'bg-white shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
                 {cat}
@@ -104,7 +105,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
           </div>
           <button
             onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg transition" style={{backgroundColor: "#e98925"}}
           >
             <Plus className="w-4 h-4" />
             Add Deal
