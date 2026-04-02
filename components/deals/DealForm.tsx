@@ -19,6 +19,9 @@ const CORE_FIELDS = [
   { name: 'lead_partner', label: 'Lead Partner', type: 'text' },
   { name: 'founders', label: 'Founder(s)', type: 'text' },
   { name: 'source', label: 'Source', type: 'text' },
+  { name: 'series', label: 'Series', type: 'text' },
+  { name: 'current_fundraise', label: 'Current Fundraise', type: 'text' },
+  { name: 'fundraising_to_date', label: 'Fundraising to Date', type: 'text' },
 ]
 
 export default function DealForm({ deal, onClose, onSaved }: Props) {
@@ -37,6 +40,9 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
     source: deal?.source ?? '',
     stage: (deal?.stage ?? 'Sourced') as DealStage,
     category: deal?.category ?? '' as string,
+    series: deal?.series ?? '',
+    current_fundraise: deal?.current_fundraise ?? '',
+    fundraising_to_date: deal?.fundraising_to_date ?? '',
     description: deal?.description ?? '',
     custom_fields: deal?.custom_fields ?? {} as Record<string, unknown>,
   })
@@ -76,6 +82,9 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
       source: form.source || null,
       stage: form.stage,
       category: form.category || null,
+      series: (form as Record<string, unknown>)['series'] as string || null,
+      current_fundraise: (form as Record<string, unknown>)['current_fundraise'] as string || null,
+      fundraising_to_date: (form as Record<string, unknown>)['fundraising_to_date'] as string || null,
       description: form.description || null,
       custom_fields: form.custom_fields,
     }

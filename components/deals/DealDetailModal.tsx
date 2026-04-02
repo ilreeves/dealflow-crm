@@ -190,6 +190,9 @@ function OverviewTab({ deal }: { deal: Deal }) {
     { icon: User, label: 'Lead Partner', value: deal.lead_partner },
     { icon: User, label: 'Founders', value: deal.founders },
     { icon: Tag, label: 'Source', value: deal.source },
+    { icon: Tag, label: 'Series', value: deal.series },
+    { icon: DollarSign, label: 'Current Fundraise', value: deal.current_fundraise },
+    { icon: DollarSign, label: 'Fundraising to Date', value: deal.fundraising_to_date },
   ]
 
   const customEntries = Object.entries(deal.custom_fields ?? {}).filter(([, v]) => v !== null && v !== '')

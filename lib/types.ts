@@ -55,6 +55,9 @@ export interface Deal {
   website: string | null
   description: string | null
   category: 'Devices' | 'Drugs' | null
+  current_fundraise: string | null
+  fundraising_to_date: string | null
+  series: string | null
   custom_fields: Record<string, unknown>
   created_by: string | null
   created_at: string
