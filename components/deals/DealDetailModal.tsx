@@ -193,6 +193,7 @@ function OverviewTab({ deal }: { deal: Deal }) {
     { icon: Tag, label: 'Series', value: deal.series },
     { icon: DollarSign, label: 'Current Fundraise', value: deal.current_fundraise },
     { icon: DollarSign, label: 'Fundraising to Date', value: deal.fundraising_to_date },
+    { icon: DollarSign, label: 'Current Valuation', value: deal.current_valuation },
   ]
 
   const customEntries = Object.entries(deal.custom_fields ?? {}).filter(([, v]) => v !== null && v !== '')

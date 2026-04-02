@@ -53,6 +53,12 @@ export default function DealCard({ deal, onUpdated, onDeleted }: Props) {
             <span className="truncate">{deal.check_size}</span>
           </div>
         )}
+        {deal.current_valuation && (
+          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <DollarSign className="w-3 h-3 shrink-0" />
+            <span className="truncate">Val: {deal.current_valuation}</span>
+          </div>
+        )}
         {deal.current_fundraise && (
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
             <DollarSign className="w-3 h-3 shrink-0" />

@@ -58,6 +58,7 @@ export interface Deal {
   current_fundraise: string | null
   fundraising_to_date: string | null
   series: string | null
+  current_valuation: string | null
   custom_fields: Record<string, unknown>
   created_by: string | null
   created_at: string

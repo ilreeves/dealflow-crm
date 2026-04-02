@@ -21,6 +21,7 @@ const CORE_FIELDS = [
   { name: 'source', label: 'Source', type: 'text' },
   { name: 'series', label: 'Series', type: 'text' },
   { name: 'current_fundraise', label: 'Current Fundraise', type: 'text' },
+  { name: 'current_valuation', label: 'Current Valuation', type: 'text' },
   { name: 'fundraising_to_date', label: 'Fundraising to Date', type: 'text' },
 ]
 
@@ -43,6 +44,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
     series: deal?.series ?? '',
     current_fundraise: deal?.current_fundraise ?? '',
     fundraising_to_date: deal?.fundraising_to_date ?? '',
+    current_valuation: deal?.current_valuation ?? '',
     description: deal?.description ?? '',
     custom_fields: deal?.custom_fields ?? {} as Record<string, unknown>,
   })
@@ -85,6 +87,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
       series: (form as Record<string, unknown>)['series'] as string || null,
       current_fundraise: (form as Record<string, unknown>)['current_fundraise'] as string || null,
       fundraising_to_date: (form as Record<string, unknown>)['fundraising_to_date'] as string || null,
+      current_valuation: (form as Record<string, unknown>)['current_valuation'] as string || null,
       description: form.description || null,
       custom_fields: form.custom_fields,
     }
