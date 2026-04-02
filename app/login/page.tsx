@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 
@@ -34,11 +35,16 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl mb-4" style={{backgroundColor: "#023a51"}}>
-            <span className="text-white font-bold text-lg">S</span>
+          <div className="flex justify-center mb-5">
+            <Image
+              src="/solas-horizontal.png"
+              alt="Solas"
+              width={180}
+              height={60}
+              className="object-contain"
+            />
           </div>
-          <h1 className="text-2xl font-semibold text-slate-900">Solas Dealflow</h1>
-          <p className="text-slate-500 mt-1 text-sm">Sign in to your account</p>
+          <p className="text-slate-500 text-sm">Sign in to your account</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
