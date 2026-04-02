@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import Link from 'next/link'
 
 
 export default function LoginPage() {
@@ -70,6 +71,12 @@ export default function LoginPage() {
                 className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition"
                 placeholder="••••••••"
               />
+            </div>
+
+            <div className="text-right -mt-2">
+              <Link href="/forgot-password" className="text-xs text-slate-500 hover:text-slate-900 transition">
+                Forgot password?
+              </Link>
             </div>
 
             {error && (
