@@ -18,13 +18,16 @@ export default function PipelineBoard({ initialDeals }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [view, setView] = useState<'board' | 'list'>('board')
   const [search, setSearch] = useState('')
+  const [category, setCategory] = useState<'All' | 'Devices' | 'Drugs'>('All')
   const supabase = createClient()
 
-  const filteredDeals = deals.filter((d) =>
-    d.name.toLowerCase().includes(search.toLowerCase()) ||
-    (d.sector?.toLowerCase() ?? '').includes(search.toLowerCase()) ||
-    (d.lead_partner?.toLowerCase() ?? '').includes(search.toLowerCase())
-  )
+  const filteredDeals = deals.filter((d) => {
+    const matchesSearch = d.name.toLowerCase().includes(search.toLowerCase()) ||
+      (d.sector?.toLowerCase() ?? '').includes(search.toLowerCase()) ||
+      (d.lead_partner?.toLowerCase() ?? '').includes(search.toLowerCase())
+    const matchesCategory = category === 'All' || d.category === category
+    return matchesSearch && matchesCategory
+  })
 
   const dealsByStage = DEAL_STAGES.reduce((acc, stage) => {
     acc[stage] = filteredDeals.filter((d) => d.stage === stage)
@@ -63,6 +66,19 @@ export default function PipelineBoard({ initialDeals }: Props) {
           <p className="text-sm text-slate-500">{deals.length} deals</p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg">
+            {(['All', 'Devices', 'Drugs'] as const).map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setCategory(cat)}
+                className={`px-3 py-1 text-sm font-medium rounded-md transition ${
+                  category === cat ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
           <input
             type="text"
             placeholder="Search deals…"

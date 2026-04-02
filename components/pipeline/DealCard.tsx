@@ -22,6 +22,14 @@ export default function DealCard({ deal, onUpdated, onDeleted }: Props) {
         className="bg-white rounded-lg border border-slate-200 p-3 cursor-pointer hover:border-slate-300 hover:shadow-sm transition-all"
       >
         <div className="flex items-start justify-between gap-2 mb-2">
+          <h3 className="text-sm font-semibold text-slate-900 leading-tight flex-1">{deal.name}</h3>
+          {deal.category && (
+            <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full shrink-0 ${
+              deal.category === 'Devices' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+            }`}>
+              {deal.category}
+            </span>
+          )}
           <h3 className="text-sm font-semibold text-slate-900 leading-tight">{deal.name}</h3>
         </div>
 

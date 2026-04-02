@@ -36,6 +36,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
     founders: deal?.founders ?? '',
     source: deal?.source ?? '',
     stage: (deal?.stage ?? 'Sourced') as DealStage,
+    category: deal?.category ?? '' as string,
     description: deal?.description ?? '',
     custom_fields: deal?.custom_fields ?? {} as Record<string, unknown>,
   })
@@ -74,6 +75,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
       founders: form.founders || null,
       source: form.source || null,
       stage: form.stage,
+      category: form.category || null,
       description: form.description || null,
       custom_fields: form.custom_fields,
     }
@@ -121,6 +123,27 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
+          </div>
+
+          {/* Category */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Category</label>
+            <div className="flex gap-2">
+              {['Devices', 'Drugs'].map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setField('category', form.category === cat ? '' : cat)}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${
+                    form.category === cat
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Core fields */}

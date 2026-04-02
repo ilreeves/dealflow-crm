@@ -54,6 +54,7 @@ export interface Deal {
   source: string | null
   website: string | null
   description: string | null
+  category: 'Devices' | 'Drugs' | null
   custom_fields: Record<string, unknown>
   created_by: string | null
   created_at: string
