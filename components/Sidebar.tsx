@@ -33,7 +33,7 @@ export default function Sidebar({ user }: SidebarProps) {
       <div className="px-4 py-5 border-b border-slate-800">
         <div className="flex items-center gap-2.5">
           <Image
-            src="/solas-orb.png"
+            src="/solas-orb-white.gif"
             alt="Solas"
             width={28}
             height={28}
