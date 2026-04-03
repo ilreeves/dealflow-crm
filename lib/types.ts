@@ -49,6 +49,7 @@ export interface Deal {
   stage: DealStage
   sector: string | null
   check_size: string | null
+  clinical_stage: string | null
   lead_partner: string | null
   founders: string | null
   source: string | null

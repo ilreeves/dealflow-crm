@@ -186,7 +186,7 @@ function OverviewTab({ deal }: { deal: Deal }) {
   const fields = [
     { icon: Globe, label: 'Website', value: deal.website, href: deal.website ?? undefined },
     { icon: Building2, label: 'Sector', value: deal.sector },
-    { icon: DollarSign, label: 'Check Size', value: deal.check_size },
+    { icon: Tag, label: 'Clinical Stage', value: deal.clinical_stage },
     { icon: User, label: 'Lead Partner', value: deal.lead_partner },
     { icon: User, label: 'Founders', value: deal.founders },
     { icon: Tag, label: 'Source', value: deal.source },
