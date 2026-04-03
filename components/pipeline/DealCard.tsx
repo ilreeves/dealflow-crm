@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Deal, STAGE_COLORS } from '@/lib/types'
-import { Building2, User, DollarSign } from 'lucide-react'
+import { Building2, User, DollarSign, FlaskConical } from 'lucide-react'
 import DealDetailModal from '@/components/deals/DealDetailModal'
 
 interface Props {
@@ -50,6 +50,13 @@ export default function DealCard({ deal, onUpdated, onDeleted }: Props) {
           <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
             <DollarSign className="w-3 h-3 shrink-0" />
             <span className="truncate">Val: {deal.current_valuation}</span>
+          </div>
+        )}
+
+        {deal.clinical_stage && (
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
+            <FlaskConical className="w-3 h-3 shrink-0" />
+            <span className="truncate">{deal.clinical_stage}</span>
           </div>
         )}
 
