@@ -1,15 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Pencil, Trash2, Globe, Building2, User, DollarSign, Tag, ArrowRight } from 'lucide-react'
+import { X, Pencil, Trash2, Globe, Building2, User, DollarSign, Tag, Mail } from 'lucide-react'
 import { Deal, DEAL_STAGES, STAGE_COLORS } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
 import DealForm from './DealForm'
 import FileManager from './FileManager'
 import NotesList from './NotesList'
+import MeetingsList from './MeetingsList'
 
-type Tab = 'overview' | 'files' | 'notes'
+type Tab = 'overview' | 'files' | 'notes' | 'meetings'
 
 interface Props {
   deal: Deal
@@ -55,6 +56,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'overview', label: 'Overview' },
+    { key: 'meetings', label: 'Meetings' },
     { key: 'files', label: 'Files' },
     { key: 'notes', label: 'Notes' },
   ]
@@ -103,7 +105,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
 
             {/* Stage changer */}
             <div className="flex items-center gap-1 mt-3 flex-wrap">
-              {DEAL_STAGES.map((stage, i) => {
+              {DEAL_STAGES.map((stage) => {
                 const sc = STAGE_COLORS[stage]
                 const isActive = deal.stage === stage
                 return (
@@ -143,6 +145,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
           {/* Content */}
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {tab === 'overview' && <OverviewTab deal={deal} />}
+            {tab === 'meetings' && <MeetingsList dealId={deal.id} />}
             {tab === 'files' && <FileManager dealId={deal.id} />}
             {tab === 'notes' && <NotesList dealId={deal.id} />}
           </div>
@@ -185,6 +188,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
 function OverviewTab({ deal }: { deal: Deal }) {
   const fields = [
     { icon: Globe, label: 'Website', value: deal.website, href: deal.website ?? undefined },
+    { icon: Mail, label: 'Contact Email', value: deal.contact_email, href: deal.contact_email ? `mailto:${deal.contact_email}` : undefined },
     { icon: Building2, label: 'Sector', value: deal.sector },
     { icon: Tag, label: 'Clinical Stage', value: deal.clinical_stage },
     { icon: User, label: 'Lead Partner', value: deal.lead_partner },
