@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
-import { Plus, LayoutList, Columns3 } from 'lucide-react'
+import { Plus, LayoutList, Columns3, ChevronRight } from 'lucide-react'
 import { Deal, DealStage, DEAL_STAGES, STAGE_COLORS } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import DealCard from './DealCard'
@@ -19,6 +19,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
   const [view, setView] = useState<'board' | 'list'>('board')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<'All' | 'Devices' | 'Drugs'>('All')
+  const [collapsedStages, setCollapsedStages] = useState<Set<DealStage>>(new Set(['Passed']))
   const supabase = createClient()
 
   const filteredDeals = deals.filter((d) => {
@@ -43,6 +44,18 @@ export default function PipelineBoard({ initialDeals }: Props) {
 
     await supabase.from('deals').update({ stage: newStage }).eq('id', draggableId)
   }, [supabase])
+
+  function toggleCollapse(stage: DealStage) {
+    setCollapsedStages((prev) => {
+      const next = new Set(prev)
+      if (next.has(stage)) {
+        next.delete(stage)
+      } else {
+        next.add(stage)
+      }
+      return next
+    })
+  }
 
   function handleDealCreated(deal: Deal) {
     setDeals((prev) => [deal, ...prev])
@@ -121,14 +134,51 @@ export default function PipelineBoard({ initialDeals }: Props) {
               {DEAL_STAGES.map((stage) => {
                 const colors = STAGE_COLORS[stage]
                 const stageDeals = dealsByStage[stage]
+                const isCollapsed = collapsedStages.has(stage)
+
+                if (isCollapsed) {
+                  return (
+                    <Droppable droppableId={stage} key={stage}>
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.droppableProps}
+                          onClick={() => toggleCollapse(stage)}
+                          title={`${stage} (${stageDeals.length})`}
+                          className={`flex flex-col items-center justify-between w-10 shrink-0 rounded-xl px-2 py-3 cursor-pointer transition-colors select-none ${
+                            snapshot.isDraggingOver ? 'bg-slate-200' : 'bg-slate-100 hover:bg-slate-200'
+                          }`}
+                        >
+                          <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span
+                            className="text-xs font-semibold text-slate-500 uppercase tracking-wide"
+                            style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                          >
+                            {stage}
+                          </span>
+                          <span className="text-xs font-medium text-slate-400">{stageDeals.length}</span>
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
+                  )
+                }
+
                 return (
                   <div key={stage} className="flex flex-col w-64 shrink-0">
-                    <div className="flex items-center justify-between mb-2 px-1">
+                    <div
+                      className="flex items-center justify-between mb-2 px-1 cursor-pointer group"
+                      onClick={() => toggleCollapse(stage)}
+                      title="Collapse column"
+                    >
                       <div className="flex items-center gap-2">
                         <span className={`inline-block w-2 h-2 rounded-full ${colors.bg.replace('bg-', 'bg-').replace('-100', '-400')}`} />
                         <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">{stage}</span>
                       </div>
-                      <span className="text-xs text-slate-400 font-medium">{stageDeals.length}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-slate-400 font-medium">{stageDeals.length}</span>
+                        <ChevronRight className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity rotate-90" />
+                      </div>
                     </div>
                     <Droppable droppableId={stage}>
                       {(provided, snapshot) => (
