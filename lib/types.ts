@@ -9,6 +9,7 @@ export type DealStage =
   | 'Passed'
 
 export const DEAL_STAGES: DealStage[] = [
+  'Passed',
   'Sourced',
   'First Meeting',
   'Science Committee',
@@ -16,7 +17,6 @@ export const DEAL_STAGES: DealStage[] = [
   'Investment Committee',
   'Term Sheet',
   'Invested',
-  'Passed',
 ]
 
 export const STAGE_COLORS: Record<DealStage, { bg: string; text: string; border: string }> = {
