@@ -165,7 +165,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
                 }
 
                 return (
-                  <div key={stage} className={`flex flex-col shrink-0 ${stage === 'Passed' ? 'w-56' : 'w-64'}`}>
+                  <div key={stage} className={`flex flex-col shrink-0 h-full ${stage === 'Passed' ? 'w-56' : 'w-64'}`}>
                     <div
                       className="flex items-center justify-between mb-2 px-1 cursor-pointer group"
                       onClick={() => toggleCollapse(stage)}
@@ -185,7 +185,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
                         <div
                           ref={provided.innerRef}
                           {...provided.droppableProps}
-                          className={`kanban-column flex-1 rounded-xl p-2 space-y-2 transition-colors ${
+                          className={`kanban-column flex-1 min-h-0 overflow-y-auto rounded-xl p-2 space-y-2 transition-colors ${
                             snapshot.isDraggingOver ? 'bg-slate-200' : 'bg-slate-100'
                           }`}
                         >
