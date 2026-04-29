@@ -165,7 +165,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
                 }
 
                 return (
-                  <div key={stage} className="flex flex-col w-64 shrink-0">
+                  <div key={stage} className={`flex flex-col shrink-0 ${stage === 'Passed' ? 'w-56' : 'w-64'}`}>
                     <div
                       className="flex items-center justify-between mb-2 px-1 cursor-pointer group"
                       onClick={() => toggleCollapse(stage)}
@@ -202,6 +202,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
                                     deal={deal}
                                     onUpdated={handleDealUpdated}
                                     onDeleted={handleDealDeleted}
+                                    compact={stage === 'Passed'}
                                   />
                                 </div>
                               )}
