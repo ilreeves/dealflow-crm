@@ -74,6 +74,13 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text}`}>
                     {deal.stage}
                   </span>
+                  {deal.category && (
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      deal.category === 'Devices' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                    }`}>
+                      {deal.category}
+                    </span>
+                  )}
                   {deal.sector && (
                     <span className="text-xs text-slate-500">{deal.sector}</span>
                   )}
