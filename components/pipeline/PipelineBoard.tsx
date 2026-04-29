@@ -31,7 +31,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
   })
 
   const dealsByStage = DEAL_STAGES.reduce((acc, stage) => {
-    acc[stage] = filteredDeals.filter((d) => d.stage === stage)
+    acc[stage] = filteredDeals.filter((d) => d.stage === stage).sort((a, b) => a.name.localeCompare(b.name))
     return acc
   }, {} as Record<DealStage, Deal[]>)
 
