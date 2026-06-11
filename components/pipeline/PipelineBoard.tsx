@@ -9,6 +9,7 @@ import { logActivity } from '@/lib/activity'
 import DealCard from './DealCard'
 import DealForm from '@/components/deals/DealForm'
 import DealsTable from './DealsTable'
+import PassReasonModal from '@/components/deals/PassReasonModal'
 
 interface Props {
   initialDeals: Deal[]
@@ -22,6 +23,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
   const [category, setCategory] = useState<'All' | 'Devices' | 'Drugs'>('All')
   const [collapsedStages, setCollapsedStages] = useState<Set<DealStage>>(new Set(['Passed']))
   const [actorName, setActorName] = useState<string | null>(null)
+  const [pendingPass, setPendingPass] = useState<{ id: string; name: string; fromStage: DealStage } | null>(null)
   const [isMobile, setIsMobile] = useState(false)
   const supabase = createClient()
 
@@ -56,7 +58,29 @@ export default function PipelineBoard({ initialDeals }: Props) {
     return acc
   }, {} as Record<DealStage, Deal[]>)
 
-  const handleDragEnd = useCallback(async (result: DropResult) => {
+  const moveDeal = useCallback(async (dealId: string, fromStage: DealStage, newStage: DealStage, passReason?: string) => {
+    const deal = deals.find((d) => d.id === dealId)
+    if (!deal) return
+
+    const now = new Date().toISOString()
+    setDeals((prev) => prev.map((d) => d.id === dealId ? { ...d, stage: newStage, stage_entered_at: now } : d))
+
+    await supabase.from('deals').update({ stage: newStage, stage_entered_at: now }).eq('id', dealId)
+    const details = passReason ? `${fromStage} \u2192 ${newStage}: ${passReason}` : `${fromStage} \u2192 ${newStage}`
+    await logActivity(dealId, deal.name, 'Stage changed', details, actorName)
+
+    if (passReason) {
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.from('deal_notes').insert({
+        deal_id: dealId,
+        content: `Passed: ${passReason}`,
+        author_id: user?.id ?? null,
+        author_name: actorName,
+      })
+    }
+  }, [supabase, deals, actorName])
+
+  const handleDragEnd = useCallback((result: DropResult) => {
     const { destination, source, draggableId } = result
     if (!destination || destination.droppableId === source.droppableId) return
 
@@ -64,12 +88,12 @@ export default function PipelineBoard({ initialDeals }: Props) {
     const deal = deals.find((d) => d.id === draggableId)
     if (!deal) return
 
-    const now = new Date().toISOString()
-    setDeals((prev) => prev.map((d) => d.id === draggableId ? { ...d, stage: newStage, stage_entered_at: now } : d))
-
-    await supabase.from('deals').update({ stage: newStage, stage_entered_at: now }).eq('id', draggableId)
-    await logActivity(draggableId, deal.name, 'Stage changed', `${deal.stage} \u2192 ${newStage}`, actorName)
-  }, [supabase, deals, actorName])
+    if (newStage === 'Passed') {
+      setPendingPass({ id: draggableId, name: deal.name, fromStage: deal.stage })
+      return
+    }
+    moveDeal(draggableId, deal.stage, newStage)
+  }, [deals, moveDeal])
 
   function toggleCollapse(stage: DealStage) {
     setCollapsedStages((prev) => {
@@ -256,6 +280,17 @@ export default function PipelineBoard({ initialDeals }: Props) {
         <DealForm
           onClose={() => setShowForm(false)}
           onSaved={handleDealCreated}
+        />
+      )}
+
+      {pendingPass && (
+        <PassReasonModal
+          dealName={pendingPass.name}
+          onConfirm={(reason) => {
+            moveDeal(pendingPass.id, pendingPass.fromStage, 'Passed', reason)
+            setPendingPass(null)
+          }}
+          onCancel={() => setPendingPass(null)}
         />
       )}
     </div>

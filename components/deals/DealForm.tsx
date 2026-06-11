@@ -47,6 +47,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDefinition[]>([])
+  const [passReason, setPassReason] = useState('')
 
   const [form, setForm] = useState({
     name: deal?.name ?? '',
@@ -86,9 +87,15 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
     }))
   }
 
+  const passReasonRequired = form.stage === 'Passed' && (!deal || deal.stage !== 'Passed')
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.name.trim()) return
+    if (passReasonRequired && !passReason.trim()) {
+      setError('Please add a note on why we passed before saving.')
+      return
+    }
     setLoading(true)
     setError('')
 
@@ -130,7 +137,17 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
     if (!deal) {
       await logActivity(saved.id, saved.name, 'Deal added', `Stage: ${saved.stage}`)
     } else if (stageChanged) {
-      await logActivity(saved.id, saved.name, 'Stage changed', `${deal.stage} \u2192 ${form.stage}`)
+      const details = passReason.trim() ? `${deal.stage} \u2192 ${form.stage}: ${passReason.trim()}` : `${deal.stage} \u2192 ${form.stage}`
+      await logActivity(saved.id, saved.name, 'Stage changed', details)
+    }
+    if (passReasonRequired && passReason.trim()) {
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.from('deal_notes').insert({
+        deal_id: saved.id,
+        content: `Passed: ${passReason.trim()}`,
+        author_id: user?.id ?? null,
+        author_name: null,
+      })
     }
     onSaved(saved)
   }
@@ -162,6 +179,20 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
+            {passReasonRequired && (
+              <div className="mt-2">
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Why are we passing?<span className="text-red-500 ml-0.5">*</span>
+                </label>
+                <textarea
+                  rows={2}
+                  value={passReason}
+                  onChange={(e) => setPassReason(e.target.value)}
+                  placeholder="e.g. Too early, valuation too high, outside our thesis…"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none"
+                />
+              </div>
+            )}
           </div>
 
           {/* Category */}

@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
 import DealForm from './DealForm'
 import { logActivity } from '@/lib/activity'
+import PassReasonModal from './PassReasonModal'
 import FileManager from './FileManager'
 import NotesList from './NotesList'
 import MeetingsList from './MeetingsList'
@@ -28,6 +29,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
   const [deleting, setDeleting] = useState(false)
   const supabase = createClient()
   const [actorName, setActorName] = useState<string | null>(null)
+  const [showPassReason, setShowPassReason] = useState(false)
   const colors = STAGE_COLORS[deal.stage]
 
   useEffect(() => {
@@ -39,7 +41,11 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
     })
   }, [])
 
-  async function handleStageChange(newStage: string) {
+  async function handleStageChange(newStage: string, passReason?: string) {
+    if (newStage === 'Passed' && deal.stage !== 'Passed' && !passReason) {
+      setShowPassReason(true)
+      return
+    }
     const prevStage = deal.stage
     const now = new Date().toISOString()
     const { data } = await supabase
@@ -51,7 +57,17 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
     if (data) {
       setDeal(data as Deal)
       onUpdated(data as Deal)
-      await logActivity(deal.id, deal.name, 'Stage changed', `${prevStage} → ${newStage}`, actorName)
+      const details = passReason ? `${prevStage} → ${newStage}: ${passReason}` : `${prevStage} → ${newStage}`
+      await logActivity(deal.id, deal.name, 'Stage changed', details, actorName)
+      if (passReason) {
+        const { data: { user } } = await supabase.auth.getUser()
+        await supabase.from('deal_notes').insert({
+          deal_id: deal.id,
+          content: `Passed: ${passReason}`,
+          author_id: user?.id ?? null,
+          author_name: actorName,
+        })
+      }
     }
   }
 
@@ -198,6 +214,17 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
 
       {showEdit && (
         <DealForm deal={deal} onClose={() => setShowEdit(false)} onSaved={handleUpdated} />
+      )}
+
+      {showPassReason && (
+        <PassReasonModal
+          dealName={deal.name}
+          onConfirm={(reason) => {
+            setShowPassReason(false)
+            handleStageChange('Passed', reason)
+          }}
+          onCancel={() => setShowPassReason(false)}
+        />
       )}
 
       {confirmDelete && (
