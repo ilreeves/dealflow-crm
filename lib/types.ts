@@ -140,6 +140,7 @@ export interface PortfolioCompany {
   description: string | null
   current_valuation: string | null
   current_fundraise: string | null
+  sharepoint_link: string | null
   created_by: string | null
   created_at: string
   updated_at: string

@@ -212,6 +212,7 @@ CREATE TABLE IF NOT EXISTS portfolio_companies (
   description TEXT,
   current_valuation TEXT,
   current_fundraise TEXT,
+  sharepoint_link TEXT,
   created_by UUID REFERENCES auth.users(id),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()

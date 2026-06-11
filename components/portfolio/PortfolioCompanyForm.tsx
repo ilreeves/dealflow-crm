@@ -24,6 +24,7 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
     description: company?.description ?? '',
     current_valuation: company?.current_valuation ?? '',
     current_fundraise: company?.current_fundraise ?? '',
+    sharepoint_link: company?.sharepoint_link ?? '',
   })
 
   function set(key: string, value: string) {
@@ -44,6 +45,7 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
       description: form.description || null,
       current_valuation: form.current_valuation || null,
       current_fundraise: form.current_fundraise || null,
+      sharepoint_link: form.sharepoint_link || null,
     }
 
     let result
@@ -69,6 +71,7 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
     { name: 'contact_email', label: 'Contact Email', type: 'email' },
     { name: 'current_valuation', label: 'Current Valuation', type: 'text' },
     { name: 'current_fundraise', label: 'Current Fundraising Need', type: 'text' },
+    { name: 'sharepoint_link', label: 'SharePoint Link', type: 'url' },
   ]
 
   return (

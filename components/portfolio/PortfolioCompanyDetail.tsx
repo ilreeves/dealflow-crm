@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Pencil, Trash2, Plus, Globe, Mail, Building2, DollarSign, Loader2, Check } from 'lucide-react'
+import { X, Pencil, Trash2, Plus, Globe, Mail, Building2, DollarSign, Loader2, Check, Link } from 'lucide-react'
 import { PortfolioCompany, PortfolioFundraiseRound, PortfolioInvestorIntro, INTRO_STATUSES } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
@@ -133,6 +133,7 @@ function OverviewTab({ company }: { company: PortfolioCompany }) {
     { icon: Building2, label: 'Sector', value: company.sector },
     { icon: DollarSign, label: 'Current Valuation', value: company.current_valuation },
     { icon: DollarSign, label: 'Current Fundraising Need', value: company.current_fundraise },
+    { icon: Link, label: 'SharePoint', value: company.sharepoint_link, href: company.sharepoint_link ?? undefined },
   ]
 
   return (
