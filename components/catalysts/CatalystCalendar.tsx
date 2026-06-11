@@ -235,7 +235,7 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
             <p className="text-sm text-slate-400">No catalysts yet — add data readouts, FDA decisions, fundraise closes, and other key timing.</p>
           </div>
         ) : view === 'gantt' ? (
-          <CatalystGantt catalysts={catalysts} />
+          <CatalystGantt catalysts={catalysts} onUpdated={(updated) => setCatalysts((prev) => prev.map((x) => x.id === updated.id ? updated : x))} />
         ) : (
           groups.map(({ key, items }) => (
             <div key={key} className="mb-8">
@@ -248,8 +248,12 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
                     <div key={c.id} className={`flex items-start gap-4 rounded-xl border px-4 py-3 group transition ${
                       isClosed ? 'border-slate-100 bg-slate-50 opacity-60' : 'border-slate-200 bg-white'
                     }`}>
-                      <div className="flex items-center justify-center w-12 h-8 rounded-lg bg-slate-100 shrink-0 mt-0.5">
-                        <span className="text-xs font-bold text-slate-600">{periodLabel(c)}</span>
+                      <div className="flex flex-col items-center justify-center w-12 h-8 rounded-lg bg-slate-100 shrink-0 mt-0.5" title={c.resolved_date ? `Resolved ${c.resolved_date}` : undefined}>
+                        <span className="text-xs font-bold text-slate-600">
+                          {c.resolved_date
+                            ? new Date(c.resolved_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                            : periodLabel(c)}
+                        </span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">

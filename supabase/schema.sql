@@ -287,6 +287,7 @@ CREATE TABLE IF NOT EXISTS catalysts (
   catalyst_date DATE NOT NULL,
   period TEXT,
   status TEXT DEFAULT 'Pending',
+  resolved_date DATE,
   notes TEXT,
   created_by UUID REFERENCES auth.users(id),
   created_at TIMESTAMPTZ DEFAULT NOW()

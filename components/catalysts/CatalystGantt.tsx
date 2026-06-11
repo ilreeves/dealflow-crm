@@ -3,10 +3,14 @@
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Catalyst } from '@/lib/types'
+import { createClient } from '@/lib/supabase/client'
 
 interface Props {
   catalysts: Catalyst[]
+  onUpdated: (c: Catalyst) => void
 }
+
+const STATUSES = ['Pending', 'On Track', 'Done', 'Delayed', 'On Hold', 'Failed', 'Terminated'] as const
 
 const STATUS_BAR: Record<string, string> = {
   'Pending':    'bg-yellow-400',
@@ -18,7 +22,6 @@ const STATUS_BAR: Record<string, string> = {
   'Terminated': 'bg-red-700',
 }
 
-// Quarter span within a year: [startQuarter (0-3), quarterCount]
 function periodSpan(c: Catalyst): { year: number; startQ: number; span: number } {
   const year = parseInt(c.catalyst_date.slice(0, 4), 10)
   if (c.period) {
@@ -30,20 +33,33 @@ function periodSpan(c: Catalyst): { year: number; startQ: number; span: number }
       case '4Q': return { year, startQ: 3, span: 1 }
       case '1H': return { year, startQ: 0, span: 2 }
       case '2H': return { year, startQ: 2, span: 2 }
-      default:   return { year, startQ: 0, span: 4 } // FY
+      default:   return { year, startQ: 0, span: 4 }
     }
   }
   const month = parseInt(c.catalyst_date.slice(5, 7), 10)
   return { year, startQ: Math.floor((month - 1) / 3), span: 1 }
 }
 
-const QUARTER_W = 48  // px per quarter
-const LABEL_W = 260   // px for the catalyst label column
+// Exact x-position (in quarters, fractional) for a specific date
+function dateQuarterPos(dateStr: string, minYear: number): number {
+  const d = new Date(dateStr + 'T00:00:00')
+  const q = Math.floor(d.getMonth() / 3)
+  const qStart = new Date(d.getFullYear(), q * 3, 1)
+  const qEnd = new Date(d.getFullYear(), q * 3 + 3, 1)
+  const frac = (d.getTime() - qStart.getTime()) / (qEnd.getTime() - qStart.getTime())
+  return (d.getFullYear() - minYear) * 4 + q + frac
+}
 
-export default function CatalystGantt({ catalysts }: Props) {
+const QUARTER_W = 48
+const LABEL_W = 260
+
+export default function CatalystGantt({ catalysts, onUpdated }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(
     () => new Set(catalysts.map((c) => c.company_name))
   )
+  const [editingTitle, setEditingTitle] = useState<{ id: string; text: string } | null>(null)
+  const [barMenu, setBarMenu] = useState<{ id: string; status: string; date: string } | null>(null)
+  const supabase = createClient()
 
   function toggleCompany(name: string) {
     setCollapsed((prev) => {
@@ -53,11 +69,34 @@ export default function CatalystGantt({ catalysts }: Props) {
     })
   }
 
+  async function saveTitle() {
+    if (!editingTitle) return
+    const text = editingTitle.text.trim()
+    if (text) {
+      const { data } = await supabase.from('catalysts').update({ title: text }).eq('id', editingTitle.id).select().single()
+      if (data) onUpdated(data as Catalyst)
+    }
+    setEditingTitle(null)
+  }
+
+  async function applyBarMenu() {
+    if (!barMenu) return
+    const { data } = await supabase.from('catalysts')
+      .update({ status: barMenu.status, resolved_date: barMenu.date || null })
+      .eq('id', barMenu.id).select().single()
+    if (data) onUpdated(data as Catalyst)
+    setBarMenu(null)
+  }
+
   if (catalysts.length === 0) {
     return <p className="text-sm text-slate-400 text-center py-12">No catalysts to chart.</p>
   }
 
-  const years = catalysts.map((c) => parseInt(c.catalyst_date.slice(0, 4), 10))
+  const years = catalysts.flatMap((c) => {
+    const ys = [parseInt(c.catalyst_date.slice(0, 4), 10)]
+    if (c.resolved_date) ys.push(parseInt(c.resolved_date.slice(0, 4), 10))
+    return ys
+  })
   const minYear = Math.min(...years)
   const maxYear = Math.max(...years)
   const yearCount = maxYear - minYear + 1
@@ -66,9 +105,8 @@ export default function CatalystGantt({ catalysts }: Props) {
   const now = new Date()
   const nowQ = (now.getFullYear() - minYear) * 4 + Math.floor(now.getMonth() / 3)
 
-  // Group by company, keep chronological order within each
   const companies: { name: string; items: Catalyst[] }[] = []
-  for (const c of [...catalysts].sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date))) {
+  for (const c of [...catalysts].sort((a, b) => (a.resolved_date ?? a.catalyst_date).localeCompare(b.resolved_date ?? b.catalyst_date))) {
     let group = companies.find((g) => g.name === c.company_name)
     if (!group) {
       group = { name: c.company_name, items: [] }
@@ -79,6 +117,38 @@ export default function CatalystGantt({ catalysts }: Props) {
   companies.sort((a, b) => a.name.localeCompare(b.name))
 
   const chartWidth = LABEL_W + totalQuarters * QUARTER_W
+
+  function renderBar(c: Catalyst, mini: boolean) {
+    const status = c.status ?? 'Pending'
+    const color = STATUS_BAR[status] ?? 'bg-slate-300'
+    const tip = `${c.title}\n${c.resolved_date ? 'Resolved ' + c.resolved_date : c.period ?? c.catalyst_date} — ${status}${c.notes ? '\n' + c.notes : ''}`
+
+    if (c.resolved_date) {
+      // Fixed point on the timeline
+      const pos = dateQuarterPos(c.resolved_date, minYear) * QUARTER_W
+      return (
+        <div
+          key={mini ? c.id : undefined}
+          title={tip}
+          onClick={mini ? undefined : (e) => { e.stopPropagation(); setBarMenu({ id: c.id, status, date: c.resolved_date ?? '' }) }}
+          className={`absolute rounded-full ${color} ${mini ? 'top-2 w-2.5 h-2.5 opacity-60' : 'top-1.5 w-4 h-4 cursor-pointer ring-2 ring-white shadow-sm hover:scale-110 transition-transform'}`}
+          style={{ left: pos - (mini ? 5 : 8) }}
+        />
+      )
+    }
+
+    const { year, startQ, span } = periodSpan(c)
+    const offset = (year - minYear) * 4 + startQ
+    return (
+      <div
+        key={mini ? c.id : undefined}
+        title={tip}
+        onClick={mini ? undefined : (e) => { e.stopPropagation(); setBarMenu({ id: c.id, status, date: '' }) }}
+        className={`absolute rounded ${color} ${mini ? 'top-2 h-3 opacity-60' : 'top-1 h-5 opacity-90 cursor-pointer hover:opacity-100 hover:ring-2 hover:ring-slate-300'}`}
+        style={{ left: offset * QUARTER_W + 2, width: span * QUARTER_W - 4 }}
+      />
+    )
+  }
 
   return (
     <div className="overflow-auto border border-slate-200 rounded-xl bg-white" style={{ maxHeight: 'calc(100vh - 180px)' }}>
@@ -115,40 +185,90 @@ export default function CatalystGantt({ catalysts }: Props) {
               </button>
               <div className="flex-1 h-7 relative">
                 <GridLines totalQuarters={totalQuarters} nowQ={nowQ} />
-                {collapsed.has(name) && items.map((c) => {
-                  const { year, startQ, span } = periodSpan(c)
-                  const offset = (year - minYear) * 4 + startQ
-                  return (
-                    <div
-                      key={c.id}
-                      title={`${c.title} (${c.period ?? c.catalyst_date})`}
-                      className={`absolute top-2 h-3 rounded-sm ${STATUS_BAR[c.status ?? 'Pending'] ?? 'bg-slate-300'} opacity-60`}
-                      style={{ left: offset * QUARTER_W + 2, width: span * QUARTER_W - 4 }}
-                    />
-                  )
-                })}
+                {collapsed.has(name) && items.map((c) => renderBar(c, true))}
               </div>
             </div>
             {!collapsed.has(name) && items.map((c) => {
-              const { year, startQ, span } = periodSpan(c)
-              const offset = (year - minYear) * 4 + startQ
-              const status = c.status ?? 'Pending'
               return (
                 <div key={c.id} className="flex items-center border-b border-slate-50 hover:bg-slate-50/50 group">
-                  <p
-                    style={{ width: LABEL_W }}
-                    className="shrink-0 sticky left-0 bg-white z-20 border-r border-slate-200 px-3 py-1.5 text-xs text-slate-600 truncate"
-                    title={`${c.title}${c.notes ? ' — ' + c.notes : ''}`}
-                  >
-                    {c.title}
-                  </p>
+                  {editingTitle?.id === c.id ? (
+                    <div style={{ width: LABEL_W }} className="shrink-0 sticky left-0 bg-white z-20 border-r border-slate-200 px-2 py-1">
+                      <input
+                        autoFocus
+                        value={editingTitle.text}
+                        onChange={(e) => setEditingTitle({ id: c.id, text: e.target.value })}
+                        onBlur={saveTitle}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveTitle()
+                          if (e.key === 'Escape') setEditingTitle(null)
+                        }}
+                        className="w-full px-1.5 py-0.5 text-xs border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-slate-900"
+                      />
+                    </div>
+                  ) : (
+                    <p
+                      style={{ width: LABEL_W }}
+                      onClick={() => setEditingTitle({ id: c.id, text: c.title })}
+                      className="shrink-0 sticky left-0 bg-white z-20 border-r border-slate-200 px-3 py-1.5 text-xs text-slate-600 truncate cursor-text hover:bg-slate-50"
+                      title={`${c.title}${c.notes ? ' — ' + c.notes : ''} (click to edit)`}
+                    >
+                      {c.title}
+                    </p>
+                  )}
                   <div className="flex-1 h-7 relative">
                     <GridLines totalQuarters={totalQuarters} nowQ={nowQ} />
-                    <div
-                      title={`${c.period ?? c.catalyst_date} — ${status}${c.notes ? '\n' + c.notes : ''}`}
-                      className={`absolute top-1 h-5 rounded ${STATUS_BAR[status] ?? 'bg-slate-300'} opacity-90`}
-                      style={{ left: offset * QUARTER_W + 2, width: span * QUARTER_W - 4 }}
-                    />
+                    {renderBar(c, false)}
+                    {barMenu?.id === c.id && (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute top-7 z-50 bg-white border border-slate-200 rounded-xl shadow-lg p-3 w-64"
+                        style={{ left: Math.min((periodSpan(c).year - minYear) * 4 * QUARTER_W, totalQuarters * QUARTER_W - 270) }}
+                      >
+                        <p className="text-xs font-semibold text-slate-700 mb-2">Status</p>
+                        <div className="flex flex-wrap gap-1 mb-3">
+                          {STATUSES.map((s) => (
+                            <button
+                              key={s}
+                              onClick={() => setBarMenu({ ...barMenu, status: s })}
+                              className={`px-2 py-0.5 rounded-full text-xs font-medium transition ${
+                                barMenu.status === s
+                                  ? `${STATUS_BAR[s]} text-white`
+                                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                              }`}
+                            >
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-xs font-semibold text-slate-700 mb-1">Actual date <span className="font-normal text-slate-400">(pins to timeline)</span></p>
+                        <div className="flex items-center gap-1.5 mb-3">
+                          <input
+                            type="date"
+                            value={barMenu.date}
+                            onChange={(e) => setBarMenu({ ...barMenu, date: e.target.value })}
+                            className="flex-1 px-2 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900"
+                          />
+                          {barMenu.date && (
+                            <button
+                              onClick={() => setBarMenu({ ...barMenu, date: '' })}
+                              className="text-xs text-slate-400 hover:text-slate-600"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button onClick={() => setBarMenu(null)} className="px-2.5 py-1 text-xs text-slate-500 hover:text-slate-800 transition">Cancel</button>
+                          <button
+                            onClick={applyBarMenu}
+                            className="px-2.5 py-1 text-xs text-white font-medium rounded-lg transition"
+                            style={{ backgroundColor: '#023a51' }}
+                          >
+                            Apply
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )
@@ -164,6 +284,10 @@ export default function CatalystGantt({ catalysts }: Props) {
               {label}
             </span>
           ))}
+          <span className="flex items-center gap-1.5 text-xs text-slate-500">
+            <span className="inline-block w-3 h-3 rounded-full bg-slate-400 ring-2 ring-slate-200" />
+            Fixed date (resolved)
+          </span>
         </div>
       </div>
     </div>
