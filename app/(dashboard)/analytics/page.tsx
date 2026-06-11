@@ -42,7 +42,7 @@ export default async function AnalyticsPage() {
   const stageTime: Record<string, number[]> = {}
   const now = Date.now()
   for (const d of deals) {
-    if (!d.stage_entered_at) continue
+    if (!d.stage_entered_at || d.stage === 'Passed') continue
     const days = (now - new Date(d.stage_entered_at).getTime()) / (1000 * 60 * 60 * 24)
     if (!stageTime[d.stage]) stageTime[d.stage] = []
     stageTime[d.stage].push(days)
