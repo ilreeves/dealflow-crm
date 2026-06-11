@@ -189,3 +189,13 @@ export interface PortfolioInvestorIntro {
   created_at: string
   updated_at: string
 }
+
+export interface Catalyst {
+  id: string
+  company_name: string
+  title: string
+  catalyst_date: string
+  notes: string | null
+  created_by: string | null
+  created_at: string
+}

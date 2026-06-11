@@ -278,3 +278,16 @@ ALTER TABLE deals ADD COLUMN IF NOT EXISTS city TEXT;
 ALTER TABLE portfolio_companies ADD COLUMN IF NOT EXISTS country TEXT;
 ALTER TABLE portfolio_companies ADD COLUMN IF NOT EXISTS state TEXT;
 ALTER TABLE portfolio_companies ADD COLUMN IF NOT EXISTS city TEXT;
+
+-- Catalyst calendar
+CREATE TABLE IF NOT EXISTS catalysts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  company_name TEXT NOT NULL,
+  title TEXT NOT NULL,
+  catalyst_date DATE NOT NULL,
+  notes TEXT,
+  created_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE catalysts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Auth users can manage catalysts" ON catalysts FOR ALL TO authenticated USING (true) WITH CHECK (true);
