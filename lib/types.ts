@@ -195,6 +195,7 @@ export interface Catalyst {
   company_name: string
   title: string
   catalyst_date: string
+  period: string | null
   notes: string | null
   created_by: string | null
   created_at: string

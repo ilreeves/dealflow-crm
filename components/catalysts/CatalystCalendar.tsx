@@ -10,25 +10,51 @@ interface Props {
   companyNames: string[]
 }
 
+const PERIODS = ['1Q', '2Q', '3Q', '4Q', '1H', '2H', 'FY'] as const
+
+// End date of each period, for sorting and past-detection
+function periodEndDate(period: string, year: number): string {
+  switch (period) {
+    case '1Q': return `${year}-03-31`
+    case '2Q': return `${year}-06-30`
+    case '3Q': return `${year}-09-30`
+    case '4Q': return `${year}-12-31`
+    case '1H': return `${year}-06-30`
+    case '2H': return `${year}-12-31`
+    default:   return `${year}-12-31`
+  }
+}
+
+function periodLabel(c: Catalyst): string {
+  if (c.period) return c.period.split(' ')[0]
+  // Legacy date-based entries
+  const d = new Date(c.catalyst_date + 'T00:00:00')
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
 export default function CatalystCalendar({ initialCatalysts, companyNames }: Props) {
   const [catalysts, setCatalysts] = useState<Catalyst[]>(initialCatalysts)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ company_name: '', title: '', catalyst_date: '', notes: '' })
+  const currentYear = new Date().getFullYear()
+  const [form, setForm] = useState({ company_name: '', title: '', period: '1Q', year: String(currentYear), notes: '' })
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
 
   async function handleAdd() {
-    if (!form.company_name.trim() || !form.title.trim() || !form.catalyst_date) return
+    if (!form.company_name.trim() || !form.title.trim()) return
+    const year = parseInt(form.year, 10)
+    if (!year || year < 2000 || year > 2100) return
     setSaving(true)
     const { data } = await supabase.from('catalysts').insert({
       company_name: form.company_name.trim(),
       title: form.title.trim(),
-      catalyst_date: form.catalyst_date,
+      catalyst_date: periodEndDate(form.period, year),
+      period: `${form.period} ${year}`,
       notes: form.notes.trim() || null,
     }).select().single()
     if (data) {
       setCatalysts((prev) => [...prev, data as Catalyst].sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date)))
-      setForm({ company_name: '', title: '', catalyst_date: '', notes: '' })
+      setForm({ company_name: '', title: '', period: '1Q', year: String(currentYear), notes: '' })
       setShowForm(false)
     }
     setSaving(false)
@@ -41,15 +67,13 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
 
   const today = new Date().toISOString().slice(0, 10)
 
-  // Group by month
-  const groups: { key: string; label: string; items: Catalyst[] }[] = []
+  // Group by year
+  const groups: { key: string; items: Catalyst[] }[] = []
   for (const c of catalysts) {
-    const d = new Date(c.catalyst_date + 'T00:00:00')
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    const key = c.catalyst_date.slice(0, 4)
     let group = groups.find((g) => g.key === key)
     if (!group) {
-      group = { key, label, items: [] }
+      group = { key, items: [] }
       groups.push(group)
     }
     group.items.push(c)
@@ -76,7 +100,7 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
         {showForm && (
           <div className="border border-slate-200 rounded-xl p-4 space-y-3 bg-slate-50 mb-6">
             <p className="text-sm font-semibold text-slate-700">New Catalyst</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs text-slate-500 mb-1">Company *</label>
                 <input
@@ -91,11 +115,27 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
                 </datalist>
               </div>
               <div>
-                <label className="block text-xs text-slate-500 mb-1">Expected Date *</label>
+                <label className="block text-xs text-slate-500 mb-1">Expected Timing *</label>
+                <select
+                  value={form.period}
+                  onChange={(e) => setForm((p) => ({ ...p, period: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+                >
+                  {PERIODS.map((p) => (
+                    <option key={p} value={p}>
+                      {p === 'FY' ? 'Full Year' : p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Year *</label>
                 <input
-                  type="date"
-                  value={form.catalyst_date}
-                  onChange={(e) => setForm((p) => ({ ...p, catalyst_date: e.target.value }))}
+                  type="number"
+                  min={2000}
+                  max={2100}
+                  value={form.year}
+                  onChange={(e) => setForm((p) => ({ ...p, year: e.target.value }))}
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
                 />
               </div>
@@ -122,7 +162,7 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
               <button onClick={() => setShowForm(false)} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 transition">Cancel</button>
               <button
                 onClick={handleAdd}
-                disabled={saving || !form.company_name.trim() || !form.title.trim() || !form.catalyst_date}
+                disabled={saving || !form.company_name.trim() || !form.title.trim() || !form.year}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg disabled:opacity-40 transition"
                 style={{ backgroundColor: '#023a51' }}
               >
@@ -136,23 +176,21 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
         {catalysts.length === 0 && !showForm ? (
           <div className="text-center py-16">
             <CalendarDays className="w-8 h-8 text-slate-300 mx-auto mb-3" />
-            <p className="text-sm text-slate-400">No catalysts yet — add data readouts, FDA decisions, fundraise closes, and other key dates.</p>
+            <p className="text-sm text-slate-400">No catalysts yet — add data readouts, FDA decisions, fundraise closes, and other key timing.</p>
           </div>
         ) : (
-          groups.map(({ key, label, items }) => (
+          groups.map(({ key, items }) => (
             <div key={key} className="mb-8">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">{label}</p>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">{key}</p>
               <div className="space-y-2">
                 {items.map((c) => {
                   const isPast = c.catalyst_date < today
-                  const d = new Date(c.catalyst_date + 'T00:00:00')
                   return (
                     <div key={c.id} className={`flex items-start gap-4 rounded-xl border px-4 py-3 group transition ${
                       isPast ? 'border-slate-100 bg-slate-50 opacity-60' : 'border-slate-200 bg-white'
                     }`}>
-                      <div className="flex flex-col items-center w-10 shrink-0">
-                        <span className="text-lg font-bold text-slate-800 leading-none">{d.getDate()}</span>
-                        <span className="text-xs text-slate-400 uppercase">{d.toLocaleDateString('en-US', { weekday: 'short' })}</span>
+                      <div className="flex items-center justify-center w-12 h-8 rounded-lg bg-slate-100 shrink-0 mt-0.5">
+                        <span className="text-xs font-bold text-slate-600">{periodLabel(c)}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">

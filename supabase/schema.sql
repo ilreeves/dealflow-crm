@@ -285,6 +285,7 @@ CREATE TABLE IF NOT EXISTS catalysts (
   company_name TEXT NOT NULL,
   title TEXT NOT NULL,
   catalyst_date DATE NOT NULL,
+  period TEXT,
   notes TEXT,
   created_by UUID REFERENCES auth.users(id),
   created_at TIMESTAMPTZ DEFAULT NOW()
