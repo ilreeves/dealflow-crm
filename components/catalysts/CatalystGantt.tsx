@@ -1,5 +1,7 @@
 'use client'
 
+import { useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { Catalyst } from '@/lib/types'
 
 interface Props {
@@ -39,6 +41,16 @@ const QUARTER_W = 48  // px per quarter
 const LABEL_W = 260   // px for the catalyst label column
 
 export default function CatalystGantt({ catalysts }: Props) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+
+  function toggleCompany(name: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) { next.delete(name) } else { next.add(name) }
+      return next
+    })
+  }
+
   if (catalysts.length === 0) {
     return <p className="text-sm text-slate-400 text-center py-12">No catalysts to chart.</p>
   }
@@ -89,12 +101,33 @@ export default function CatalystGantt({ catalysts }: Props) {
         {companies.map(({ name, items }) => (
           <div key={name}>
             <div className="flex items-center bg-slate-50 border-b border-slate-100">
-              <p style={{ width: LABEL_W }} className="shrink-0 sticky left-0 bg-slate-50 z-20 border-r border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 uppercase tracking-wide">{name}</p>
+              <button
+                onClick={() => toggleCompany(name)}
+                style={{ width: LABEL_W }}
+                className="shrink-0 sticky left-0 bg-slate-50 z-20 border-r border-slate-200 px-3 py-1.5 flex items-center gap-1.5 text-left hover:bg-slate-100 transition"
+                title={collapsed.has(name) ? 'Show catalysts' : 'Hide catalysts'}
+              >
+                <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${collapsed.has(name) ? '-rotate-90' : ''}`} />
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wide truncate">{name}</span>
+                <span className="text-xs text-slate-400 font-medium ml-auto">{items.length}</span>
+              </button>
               <div className="flex-1 h-7 relative">
                 <GridLines totalQuarters={totalQuarters} nowQ={nowQ} />
+                {collapsed.has(name) && items.map((c) => {
+                  const { year, startQ, span } = periodSpan(c)
+                  const offset = (year - minYear) * 4 + startQ
+                  return (
+                    <div
+                      key={c.id}
+                      title={`${c.title} (${c.period ?? c.catalyst_date})`}
+                      className={`absolute top-2 h-3 rounded-sm ${STATUS_BAR[c.status ?? 'Pending'] ?? 'bg-slate-300'} opacity-60`}
+                      style={{ left: offset * QUARTER_W + 2, width: span * QUARTER_W - 4 }}
+                    />
+                  )
+                })}
               </div>
             </div>
-            {items.map((c) => {
+            {!collapsed.has(name) && items.map((c) => {
               const { year, startQ, span } = periodSpan(c)
               const offset = (year - minYear) * 4 + startQ
               const status = c.status ?? 'Pending'
