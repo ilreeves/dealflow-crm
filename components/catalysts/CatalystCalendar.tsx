@@ -51,7 +51,7 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
   const currentYear = new Date().getFullYear()
   const [form, setForm] = useState({ company_name: '', title: '', period: '1Q', year: String(currentYear), status: 'Pending', notes: '' })
   const [saving, setSaving] = useState(false)
-  const [view, setView] = useState<'list' | 'gantt'>('list')
+  const [view, setView] = useState<'list' | 'gantt'>('gantt')
   const [editingNote, setEditingNote] = useState<{ id: string; text: string } | null>(null)
   const supabase = createClient()
 

@@ -41,7 +41,9 @@ const QUARTER_W = 48  // px per quarter
 const LABEL_W = 260   // px for the catalyst label column
 
 export default function CatalystGantt({ catalysts }: Props) {
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [collapsed, setCollapsed] = useState<Set<string>>(
+    () => new Set(catalysts.map((c) => c.company_name))
+  )
 
   function toggleCompany(name: string) {
     setCollapsed((prev) => {
