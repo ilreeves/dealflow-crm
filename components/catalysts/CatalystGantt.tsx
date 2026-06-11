@@ -67,12 +67,12 @@ export default function CatalystGantt({ catalysts }: Props) {
   const chartWidth = LABEL_W + totalQuarters * QUARTER_W
 
   return (
-    <div className="overflow-x-auto pb-4">
+    <div className="overflow-auto border border-slate-200 rounded-xl bg-white" style={{ maxHeight: 'calc(100vh - 180px)' }}>
       <div style={{ width: chartWidth, minWidth: chartWidth }}>
 
         {/* Year + quarter headers */}
-        <div className="flex sticky top-0 bg-white z-10 border-b border-slate-200">
-          <div style={{ width: LABEL_W }} className="shrink-0" />
+        <div className="flex sticky top-0 bg-white z-30 border-b border-slate-200">
+          <div style={{ width: LABEL_W }} className="shrink-0 sticky left-0 bg-white z-40 border-r border-slate-200" />
           {Array.from({ length: yearCount }, (_, y) => (
             <div key={y} style={{ width: QUARTER_W * 4 }} className="shrink-0 border-l border-slate-200">
               <p className="text-xs font-semibold text-slate-600 text-center py-1">{minYear + y}</p>
@@ -89,7 +89,7 @@ export default function CatalystGantt({ catalysts }: Props) {
         {companies.map(({ name, items }) => (
           <div key={name}>
             <div className="flex items-center bg-slate-50 border-b border-slate-100">
-              <p style={{ width: LABEL_W }} className="shrink-0 px-3 py-1.5 text-xs font-bold text-slate-700 uppercase tracking-wide">{name}</p>
+              <p style={{ width: LABEL_W }} className="shrink-0 sticky left-0 bg-slate-50 z-20 border-r border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 uppercase tracking-wide">{name}</p>
               <div className="flex-1 h-7 relative">
                 <GridLines totalQuarters={totalQuarters} nowQ={nowQ} />
               </div>
@@ -102,7 +102,7 @@ export default function CatalystGantt({ catalysts }: Props) {
                 <div key={c.id} className="flex items-center border-b border-slate-50 hover:bg-slate-50/50 group">
                   <p
                     style={{ width: LABEL_W }}
-                    className="shrink-0 px-3 py-1.5 text-xs text-slate-600 truncate"
+                    className="shrink-0 sticky left-0 bg-white z-20 border-r border-slate-200 px-3 py-1.5 text-xs text-slate-600 truncate"
                     title={`${c.title}${c.notes ? ' — ' + c.notes : ''}`}
                   >
                     {c.title}
@@ -122,7 +122,7 @@ export default function CatalystGantt({ catalysts }: Props) {
         ))}
 
         {/* Legend */}
-        <div className="flex items-center gap-4 mt-4 px-3 flex-wrap">
+        <div className="flex items-center gap-4 py-3 px-3 flex-wrap sticky left-0 bg-white" style={{ width: 'fit-content' }}>
           {Object.entries(STATUS_BAR).map(([label, cls]) => (
             <span key={label} className="flex items-center gap-1.5 text-xs text-slate-500">
               <span className={`inline-block w-3 h-3 rounded ${cls}`} />
