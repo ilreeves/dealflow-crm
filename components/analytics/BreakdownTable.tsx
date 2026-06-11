@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 
 export interface BreakdownRow {
@@ -26,9 +26,8 @@ export default function BreakdownTable({ title, rows, max, color }: Props) {
         <table className="w-full text-sm">
           <tbody>
             {rows.map(({ label, count, companies }) => (
-              <>
+              <Fragment key={label}>
                 <tr
-                  key={label}
                   onClick={() => setExpanded(expanded === label ? null : label)}
                   className="border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50 transition"
                 >
@@ -46,7 +45,7 @@ export default function BreakdownTable({ title, rows, max, color }: Props) {
                   </td>
                 </tr>
                 {expanded === label && (
-                  <tr key={`${label}-detail`} className="border-b border-slate-50 last:border-0">
+                  <tr className="border-b border-slate-50 last:border-0">
                     <td colSpan={3} className="px-4 pb-3 pt-0 bg-slate-50/50">
                       <div className="flex flex-wrap gap-1.5 pl-4.5 pt-2">
                         {companies.map(({ name, stage }) => (
@@ -59,7 +58,7 @@ export default function BreakdownTable({ title, rows, max, color }: Props) {
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>
