@@ -12,6 +12,18 @@ interface Props {
 
 const PERIODS = ['1Q', '2Q', '3Q', '4Q', '1H', '2H', 'FY'] as const
 
+const STATUSES = ['Pending', 'On Track', 'Done', 'Delayed', 'On Hold', 'Failed', 'Terminated'] as const
+const STATUS_COLORS: Record<string, string> = {
+  'Pending':    'bg-yellow-100 text-yellow-800',
+  'On Track':   'bg-emerald-100 text-emerald-700',
+  'Done':       'bg-green-100 text-green-700',
+  'Delayed':    'bg-orange-100 text-orange-700',
+  'On Hold':    'bg-slate-200 text-slate-600',
+  'Failed':     'bg-red-100 text-red-700',
+  'Terminated': 'bg-red-100 text-red-700',
+}
+const CLOSED_STATUSES = ['Done', 'Failed', 'Terminated']
+
 // End date of each period, for sorting and past-detection
 function periodEndDate(period: string, year: number): string {
   switch (period) {
@@ -36,7 +48,7 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
   const [catalysts, setCatalysts] = useState<Catalyst[]>(initialCatalysts)
   const [showForm, setShowForm] = useState(false)
   const currentYear = new Date().getFullYear()
-  const [form, setForm] = useState({ company_name: '', title: '', period: '1Q', year: String(currentYear), notes: '' })
+  const [form, setForm] = useState({ company_name: '', title: '', period: '1Q', year: String(currentYear), status: 'Pending', notes: '' })
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
 
@@ -50,11 +62,12 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
       title: form.title.trim(),
       catalyst_date: periodEndDate(form.period, year),
       period: `${form.period} ${year}`,
+      status: form.status,
       notes: form.notes.trim() || null,
     }).select().single()
     if (data) {
       setCatalysts((prev) => [...prev, data as Catalyst].sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date)))
-      setForm({ company_name: '', title: '', period: '1Q', year: String(currentYear), notes: '' })
+      setForm({ company_name: '', title: '', period: '1Q', year: String(currentYear), status: 'Pending', notes: '' })
       setShowForm(false)
     }
     setSaving(false)
@@ -65,7 +78,10 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
     setCatalysts((prev) => prev.filter((c) => c.id !== id))
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  async function handleStatusChange(id: string, status: string) {
+    const { data } = await supabase.from('catalysts').update({ status }).eq('id', id).select().single()
+    if (data) setCatalysts((prev) => prev.map((c) => c.id === id ? data as Catalyst : c))
+  }
 
   // Group by year
   const groups: { key: string; items: Catalyst[] }[] = []
@@ -84,7 +100,7 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
       <div className="px-4 md:px-6 py-4 bg-white border-b border-slate-200 flex items-center justify-between gap-4 shrink-0">
         <div>
           <h1 className="text-lg font-semibold text-slate-900">Catalyst Calendar</h1>
-          <p className="text-sm text-slate-500">{catalysts.filter((c) => c.catalyst_date >= today).length} upcoming</p>
+          <p className="text-sm text-slate-500">{catalysts.filter((c) => !CLOSED_STATUSES.includes(c.status ?? 'Pending')).length} open</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
@@ -100,7 +116,7 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
         {showForm && (
           <div className="border border-slate-200 rounded-xl p-4 space-y-3 bg-slate-50 mb-6">
             <p className="text-sm font-semibold text-slate-700">New Catalyst</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div>
                 <label className="block text-xs text-slate-500 mb-1">Company *</label>
                 <input
@@ -138,6 +154,16 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
                   onChange={(e) => setForm((p) => ({ ...p, year: e.target.value }))}
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
                 />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Status</label>
+                <select
+                  value={form.status}
+                  onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+                >
+                  {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
               </div>
             </div>
             <div>
@@ -184,10 +210,11 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">{key}</p>
               <div className="space-y-2">
                 {items.map((c) => {
-                  const isPast = c.catalyst_date < today
+                  const status = c.status ?? 'Pending'
+                  const isClosed = CLOSED_STATUSES.includes(status)
                   return (
                     <div key={c.id} className={`flex items-start gap-4 rounded-xl border px-4 py-3 group transition ${
-                      isPast ? 'border-slate-100 bg-slate-50 opacity-60' : 'border-slate-200 bg-white'
+                      isClosed ? 'border-slate-100 bg-slate-50 opacity-60' : 'border-slate-200 bg-white'
                     }`}>
                       <div className="flex items-center justify-center w-12 h-8 rounded-lg bg-slate-100 shrink-0 mt-0.5">
                         <span className="text-xs font-bold text-slate-600">{periodLabel(c)}</span>
@@ -196,6 +223,13 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-slate-800">{c.company_name}</span>
                           <span className="text-sm text-slate-600">{c.title}</span>
+                          <select
+                            value={status}
+                            onChange={(e) => handleStatusChange(c.id, e.target.value)}
+                            className={`text-xs font-medium px-1.5 py-0.5 rounded-full border-0 cursor-pointer appearance-none ${STATUS_COLORS[status] ?? 'bg-slate-100 text-slate-600'}`}
+                          >
+                            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                          </select>
                         </div>
                         {c.notes && <p className="text-sm text-slate-500 mt-0.5 leading-relaxed">{c.notes}</p>}
                       </div>
