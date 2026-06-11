@@ -12,9 +12,19 @@ interface Props {
   compact?: boolean
 }
 
+function getAgingText(stageEnteredAt: string | null): string | null {
+  if (!stageEnteredAt) return null
+  const days = Math.floor((Date.now() - new Date(stageEnteredAt).getTime()) / (1000 * 60 * 60 * 24))
+  if (days === 0) return 'today'
+  if (days < 14) return `${days}d`
+  const weeks = Math.floor(days / 7)
+  if (weeks < 8) return `${weeks}w`
+  return `${Math.floor(days / 30)}mo`
+}
+
 export default function DealCard({ deal, onUpdated, onDeleted, compact }: Props) {
   const [showDetail, setShowDetail] = useState(false)
-  const colors = STAGE_COLORS[deal.stage]
+  const aging = getAgingText(deal.stage_entered_at)
 
   return (
     <>
@@ -24,13 +34,16 @@ export default function DealCard({ deal, onUpdated, onDeleted, compact }: Props)
           className="flex items-center justify-between gap-2 bg-white rounded-md border border-slate-200 px-2.5 py-1.5 cursor-pointer hover:border-slate-300 hover:shadow-sm transition-all"
         >
           <span className="text-xs font-medium text-slate-800 truncate">{deal.name}</span>
-          {deal.category && (
-            <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full shrink-0 ${
-              deal.category === 'Devices' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-            }`}>
-              {deal.category}
-            </span>
-          )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {aging && <span className="text-xs text-slate-300">{aging}</span>}
+            {deal.category && (
+              <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${
+                deal.category === 'Devices' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+              }`}>
+                {deal.category}
+              </span>
+            )}
+          </div>
         </div>
       ) : (
         <div
@@ -39,13 +52,16 @@ export default function DealCard({ deal, onUpdated, onDeleted, compact }: Props)
         >
           <div className="flex items-start justify-between gap-2 mb-2">
             <h3 className="text-sm font-semibold text-slate-900 leading-tight flex-1">{deal.name}</h3>
-            {deal.category && (
-              <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full shrink-0 ${
-                deal.category === 'Devices' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-              }`}>
-                {deal.category}
-              </span>
-            )}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {aging && <span className="text-xs text-slate-300">{aging}</span>}
+              {deal.category && (
+                <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${
+                  deal.category === 'Devices' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                }`}>
+                  {deal.category}
+                </span>
+              )}
+            </div>
           </div>
 
           {deal.sector && (
@@ -54,28 +70,24 @@ export default function DealCard({ deal, onUpdated, onDeleted, compact }: Props)
               <span className="truncate">{deal.sector}</span>
             </div>
           )}
-
           {deal.lead_partner && (
             <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
               <User className="w-3 h-3 shrink-0" />
               <span className="truncate">{deal.lead_partner}</span>
             </div>
           )}
-
           {deal.current_valuation && (
             <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
               <DollarSign className="w-3 h-3 shrink-0" />
               <span className="truncate">Val: {deal.current_valuation}</span>
             </div>
           )}
-
           {deal.clinical_stage && (
             <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
               <FlaskConical className="w-3 h-3 shrink-0" />
               <span className="truncate">{deal.clinical_stage}</span>
             </div>
           )}
-
           {deal.current_fundraise && (
             <div className="flex items-center gap-1.5 text-xs text-slate-500">
               <DollarSign className="w-3 h-3 shrink-0" />

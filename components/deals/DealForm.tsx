@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { Deal, DealStage, DEAL_STAGES, CustomFieldDefinition } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
+import { logActivity } from '@/lib/activity'
 
 interface Props {
   deal?: Deal
@@ -76,6 +77,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
     setLoading(true)
     setError('')
 
+    const stageChanged = !deal || form.stage !== deal.stage
     const payload = {
       name: form.name.trim(),
       website: form.website || null,
@@ -93,6 +95,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
       current_valuation: (form as Record<string, unknown>)['current_valuation'] as string || null,
       description: form.description || null,
       custom_fields: form.custom_fields,
+      ...(stageChanged ? { stage_entered_at: new Date().toISOString() } : {}),
     }
 
     let result
@@ -108,7 +111,13 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
       return
     }
 
-    onSaved(result.data as Deal)
+    const saved = result.data as Deal
+    if (!deal) {
+      await logActivity(saved.id, saved.name, 'Deal added', `Stage: ${saved.stage}`)
+    } else if (stageChanged) {
+      await logActivity(saved.id, saved.name, 'Stage changed', `${deal.stage} \u2192 ${form.stage}`)
+    }
+    onSaved(saved)
   }
 
   return (

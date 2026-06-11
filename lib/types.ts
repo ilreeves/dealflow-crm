@@ -62,9 +62,20 @@ export interface Deal {
   series: string | null
   current_valuation: string | null
   custom_fields: Record<string, unknown>
+  stage_entered_at: string | null
   created_by: string | null
   created_at: string
   updated_at: string
+}
+
+export interface DealActivity {
+  id: string
+  deal_id: string | null
+  deal_name: string
+  action: string
+  details: string | null
+  actor_name: string | null
+  created_at: string
 }
 
 export interface DealFile {

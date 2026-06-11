@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { Plus, LayoutList, Columns3, ChevronRight } from 'lucide-react'
 import { Deal, DealStage, DEAL_STAGES, STAGE_COLORS } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
+import { logActivity } from '@/lib/activity'
 import DealCard from './DealCard'
 import DealForm from '@/components/deals/DealForm'
 import DealsTable from './DealsTable'
@@ -20,7 +21,27 @@ export default function PipelineBoard({ initialDeals }: Props) {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<'All' | 'Devices' | 'Drugs'>('All')
   const [collapsedStages, setCollapsedStages] = useState<Set<DealStage>>(new Set(['Passed']))
+  const [actorName, setActorName] = useState<string | null>(null)
+  const [isMobile, setIsMobile] = useState(false)
   const supabase = createClient()
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        supabase.from('profiles').select('full_name').eq('id', user.id).single()
+          .then(({ data }) => setActorName(data?.full_name || user.email || null))
+      }
+    })
+  }, [])
+
+  const effectiveView = isMobile ? 'list' : view
 
   const filteredDeals = deals.filter((d) => {
     const matchesSearch = d.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -40,19 +61,20 @@ export default function PipelineBoard({ initialDeals }: Props) {
     if (!destination || destination.droppableId === source.droppableId) return
 
     const newStage = destination.droppableId as DealStage
-    setDeals((prev) => prev.map((d) => d.id === draggableId ? { ...d, stage: newStage } : d))
+    const deal = deals.find((d) => d.id === draggableId)
+    if (!deal) return
 
-    await supabase.from('deals').update({ stage: newStage }).eq('id', draggableId)
-  }, [supabase])
+    const now = new Date().toISOString()
+    setDeals((prev) => prev.map((d) => d.id === draggableId ? { ...d, stage: newStage, stage_entered_at: now } : d))
+
+    await supabase.from('deals').update({ stage: newStage, stage_entered_at: now }).eq('id', draggableId)
+    await logActivity(draggableId, deal.name, 'Stage changed', `${deal.stage} \u2192 ${newStage}`, actorName)
+  }, [supabase, deals, actorName])
 
   function toggleCollapse(stage: DealStage) {
     setCollapsedStages((prev) => {
       const next = new Set(prev)
-      if (next.has(stage)) {
-        next.delete(stage)
-      } else {
-        next.add(stage)
-      }
+      if (next.has(stage)) { next.delete(stage) } else { next.add(stage) }
       return next
     })
   }
@@ -73,12 +95,12 @@ export default function PipelineBoard({ initialDeals }: Props) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-6 py-4 bg-white border-b border-slate-200 flex items-center justify-between gap-4 shrink-0">
+      <div className="px-4 md:px-6 py-4 bg-white border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div>
           <h1 className="text-lg font-semibold text-slate-900">Pipeline</h1>
           <p className="text-sm text-slate-500">{deals.length} deals</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg">
             {(['All', 'Devices', 'Drugs'] as const).map((cat) => (
               <button
@@ -95,27 +117,29 @@ export default function PipelineBoard({ initialDeals }: Props) {
           </div>
           <input
             type="text"
-            placeholder="Search deals…"
+            placeholder="Search deals\u2026"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 w-52"
+            className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 w-44 sm:w-52"
           />
-          <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
-            <button
-              onClick={() => setView('board')}
-              className={`p-1.5 ${view === 'board' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-              title="Board view"
-            >
-              <Columns3 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setView('list')}
-              className={`p-1.5 ${view === 'list' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-              title="List view"
-            >
-              <LayoutList className="w-4 h-4" />
-            </button>
-          </div>
+          {!isMobile && (
+            <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setView('board')}
+                className={`p-1.5 ${view === 'board' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+                title="Board view"
+              >
+                <Columns3 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setView('list')}
+                className={`p-1.5 ${view === 'list' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+                title="List view"
+              >
+                <LayoutList className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <button
             onClick={() => setShowForm(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg transition" style={{backgroundColor: "#e98925"}}
@@ -126,8 +150,8 @@ export default function PipelineBoard({ initialDeals }: Props) {
         </div>
       </div>
 
-      {/* Board */}
-      {view === 'board' ? (
+      {/* Board / List */}
+      {effectiveView === 'board' ? (
         <div className="flex-1 overflow-x-auto">
           <DragDropContext onDragEnd={handleDragEnd}>
             <div className="flex gap-3 p-4 h-full min-w-max">
@@ -219,7 +243,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
           </DragDropContext>
         </div>
       ) : (
-        <div className="flex-1 overflow-auto p-6">
+        <div className="flex-1 overflow-auto p-4 md:p-6">
           <DealsTable
             deals={filteredDeals}
             onUpdated={handleDealUpdated}
@@ -228,7 +252,6 @@ export default function PipelineBoard({ initialDeals }: Props) {
         </div>
       )}
 
-      {/* New Deal Modal */}
       {showForm && (
         <DealForm
           onClose={() => setShowForm(false)}

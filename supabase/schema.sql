@@ -257,3 +257,16 @@ CREATE TRIGGER update_portfolio_companies_updated_at
 CREATE TRIGGER update_portfolio_investor_intros_updated_at
   BEFORE UPDATE ON portfolio_investor_intros
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- Activity log
+CREATE TABLE IF NOT EXISTS deal_activity (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  deal_id UUID REFERENCES deals(id) ON DELETE CASCADE,
+  deal_name TEXT NOT NULL,
+  action TEXT NOT NULL,
+  details TEXT,
+  actor_name TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE deal_activity ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Auth users can manage deal_activity" ON deal_activity FOR ALL TO authenticated USING (true) WITH CHECK (true);

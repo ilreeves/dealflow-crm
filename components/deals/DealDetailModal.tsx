@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
-import { X, Pencil, Trash2, Globe, Building2, User, DollarSign, Tag, Mail } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, Pencil, Trash2, Globe, Building2, User, DollarSign, Tag, Mail, Send, Link } from 'lucide-react'
 import { Deal, DEAL_STAGES, STAGE_COLORS } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
 import DealForm from './DealForm'
+import { logActivity } from '@/lib/activity'
 import FileManager from './FileManager'
 import NotesList from './NotesList'
 import MeetingsList from './MeetingsList'
@@ -26,18 +27,31 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const supabase = createClient()
+  const [actorName, setActorName] = useState<string | null>(null)
   const colors = STAGE_COLORS[deal.stage]
 
-  async function handleStageChange(stage: string) {
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        supabase.from('profiles').select('full_name').eq('id', user.id).single()
+          .then(({ data }) => setActorName(data?.full_name || user.email || null))
+      }
+    })
+  }, [])
+
+  async function handleStageChange(newStage: string) {
+    const prevStage = deal.stage
+    const now = new Date().toISOString()
     const { data } = await supabase
       .from('deals')
-      .update({ stage })
+      .update({ stage: newStage, stage_entered_at: now })
       .eq('id', deal.id)
       .select()
       .single()
     if (data) {
       setDeal(data as Deal)
       onUpdated(data as Deal)
+      await logActivity(deal.id, deal.name, 'Stage changed', `${prevStage} → ${newStage}`, actorName)
     }
   }
 
@@ -87,6 +101,29 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => {
+                    const fields = [
+                      `Stage: ${deal.stage}`,
+                      deal.category ? `Category: ${deal.category}` : null,
+                      deal.sector ? `Sector: ${deal.sector}` : null,
+                      deal.clinical_stage ? `Clinical Stage: ${deal.clinical_stage}` : null,
+                      deal.series ? `Series: ${deal.series}` : null,
+                      deal.current_fundraise ? `Raising: ${deal.current_fundraise}` : null,
+                      deal.current_valuation ? `Valuation: ${deal.current_valuation}` : null,
+                      deal.lead_partner ? `Lead Partner: ${deal.lead_partner}` : null,
+                      deal.source ? `Source: ${deal.source}` : null,
+                      deal.website ? `Website: ${deal.website}` : null,
+                      deal.contact_email ? `Contact: ${deal.contact_email}` : null,
+                      deal.description ? `\nNotes: ${deal.description}` : null,
+                    ].filter(Boolean).join('\n')
+                    window.location.href = `mailto:?subject=${encodeURIComponent(`Deal Summary: ${deal.name}`)}&body=${encodeURIComponent(fields)}`
+                  }}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+                  title="Email deal summary"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
                 <button
                   onClick={() => setShowEdit(true)}
                   className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
