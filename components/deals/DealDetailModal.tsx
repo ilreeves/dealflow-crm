@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
 import DealForm from './DealForm'
 import { logActivity } from '@/lib/activity'
+import { addDealToPortfolio } from '@/lib/portfolio'
 import PassReasonModal from './PassReasonModal'
 import FileManager from './FileManager'
 import NotesList from './NotesList'
@@ -59,6 +60,10 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
       onUpdated(data as Deal)
       const details = passReason ? `${prevStage} → ${newStage}: ${passReason}` : `${prevStage} → ${newStage}`
       await logActivity(deal.id, deal.name, 'Stage changed', details, actorName)
+      if (newStage === 'Invested') {
+        await addDealToPortfolio(supabase, data as Deal)
+        await logActivity(deal.id, deal.name, 'Added to portfolio', 'Auto-added on move to Invested', actorName)
+      }
       if (passReason) {
         const { data: { user } } = await supabase.auth.getUser()
         await supabase.from('deal_notes').insert({

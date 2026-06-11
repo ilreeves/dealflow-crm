@@ -6,6 +6,7 @@ import { Plus, LayoutList, Columns3, ChevronRight } from 'lucide-react'
 import { Deal, DealStage, DEAL_STAGES, STAGE_COLORS } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
+import { addDealToPortfolio } from '@/lib/portfolio'
 import DealCard from './DealCard'
 import DealForm from '@/components/deals/DealForm'
 import DealsTable from './DealsTable'
@@ -68,6 +69,11 @@ export default function PipelineBoard({ initialDeals }: Props) {
     await supabase.from('deals').update({ stage: newStage, stage_entered_at: now }).eq('id', dealId)
     const details = passReason ? `${fromStage} \u2192 ${newStage}: ${passReason}` : `${fromStage} \u2192 ${newStage}`
     await logActivity(dealId, deal.name, 'Stage changed', details, actorName)
+
+    if (newStage === 'Invested') {
+      await addDealToPortfolio(supabase, { ...deal, stage: newStage })
+      await logActivity(dealId, deal.name, 'Added to portfolio', 'Auto-added on move to Invested', actorName)
+    }
 
     if (passReason) {
       const { data: { user } } = await supabase.auth.getUser()

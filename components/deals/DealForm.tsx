@@ -5,6 +5,7 @@ import { X } from 'lucide-react'
 import { Deal, DealStage, DEAL_STAGES, CustomFieldDefinition } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
+import { addDealToPortfolio } from '@/lib/portfolio'
 
 interface Props {
   deal?: Deal
@@ -148,6 +149,10 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
     } else if (stageChanged) {
       const details = passReason.trim() ? `${deal.stage} \u2192 ${form.stage}: ${passReason.trim()}` : `${deal.stage} \u2192 ${form.stage}`
       await logActivity(saved.id, saved.name, 'Stage changed', details)
+    }
+    if (saved.stage === 'Invested' && (!deal || deal.stage !== 'Invested')) {
+      await addDealToPortfolio(supabase, saved)
+      await logActivity(saved.id, saved.name, 'Added to portfolio', 'Auto-added on move to Invested')
     }
     if (passReasonRequired && passReason.trim()) {
       const { data: { user } } = await supabase.auth.getUser()
