@@ -12,16 +12,30 @@ interface Props {
   onSaved: (deal: Deal) => void
 }
 
+const SERIES_OPTIONS = ['Pre-Seed', 'Seed', 'Bridge', 'A', 'B', 'C', 'D+']
+const CLINICAL_STAGE_OPTIONS = [
+  'Preclinical',
+  'Pre-IND',
+  'Phase I',
+  'Phase II',
+  'Phase III',
+  'Pre-IDE',
+  'FIH',
+  'Pivotal',
+  '510(k)',
+  'Approved / Marketed',
+]
+
 const CORE_FIELDS = [
   { name: 'name', label: 'Company Name', type: 'text', required: true },
   { name: 'website', label: 'Website', type: 'url' },
   { name: 'contact_email', label: 'Contact Email', type: 'email' },
   { name: 'sector', label: 'Sector', type: 'text' },
-  { name: 'clinical_stage', label: 'Clinical Stage', type: 'text' },
+  { name: 'clinical_stage', label: 'Clinical Stage', type: 'select', options: CLINICAL_STAGE_OPTIONS },
   { name: 'lead_partner', label: 'Lead Partner', type: 'text' },
   { name: 'founders', label: 'Founder(s)', type: 'text' },
   { name: 'source', label: 'Source', type: 'text' },
-  { name: 'series', label: 'Series', type: 'text' },
+  { name: 'series', label: 'Series', type: 'select', options: SERIES_OPTIONS },
   { name: 'current_fundraise', label: 'Current Fundraise', type: 'text' },
   { name: 'current_valuation', label: 'Current Valuation', type: 'text' },
   { name: 'fundraising_to_date', label: 'Fundraising to Date', type: 'text' },
@@ -171,20 +185,39 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
           </div>
 
           {/* Core fields */}
-          {CORE_FIELDS.map((field) => (
-            <div key={field.name}>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                {field.label}{field.required && <span className="text-red-500 ml-0.5">*</span>}
-              </label>
-              <input
-                type={field.type}
-                required={field.required}
-                value={(form as Record<string, unknown>)[field.name] as string}
-                onChange={(e) => setField(field.name, e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-              />
-            </div>
-          ))}
+          {CORE_FIELDS.map((field) => {
+            const value = (form as Record<string, unknown>)[field.name] as string
+            return (
+              <div key={field.name}>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  {field.label}{field.required && <span className="text-red-500 ml-0.5">*</span>}
+                </label>
+                {field.type === 'select' ? (
+                  <select
+                    value={value}
+                    onChange={(e) => setField(field.name, e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+                  >
+                    <option value="">Select…</option>
+                    {value && !(field.options ?? []).includes(value) && (
+                      <option value={value}>{value}</option>
+                    )}
+                    {(field.options ?? []).map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type={field.type}
+                    required={field.required}
+                    value={value}
+                    onChange={(e) => setField(field.name, e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  />
+                )}
+              </div>
+            )
+          })}
 
           {/* Description */}
           <div>

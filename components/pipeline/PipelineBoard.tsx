@@ -117,7 +117,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
           </div>
           <input
             type="text"
-            placeholder="Search deals\u2026"
+            placeholder="Search deals…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 w-44 sm:w-52"
