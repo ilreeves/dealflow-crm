@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Deal } from '@/lib/types'
+import BreakdownTable, { BreakdownRow } from '@/components/analytics/BreakdownTable'
 
 export default async function AnalyticsPage() {
   const supabase = await createClient()
@@ -37,31 +38,32 @@ export default async function AnalyticsPage() {
   }
   const sectors = Object.entries(sectorMap).sort((a, b) => b[1] - a[1]).slice(0, 8)
 
-  // Series breakdown (active deals)
-  const SERIES_ORDER = ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'Bridge', 'A', 'B', 'C', 'D+']
-  const seriesMap: Record<string, number> = {}
-  for (const d of deals.filter((d) => d.stage !== 'Passed')) {
-    const key = d.series?.trim() || 'Unknown'
-    seriesMap[key] = (seriesMap[key] ?? 0) + 1
+  // Series + clinical stage breakdowns (active deals), with company lists
+  function buildBreakdown(field: 'series' | 'clinical_stage', order: string[]): BreakdownRow[] {
+    const map: Record<string, { name: string; stage: string }[]> = {}
+    for (const d of deals.filter((d) => d.stage !== 'Passed')) {
+      const key = d[field]?.trim() || 'Unknown'
+      if (!map[key]) map[key] = []
+      map[key].push({ name: d.name, stage: d.stage })
+    }
+    return Object.entries(map)
+      .sort((a, b) => {
+        const ia = order.indexOf(a[0]); const ib = order.indexOf(b[0])
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
+      })
+      .map(([label, companies]) => ({
+        label,
+        count: companies.length,
+        companies: companies.sort((a, b) => a.name.localeCompare(b.name)),
+      }))
   }
-  const seriesBreakdown = Object.entries(seriesMap).sort((a, b) => {
-    const ia = SERIES_ORDER.indexOf(a[0]); const ib = SERIES_ORDER.indexOf(b[0])
-    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
-  })
-  const maxSeries = Math.max(...seriesBreakdown.map(([, n]) => n), 1)
 
-  // Clinical stage breakdown (active deals)
+  const SERIES_ORDER = ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'Bridge', 'A', 'B', 'C', 'D+']
   const CLINICAL_ORDER = ['Preclinical', 'Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Pre-IDE', 'FIH', 'Pivotal', '510(k)', 'PMA', 'Approved / Marketed']
-  const clinicalMap: Record<string, number> = {}
-  for (const d of deals.filter((d) => d.stage !== 'Passed')) {
-    const key = d.clinical_stage?.trim() || 'Unknown'
-    clinicalMap[key] = (clinicalMap[key] ?? 0) + 1
-  }
-  const clinicalBreakdown = Object.entries(clinicalMap).sort((a, b) => {
-    const ia = CLINICAL_ORDER.indexOf(a[0]); const ib = CLINICAL_ORDER.indexOf(b[0])
-    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
-  })
-  const maxClinical = Math.max(...clinicalBreakdown.map(([, n]) => n), 1)
+  const seriesBreakdown = buildBreakdown('series', SERIES_ORDER)
+  const clinicalBreakdown = buildBreakdown('clinical_stage', CLINICAL_ORDER)
+  const maxSeries = Math.max(...seriesBreakdown.map((r) => r.count), 1)
+  const maxClinical = Math.max(...clinicalBreakdown.map((r) => r.count), 1)
 
   // Average time in current stage, per stage
   const STAGE_ORDER = ['Sourced', 'First Meeting', 'Science Committee', 'Finance Committee', 'Investment Committee', 'Term Sheet', 'Invested', 'Passed']
@@ -198,31 +200,8 @@ export default async function AnalyticsPage() {
 
         {/* Series & Clinical Stage breakdowns */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[
-            { title: 'Active Pipeline by Series', rows: seriesBreakdown, max: maxSeries, color: '#023a51' },
-            { title: 'Active Pipeline by Clinical Stage', rows: clinicalBreakdown, max: maxClinical, color: '#e98925' },
-          ].map(({ title, rows, max, color }) => (
-            <div key={title}>
-              <p className="text-sm font-semibold text-slate-700 mb-3">{title}</p>
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                <table className="w-full text-sm">
-                  <tbody>
-                    {rows.map(([label, count]) => (
-                      <tr key={label} className="border-b border-slate-50 last:border-0">
-                        <td className="px-4 py-2.5 font-medium text-slate-700">{label}</td>
-                        <td className="px-4 py-2.5 text-right text-slate-500 w-8">{count}</td>
-                        <td className="px-4 py-2.5 w-24">
-                          <div className="w-full bg-slate-100 rounded-full h-1.5">
-                            <div className="h-1.5 rounded-full" style={{ width: `${count / max * 100}%`, backgroundColor: color }} />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ))}
+          <BreakdownTable title="Active Pipeline by Series" rows={seriesBreakdown} max={maxSeries} color="#023a51" />
+          <BreakdownTable title="Active Pipeline by Clinical Stage" rows={clinicalBreakdown} max={maxClinical} color="#e98925" />
         </div>
 
         {/* Active pipeline by sector */}
