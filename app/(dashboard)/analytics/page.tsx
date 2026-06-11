@@ -5,7 +5,7 @@ export default async function AnalyticsPage() {
   const supabase = await createClient()
   const { data } = await supabase
     .from('deals')
-    .select('name,stage,category,source,sector,clinical_stage,series')
+    .select('name,stage,category,source,sector,clinical_stage,series,stage_entered_at')
 
   const deals = (data as Deal[]) ?? []
   const total = deals.length
@@ -36,6 +36,32 @@ export default async function AnalyticsPage() {
     sectorMap[key] = (sectorMap[key] ?? 0) + 1
   }
   const sectors = Object.entries(sectorMap).sort((a, b) => b[1] - a[1]).slice(0, 8)
+
+  // Average time in current stage, per stage
+  const STAGE_ORDER = ['Sourced', 'First Meeting', 'Science Committee', 'Finance Committee', 'Investment Committee', 'Term Sheet', 'Invested', 'Passed']
+  const stageTime: Record<string, number[]> = {}
+  const now = Date.now()
+  for (const d of deals) {
+    if (!d.stage_entered_at) continue
+    const days = (now - new Date(d.stage_entered_at).getTime()) / (1000 * 60 * 60 * 24)
+    if (!stageTime[d.stage]) stageTime[d.stage] = []
+    stageTime[d.stage].push(days)
+  }
+  const stageAverages = STAGE_ORDER
+    .filter((s) => stageTime[s]?.length)
+    .map((s) => ({
+      stage: s,
+      count: stageTime[s].length,
+      avgDays: stageTime[s].reduce((a, b) => a + b, 0) / stageTime[s].length,
+    }))
+  const maxAvg = Math.max(...stageAverages.map((s) => s.avgDays), 1)
+
+  function formatDays(days: number): string {
+    if (days < 1) return '<1 day'
+    if (days < 14) return `${Math.round(days)} days`
+    if (days < 60) return `${(days / 7).toFixed(1)} weeks`
+    return `${(days / 30).toFixed(1)} months`
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -117,6 +143,32 @@ export default async function AnalyticsPage() {
             </table>
           </div>
         </div>
+
+        {/* Average time in stage */}
+        {stageAverages.length > 0 && (
+          <div>
+            <p className="text-sm font-semibold text-slate-700 mb-1">Average Time in Stage</p>
+            <p className="text-xs text-slate-400 mb-3">How long deals currently in each stage have been sitting there. Accuracy improves as deals move from here on.</p>
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <tbody>
+                  {stageAverages.map(({ stage, count, avgDays }) => (
+                    <tr key={stage} className="border-b border-slate-50 last:border-0">
+                      <td className="px-4 py-2.5 font-medium text-slate-700">{stage}</td>
+                      <td className="px-4 py-2.5 text-right text-slate-400 text-xs whitespace-nowrap">{count} {count === 1 ? 'deal' : 'deals'}</td>
+                      <td className="px-4 py-2.5 text-right text-slate-600 whitespace-nowrap w-24">{formatDays(avgDays)}</td>
+                      <td className="px-4 py-2.5 w-32">
+                        <div className="w-full bg-slate-100 rounded-full h-1.5">
+                          <div className="bg-slate-400 h-1.5 rounded-full" style={{ width: `${avgDays / maxAvg * 100}%` }} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Active pipeline by sector */}
         {sectors.length > 0 && (
