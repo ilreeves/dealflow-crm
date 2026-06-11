@@ -4,9 +4,10 @@ import BreakdownTable, { BreakdownRow } from '@/components/analytics/BreakdownTa
 
 export default async function AnalyticsPage() {
   const supabase = await createClient()
-  const { data } = await supabase
-    .from('deals')
-    .select('name,stage,category,source,sector,clinical_stage,series,stage_entered_at')
+  const [{ data }, { data: activityData }] = await Promise.all([
+    supabase.from('deals').select('id,name,stage,category,source,sector,clinical_stage,series,stage_entered_at,created_at'),
+    supabase.from('deal_activity').select('deal_id,details,created_at').eq('action', 'Stage changed').order('created_at', { ascending: true }),
+  ])
 
   const deals = (data as Deal[]) ?? []
   const total = deals.length
@@ -83,6 +84,45 @@ export default async function AnalyticsPage() {
       avgDays: stageTime[s].reduce((a, b) => a + b, 0) / stageTime[s].length,
     }))
   const maxAvg = Math.max(...stageAverages.map((s) => s.avgDays), 1)
+
+  // Historical time in stage, from the stage-change activity log.
+  // A completed interval = time between entering a stage and leaving it.
+  type StageEvent = { deal_id: string; details: string; created_at: string }
+  const events = (activityData as StageEvent[]) ?? []
+  const dealCreated: Record<string, string> = {}
+  for (const d of deals) dealCreated[d.id] = d.created_at
+
+  const historical: Record<string, number[]> = {}
+  const lastEntered: Record<string, { stage: string; at: string }> = {}
+  for (const e of events) {
+    const arrow = e.details.indexOf(' \u2192 ')
+    if (arrow === -1) continue
+    const fromStage = e.details.slice(0, arrow).trim()
+    // Entry time for fromStage: previous transition into it, else deal creation
+    const enteredAt = lastEntered[e.deal_id]?.stage === fromStage
+      ? lastEntered[e.deal_id].at
+      : dealCreated[e.deal_id]
+    if (enteredAt) {
+      const days = (new Date(e.created_at).getTime() - new Date(enteredAt).getTime()) / (1000 * 60 * 60 * 24)
+      if (days >= 0) {
+        if (!historical[fromStage]) historical[fromStage] = []
+        historical[fromStage].push(days)
+      }
+    }
+    let toStage = e.details.slice(arrow + 3).trim()
+    const colon = toStage.indexOf(':')
+    if (colon !== -1) toStage = toStage.slice(0, colon).trim()
+    lastEntered[e.deal_id] = { stage: toStage, at: e.created_at }
+  }
+  const historicalAverages = STAGE_ORDER
+    .filter((s) => historical[s]?.length)
+    .map((s) => ({
+      stage: s,
+      count: historical[s].length,
+      avgDays: historical[s].reduce((a, b) => a + b, 0) / historical[s].length,
+    }))
+  const maxHistAvg = Math.max(...historicalAverages.map((s) => s.avgDays), 1)
+  const totalTransitions = historicalAverages.reduce((a, s) => a + s.count, 0)
 
   function formatDays(days: number): string {
     if (days < 1) return '<1 day'
@@ -175,8 +215,8 @@ export default async function AnalyticsPage() {
         {/* Average time in stage */}
         {stageAverages.length > 0 && (
           <div>
-            <p className="text-sm font-semibold text-slate-700 mb-1">Average Time in Stage</p>
-            <p className="text-xs text-slate-400 mb-3">How long deals currently in each stage have been sitting there. Accuracy improves as deals move from here on.</p>
+            <p className="text-sm font-semibold text-slate-700 mb-1">Current Inventory Age</p>
+            <p className="text-xs text-slate-400 mb-3">How long the deals currently sitting in each stage have been there.</p>
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <table className="w-full text-sm">
                 <tbody>
@@ -197,6 +237,38 @@ export default async function AnalyticsPage() {
             </div>
           </div>
         )}
+
+        {/* Historical time in stage */}
+        <div>
+          <p className="text-sm font-semibold text-slate-700 mb-1">Historical Time in Stage</p>
+          <p className="text-xs text-slate-400 mb-3">
+            Average time deals spent in each stage before moving on, from the stage-change log ({totalTransitions} completed {totalTransitions === 1 ? 'transition' : 'transitions'}). Tracking began June 11, 2026, so this builds accuracy over time.
+          </p>
+          {historicalAverages.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-200 px-5 py-6 text-center">
+              <p className="text-sm text-slate-400">No completed stage transitions logged yet — this fills in as deals move through the pipeline.</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <tbody>
+                  {historicalAverages.map(({ stage, count, avgDays }) => (
+                    <tr key={stage} className="border-b border-slate-50 last:border-0">
+                      <td className="px-4 py-2.5 font-medium text-slate-700">{stage}</td>
+                      <td className="px-4 py-2.5 text-right text-slate-400 text-xs whitespace-nowrap">{count} {count === 1 ? 'exit' : 'exits'}</td>
+                      <td className="px-4 py-2.5 text-right text-slate-600 whitespace-nowrap w-24">{formatDays(avgDays)}</td>
+                      <td className="px-4 py-2.5 w-32">
+                        <div className="w-full bg-slate-100 rounded-full h-1.5">
+                          <div className="h-1.5 rounded-full" style={{ width: `${avgDays / maxHistAvg * 100}%`, backgroundColor: '#023a51' }} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
         {/* Series & Clinical Stage breakdowns */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
