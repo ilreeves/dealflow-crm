@@ -12,7 +12,7 @@ interface Props {
   onSaved: (deal: Deal) => void
 }
 
-const SERIES_OPTIONS = ['Pre-Seed', 'Seed', 'Bridge', 'A', 'B', 'C', 'D+']
+const SERIES_OPTIONS = ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'A', 'B', 'C', 'D+']
 const CLINICAL_STAGE_OPTIONS = [
   'Preclinical',
   'Pre-IND',
@@ -23,6 +23,7 @@ const CLINICAL_STAGE_OPTIONS = [
   'FIH',
   'Pivotal',
   '510(k)',
+  'PMA',
   'Approved / Marketed',
 ]
 
