@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Trash2, Loader2, CalendarDays } from 'lucide-react'
+import { Plus, Trash2, Loader2, CalendarDays, Pencil, LayoutList, BarChartHorizontal, Check, X } from 'lucide-react'
 import { Catalyst } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
+import CatalystGantt from './CatalystGantt'
 
 interface Props {
   initialCatalysts: Catalyst[]
@@ -50,6 +51,8 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
   const currentYear = new Date().getFullYear()
   const [form, setForm] = useState({ company_name: '', title: '', period: '1Q', year: String(currentYear), status: 'Pending', notes: '' })
   const [saving, setSaving] = useState(false)
+  const [view, setView] = useState<'list' | 'gantt'>('list')
+  const [editingNote, setEditingNote] = useState<{ id: string; text: string } | null>(null)
   const supabase = createClient()
 
   async function handleAdd() {
@@ -83,6 +86,15 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
     if (data) setCatalysts((prev) => prev.map((c) => c.id === id ? data as Catalyst : c))
   }
 
+  async function handleNoteSave() {
+    if (!editingNote) return
+    const { data } = await supabase.from('catalysts')
+      .update({ notes: editingNote.text.trim() || null })
+      .eq('id', editingNote.id).select().single()
+    if (data) setCatalysts((prev) => prev.map((c) => c.id === editingNote.id ? data as Catalyst : c))
+    setEditingNote(null)
+  }
+
   // Group by year
   const groups: { key: string; items: Catalyst[] }[] = []
   for (const c of catalysts) {
@@ -102,17 +114,35 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
           <h1 className="text-lg font-semibold text-slate-900">Catalyst Calendar</h1>
           <p className="text-sm text-slate-500">{catalysts.filter((c) => !CLOSED_STATUSES.includes(c.status ?? 'Pending')).length} open</p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg transition"
-          style={{ backgroundColor: '#e98925' }}
-        >
-          <Plus className="w-4 h-4" />
-          Add Catalyst
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setView('list')}
+              className={`p-1.5 ${view === 'list' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+              title="List view"
+            >
+              <LayoutList className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setView('gantt')}
+              className={`p-1.5 ${view === 'gantt' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+              title="Gantt view"
+            >
+              <BarChartHorizontal className="w-4 h-4" />
+            </button>
+          </div>
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg transition"
+            style={{ backgroundColor: '#e98925' }}
+          >
+            <Plus className="w-4 h-4" />
+            Add Catalyst
+          </button>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6 max-w-3xl">
+      <div className={`flex-1 overflow-y-auto px-4 md:px-6 py-6 ${view === 'list' ? 'max-w-3xl' : ''}`}>
         {showForm && (
           <div className="border border-slate-200 rounded-xl p-4 space-y-3 bg-slate-50 mb-6">
             <p className="text-sm font-semibold text-slate-700">New Catalyst</p>
@@ -204,6 +234,8 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
             <CalendarDays className="w-8 h-8 text-slate-300 mx-auto mb-3" />
             <p className="text-sm text-slate-400">No catalysts yet — add data readouts, FDA decisions, fundraise closes, and other key timing.</p>
           </div>
+        ) : view === 'gantt' ? (
+          <CatalystGantt catalysts={catalysts} />
         ) : (
           groups.map(({ key, items }) => (
             <div key={key} className="mb-8">
@@ -231,14 +263,42 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
                             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                           </select>
                         </div>
-                        {c.notes && <p className="text-sm text-slate-500 mt-0.5 leading-relaxed">{c.notes}</p>}
+                        {editingNote?.id === c.id ? (
+                          <div className="flex items-start gap-1.5 mt-1.5">
+                            <textarea
+                              autoFocus
+                              rows={2}
+                              value={editingNote.text}
+                              onChange={(e) => setEditingNote({ id: c.id, text: e.target.value })}
+                              className="flex-1 px-2.5 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none"
+                            />
+                            <button onClick={handleNoteSave} className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition" title="Save note">
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => setEditingNote(null)} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition" title="Cancel">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          c.notes && <p className="text-sm text-slate-500 mt-0.5 leading-relaxed">{c.notes}</p>
+                        )}
                       </div>
-                      <button
-                        onClick={() => handleDelete(c.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition shrink-0"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition shrink-0">
+                        <button
+                          onClick={() => setEditingNote({ id: c.id, text: c.notes ?? '' })}
+                          className="p-1.5 text-slate-300 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition"
+                          title={c.notes ? 'Edit note' : 'Add note'}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(c.id)}
+                          className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   )
                 })}
