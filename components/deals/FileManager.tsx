@@ -19,6 +19,7 @@ export default function FileManager({ dealId }: Props) {
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
@@ -38,7 +39,11 @@ export default function FileManager({ dealId }: Props) {
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const selectedFiles = Array.from(e.target.files ?? [])
+    await uploadFiles(Array.from(e.target.files ?? []))
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  async function uploadFiles(selectedFiles: File[]) {
     if (!selectedFiles.length) return
 
     setUploading(true)
@@ -73,7 +78,6 @@ export default function FileManager({ dealId }: Props) {
     }
 
     setUploading(false)
-    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   async function handleDownload(file: DealFile) {
@@ -100,7 +104,16 @@ export default function FileManager({ dealId }: Props) {
       {/* Upload area */}
       <div
         onClick={() => fileInputRef.current?.click()}
-        className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center cursor-pointer hover:border-slate-400 hover:bg-slate-50 transition group"
+        onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+        onDragLeave={(e) => { e.preventDefault(); setIsDragging(false) }}
+        onDrop={(e) => {
+          e.preventDefault()
+          setIsDragging(false)
+          uploadFiles(Array.from(e.dataTransfer.files))
+        }}
+        className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition group ${
+          isDragging ? 'border-slate-500 bg-slate-100' : 'border-slate-200 hover:border-slate-400 hover:bg-slate-50'
+        }`}
       >
         <Upload className="w-6 h-6 text-slate-400 group-hover:text-slate-600 mx-auto mb-2 transition" />
         <p className="text-sm text-slate-500">
