@@ -207,6 +207,8 @@ CREATE TABLE IF NOT EXISTS portfolio_companies (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   sector TEXT,
+  series TEXT,
+  clinical_stage TEXT,
   website TEXT,
   contact_email TEXT,
   description TEXT,

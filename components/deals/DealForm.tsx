@@ -38,7 +38,7 @@ const CORE_FIELDS = [
   { name: 'country', label: 'Country', type: 'text' },
   { name: 'clinical_stage', label: 'Clinical Stage', type: 'select', options: CLINICAL_STAGE_OPTIONS },
   { name: 'lead_partner', label: 'Lead Partner', type: 'text' },
-  { name: 'founders', label: 'Founder(s)', type: 'text' },
+  { name: 'founders', label: 'CEO', type: 'text' },
   { name: 'source', label: 'Source', type: 'text' },
   { name: 'series', label: 'Series', type: 'select', options: SERIES_OPTIONS },
   { name: 'current_fundraise', label: 'Current Fundraise', type: 'text' },

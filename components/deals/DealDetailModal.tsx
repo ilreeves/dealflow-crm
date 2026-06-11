@@ -269,7 +269,7 @@ function OverviewTab({ deal }: { deal: Deal }) {
     { icon: MapPin, label: 'Location', value: [deal.city, deal.state, deal.country].filter(Boolean).join(', ') || null },
     { icon: Tag, label: 'Clinical Stage', value: deal.clinical_stage },
     { icon: User, label: 'Lead Partner', value: deal.lead_partner },
-    { icon: User, label: 'Founders', value: deal.founders },
+    { icon: User, label: 'CEO', value: deal.founders },
     { icon: Tag, label: 'Source', value: deal.source },
     { icon: Tag, label: 'Series', value: deal.series },
     { icon: DollarSign, label: 'Current Fundraise', value: deal.current_fundraise },

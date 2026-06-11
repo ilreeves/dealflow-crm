@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Pencil, Trash2, Plus, Globe, Mail, Building2, DollarSign, Loader2, Check, Link, MapPin } from 'lucide-react'
+import { X, Pencil, Trash2, Plus, Globe, Mail, Building2, DollarSign, Loader2, Check, Link, MapPin, Tag } from 'lucide-react'
 import { PortfolioCompany, PortfolioFundraiseRound, PortfolioInvestorIntro, INTRO_STATUSES } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
@@ -131,6 +131,8 @@ function OverviewTab({ company }: { company: PortfolioCompany }) {
     { icon: Globe, label: 'Website', value: company.website, href: company.website ?? undefined },
     { icon: Mail, label: 'Contact Email', value: company.contact_email, href: company.contact_email ? `mailto:${company.contact_email}` : undefined },
     { icon: Building2, label: 'Sector', value: company.sector },
+    { icon: Tag, label: 'Series', value: company.series },
+    { icon: Tag, label: 'Clinical Stage', value: company.clinical_stage },
     { icon: MapPin, label: 'Location', value: [company.city, company.state, company.country].filter(Boolean).join(', ') || null },
     { icon: DollarSign, label: 'Current Valuation', value: company.current_valuation },
     { icon: DollarSign, label: 'Current Fundraising Need', value: company.current_fundraise },

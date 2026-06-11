@@ -19,6 +19,8 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
   const [form, setForm] = useState({
     name: company?.name ?? '',
     sector: company?.sector ?? '',
+    series: company?.series ?? '',
+    clinical_stage: company?.clinical_stage ?? '',
     city: company?.city ?? '',
     state: company?.state ?? '',
     country: company?.country ?? '',
@@ -43,6 +45,8 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
     const payload = {
       name: form.name.trim(),
       sector: form.sector || null,
+      series: form.series || null,
+      clinical_stage: form.clinical_stage || null,
       city: form.city || null,
       state: form.state || null,
       country: form.country || null,
@@ -73,6 +77,8 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
   const fields = [
     { name: 'name', label: 'Company Name', type: 'text', required: true },
     { name: 'sector', label: 'Sector / Therapeutic Area', type: 'text' },
+    { name: 'series', label: 'Series', type: 'select', options: ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'A', 'B', 'C', 'D+'] },
+    { name: 'clinical_stage', label: 'Clinical Stage', type: 'select', options: ['Preclinical', 'Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Pre-IDE', 'FIH', 'Pivotal', '510(k)', 'PMA', 'Approved / Marketed'] },
     { name: 'city', label: 'City', type: 'text' },
     { name: 'state', label: 'State / Region', type: 'text' },
     { name: 'country', label: 'Country', type: 'text' },
@@ -102,13 +108,29 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
                 {field.label}
                 {field.required && <span className="text-red-500 ml-0.5">*</span>}
               </label>
-              <input
-                type={field.type}
-                required={field.required}
-                value={(form as Record<string, string>)[field.name]}
-                onChange={(e) => set(field.name, e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
-              />
+              {field.type === 'select' ? (
+                <select
+                  value={(form as Record<string, string>)[field.name]}
+                  onChange={(e) => set(field.name, e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+                >
+                  <option value="">Select…</option>
+                  {(form as Record<string, string>)[field.name] && !(field.options ?? []).includes((form as Record<string, string>)[field.name]) && (
+                    <option value={(form as Record<string, string>)[field.name]}>{(form as Record<string, string>)[field.name]}</option>
+                  )}
+                  {(field.options ?? []).map((opt: string) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type={field.type}
+                  required={field.required}
+                  value={(form as Record<string, string>)[field.name]}
+                  onChange={(e) => set(field.name, e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              )}
             </div>
           ))}
 
