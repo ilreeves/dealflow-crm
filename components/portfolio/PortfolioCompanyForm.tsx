@@ -19,6 +19,9 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
   const [form, setForm] = useState({
     name: company?.name ?? '',
     sector: company?.sector ?? '',
+    city: company?.city ?? '',
+    state: company?.state ?? '',
+    country: company?.country ?? '',
     website: company?.website ?? '',
     contact_email: company?.contact_email ?? '',
     description: company?.description ?? '',
@@ -40,6 +43,9 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
     const payload = {
       name: form.name.trim(),
       sector: form.sector || null,
+      city: form.city || null,
+      state: form.state || null,
+      country: form.country || null,
       website: form.website || null,
       contact_email: form.contact_email || null,
       description: form.description || null,
@@ -67,6 +73,9 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
   const fields = [
     { name: 'name', label: 'Company Name', type: 'text', required: true },
     { name: 'sector', label: 'Sector / Therapeutic Area', type: 'text' },
+    { name: 'city', label: 'City', type: 'text' },
+    { name: 'state', label: 'State / Region', type: 'text' },
+    { name: 'country', label: 'Country', type: 'text' },
     { name: 'website', label: 'Website', type: 'url' },
     { name: 'contact_email', label: 'Contact Email', type: 'email' },
     { name: 'current_valuation', label: 'Current Valuation', type: 'text' },

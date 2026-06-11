@@ -57,6 +57,9 @@ export interface Deal {
   contact_email: string | null
   description: string | null
   category: 'Devices' | 'Drugs' | null
+  country: string | null
+  state: string | null
+  city: string | null
   current_fundraise: string | null
   fundraising_to_date: string | null
   series: string | null
@@ -146,6 +149,9 @@ export interface PortfolioCompany {
   id: string
   name: string
   sector: string | null
+  country: string | null
+  state: string | null
+  city: string | null
   website: string | null
   contact_email: string | null
   description: string | null

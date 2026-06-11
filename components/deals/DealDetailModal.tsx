@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Pencil, Trash2, Globe, Building2, User, DollarSign, Tag, Mail, Send, Link } from 'lucide-react'
+import { X, Pencil, Trash2, Globe, Building2, User, DollarSign, Tag, Mail, Send, Link, MapPin } from 'lucide-react'
 import { Deal, DEAL_STAGES, STAGE_COLORS } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
@@ -261,6 +261,7 @@ function OverviewTab({ deal }: { deal: Deal }) {
     { icon: Globe, label: 'Website', value: deal.website, href: deal.website ?? undefined },
     { icon: Mail, label: 'Contact Email', value: deal.contact_email, href: deal.contact_email ? `mailto:${deal.contact_email}` : undefined },
     { icon: Building2, label: 'Sector', value: deal.sector },
+    { icon: MapPin, label: 'Location', value: [deal.city, deal.state, deal.country].filter(Boolean).join(', ') || null },
     { icon: Tag, label: 'Clinical Stage', value: deal.clinical_stage },
     { icon: User, label: 'Lead Partner', value: deal.lead_partner },
     { icon: User, label: 'Founders', value: deal.founders },

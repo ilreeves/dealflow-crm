@@ -270,3 +270,11 @@ CREATE TABLE IF NOT EXISTS deal_activity (
 );
 ALTER TABLE deal_activity ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Auth users can manage deal_activity" ON deal_activity FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- Location fields
+ALTER TABLE deals ADD COLUMN IF NOT EXISTS country TEXT;
+ALTER TABLE deals ADD COLUMN IF NOT EXISTS state TEXT;
+ALTER TABLE deals ADD COLUMN IF NOT EXISTS city TEXT;
+ALTER TABLE portfolio_companies ADD COLUMN IF NOT EXISTS country TEXT;
+ALTER TABLE portfolio_companies ADD COLUMN IF NOT EXISTS state TEXT;
+ALTER TABLE portfolio_companies ADD COLUMN IF NOT EXISTS city TEXT;
