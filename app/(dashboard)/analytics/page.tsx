@@ -4,10 +4,11 @@ import BreakdownTable, { BreakdownRow } from '@/components/analytics/BreakdownTa
 
 export default async function AnalyticsPage() {
   const supabase = await createClient()
-  const [{ data }, { data: activityData }, { data: catalystData }] = await Promise.all([
+  const [{ data }, { data: activityData }, { data: catalystData }, { data: portfolioData }] = await Promise.all([
     supabase.from('deals').select('id,name,stage,category,source,sector,clinical_stage,series,stage_entered_at,created_at'),
     supabase.from('deal_activity').select('deal_id,details,created_at').eq('action', 'Stage changed').order('created_at', { ascending: true }),
     supabase.from('catalysts').select('company_name,catalyst_date,original_date,status'),
+    supabase.from('portfolio_companies').select('sector'),
   ])
 
   const deals = (data as Deal[]) ?? []
@@ -32,13 +33,22 @@ export default async function AnalyticsPage() {
   const devices = deals.filter((d) => d.category === 'Devices')
   const drugs = deals.filter((d) => d.category === 'Drugs')
 
-  // Sector breakdown (all deals, including passed)
-  const sectorMap: Record<string, number> = {}
+  // Sector breakdown: all deals + portfolio companies, side by side
+  const portfolioSectors = (portfolioData as { sector: string | null }[]) ?? []
+  const sectorMap: Record<string, { deals: number; portfolio: number }> = {}
   for (const d of deals) {
     const key = d.sector?.trim() || 'Unknown'
-    sectorMap[key] = (sectorMap[key] ?? 0) + 1
+    if (!sectorMap[key]) sectorMap[key] = { deals: 0, portfolio: 0 }
+    sectorMap[key].deals++
   }
-  const sectors = Object.entries(sectorMap).sort((a, b) => b[1] - a[1]).slice(0, 8)
+  for (const pc of portfolioSectors) {
+    const key = pc.sector?.trim() || 'Unknown'
+    if (!sectorMap[key]) sectorMap[key] = { deals: 0, portfolio: 0 }
+    sectorMap[key].portfolio++
+  }
+  const sectors = Object.entries(sectorMap)
+    .sort((a, b) => (b[1].deals + b[1].portfolio) - (a[1].deals + a[1].portfolio))
+  const maxSectorTotal = Math.max(...sectors.map(([, s]) => s.deals + s.portfolio), 1)
 
   // Series + clinical stage breakdowns (active deals), with company lists
   function buildBreakdown(field: 'series' | 'clinical_stage', order: string[]): BreakdownRow[] {
@@ -308,17 +318,28 @@ export default async function AnalyticsPage() {
         {/* Active pipeline by sector */}
         {sectors.length > 0 && (
           <div>
-            <p className="text-sm font-semibold text-slate-700 mb-3">All Deals by Sector</p>
+            <p className="text-sm font-semibold text-slate-700 mb-1">By Sector</p>
+            <p className="text-xs text-slate-400 mb-3">All deals ever logged (green) alongside current portfolio companies (navy)</p>
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Sector</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Deals</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Portfolio</th>
+                    <th className="px-4 py-2.5 w-32"></th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {sectors.map(([sector, count]) => (
+                  {sectors.map(([sector, { deals: dc, portfolio: pc }]) => (
                     <tr key={sector} className="border-b border-slate-50 last:border-0">
                       <td className="px-4 py-2.5 font-medium text-slate-700">{sector}</td>
-                      <td className="px-4 py-2.5 text-right text-slate-500 w-8">{count}</td>
+                      <td className="px-4 py-2.5 text-right text-slate-600">{dc || ''}</td>
+                      <td className="px-4 py-2.5 text-right font-medium" style={{ color: '#023a51' }}>{pc || ''}</td>
                       <td className="px-4 py-2.5 w-32">
-                        <div className="w-full bg-slate-100 rounded-full h-1.5">
-                          <div className="h-1.5 rounded-full" style={{ width: `${count / sectors[0][1] * 100}%`, backgroundColor: '#5ba200' }} />
+                        <div className="w-full bg-slate-100 rounded-full h-1.5 flex overflow-hidden">
+                          <div className="h-1.5" style={{ width: `${dc / maxSectorTotal * 100}%`, backgroundColor: '#5ba200' }} />
+                          <div className="h-1.5" style={{ width: `${pc / maxSectorTotal * 100}%`, backgroundColor: '#023a51' }} />
                         </div>
                       </td>
                     </tr>
