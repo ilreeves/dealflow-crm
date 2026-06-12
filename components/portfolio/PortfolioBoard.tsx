@@ -126,8 +126,8 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
-        {filtered.length === 0 ? (
+      {filtered.length === 0 ? (
+        <div className="flex-1 overflow-y-auto p-6">
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <Building2 className="w-10 h-10 text-slate-300 mb-3" />
             <p className="text-slate-500 font-medium">
@@ -137,8 +137,9 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
               <p className="text-slate-400 text-sm mt-1">Add your first portfolio company to get started</p>
             )}
           </div>
-        ) : (
-          groupBy === 'fund' ? (
+        </div>
+      ) : groupBy === 'fund' ? (
+        <div className="flex-1 overflow-y-auto p-6">
           <div className="space-y-8">
             {groups.map(({ label, items }) => (
               <div key={label}>
@@ -154,20 +155,37 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
               </div>
             ))}
           </div>
-          ) : (
-          <div className="space-y-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-              {[
-                { title: 'Drugs', items: drugCompanies, accent: 'bg-purple-100 text-purple-700' },
-                { title: 'Devices', items: deviceCompanies, accent: 'bg-blue-100 text-blue-700' },
-              ].map(({ title, items, accent }) => (
-                <div key={title}>
-                  <div className="flex items-center gap-2 mb-4">
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-sm font-semibold ${accent}`}>{title}</span>
-                    <span className="text-xs text-slate-400 font-medium">{items.length}</span>
-                  </div>
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0 flex flex-col p-6 gap-4">
+          {uncategorized.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap shrink-0">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Uncategorized:</span>
+              {uncategorized.map((company) => (
+                <button
+                  key={company.id}
+                  onClick={() => setSelected(company)}
+                  className="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition"
+                >
+                  {company.name}
+                </button>
+              ))}
+              <span className="text-xs text-slate-400">— set Drugs/Devices in the edit form</span>
+            </div>
+          )}
+          <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {[
+              { title: 'Drugs', items: drugCompanies, accent: 'bg-purple-100 text-purple-700' },
+              { title: 'Devices', items: deviceCompanies, accent: 'bg-blue-100 text-blue-700' },
+            ].map(({ title, items, accent }) => (
+              <div key={title} className="flex flex-col min-h-0 bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <div className="px-5 py-3 border-b border-slate-100 shrink-0 flex items-center gap-2">
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-semibold ${accent}`}>{title}</span>
+                  <span className="text-xs text-slate-400 font-medium">{items.length}</span>
+                </div>
+                <div className="flex-1 overflow-y-auto px-5 py-4">
                   {items.length === 0 ? (
-                    <p className="text-sm text-slate-400 py-4">No {title.toLowerCase()} companies categorized yet</p>
+                    <p className="text-sm text-slate-400 py-4 text-center">No {title.toLowerCase()} companies categorized yet</p>
                   ) : (
                     <div className="space-y-6">
                       {stageGroups(items).map(({ stage, items: stageItems }) => (
@@ -183,26 +201,11 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
                     </div>
                   )}
                 </div>
-              ))}
-            </div>
-            {uncategorized.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <p className="text-sm font-bold text-slate-500 uppercase tracking-wide">Uncategorized</p>
-                  <span className="text-xs text-slate-400 font-medium">{uncategorized.length}</span>
-                  <span className="text-xs text-slate-400">— set Drugs/Devices in each company's edit form</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {uncategorized.map((company) => (
-                    <CompanyCard key={company.id} company={company} onClick={() => setSelected(company)} />
-                  ))}
-                </div>
               </div>
-            )}
+            ))}
           </div>
-          )
-        )}
-      </div>
+        </div>
+      )}
 
       {showForm && (
         <PortfolioCompanyForm onClose={() => setShowForm(false)} onSaved={handleSaved} />
