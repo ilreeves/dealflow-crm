@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { X, Pencil, Trash2, Plus, Globe, Mail, Building2, DollarSign, Loader2, Check, Link, MapPin, Tag } from 'lucide-react'
-import { PortfolioCompany, PortfolioFundraiseRound, PortfolioInvestorIntro, INTRO_STATUSES } from '@/lib/types'
+import { PortfolioCompany, PortfolioFundraiseRound, PortfolioInvestorIntro, INTRO_STATUSES, Catalyst } from '@/lib/types'
+import { logCatalystActivity } from '@/lib/activity'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
 import PortfolioCompanyForm from './PortfolioCompanyForm'
 
-type Tab = 'overview' | 'rounds' | 'intros'
+type Tab = 'overview' | 'rounds' | 'intros' | 'catalysts'
 
 interface Props {
   company: PortfolioCompany
@@ -41,6 +42,7 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
     { key: 'overview', label: 'Overview' },
     { key: 'rounds', label: 'Fundraise Rounds' },
     { key: 'intros', label: 'Investor Intros' },
+    { key: 'catalysts', label: 'Catalysts' },
   ]
 
   return (
@@ -91,6 +93,7 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
             {tab === 'overview' && <OverviewTab company={company} />}
             {tab === 'rounds' && <FundraiseRoundsTab companyId={company.id} />}
             {tab === 'intros' && <InvestorIntrosTab companyId={company.id} />}
+            {tab === 'catalysts' && <CatalystsTab companyName={company.name} />}
           </div>
         </div>
       </div>
@@ -519,6 +522,187 @@ function InvestorIntrosTab({ companyId }: { companyId: string }) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Catalysts Tab ────────────────────────────────────────────────────────────
+const CATALYST_PERIODS = ['1Q', '2Q', '3Q', '4Q', '1H', '2H', 'FY'] as const
+
+const CATALYST_PERIOD_END: Record<string, string> = {
+  '1Q': '03-31', '2Q': '06-30', '3Q': '09-30', '4Q': '12-31',
+  '1H': '06-30', '2H': '12-31', 'FY': '12-31',
+}
+
+const CATALYST_STATUS_COLORS: Record<string, string> = {
+  'Pending':    'bg-yellow-100 text-yellow-800',
+  'On Track':   'bg-emerald-100 text-emerald-700',
+  'Done':       'bg-green-100 text-green-700',
+  'Delayed':    'bg-orange-100 text-orange-700',
+  'On Hold':    'bg-slate-200 text-slate-600',
+  'Failed':     'bg-red-100 text-red-700',
+  'Terminated': 'bg-red-100 text-red-700',
+}
+
+function CatalystsTab({ companyName }: { companyName: string }) {
+  const [catalysts, setCatalysts] = useState<Catalyst[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const currentYear = new Date().getFullYear()
+  const [form, setForm] = useState({ title: '', period: '1Q', year: String(currentYear), notes: '' })
+  const [saving, setSaving] = useState(false)
+  const supabase = createClient()
+
+  useEffect(() => {
+    supabase.from('catalysts').select('*').eq('company_name', companyName)
+      .order('catalyst_date', { ascending: true })
+      .then(({ data }) => { setCatalysts((data as Catalyst[]) ?? []); setLoading(false) })
+  }, [companyName])
+
+  async function handleAdd() {
+    if (!form.title.trim()) return
+    const year = parseInt(form.year, 10)
+    if (!year || year < 2000 || year > 2100) return
+    setSaving(true)
+    const dateEnd = `${year}-${CATALYST_PERIOD_END[form.period]}`
+    const { data } = await supabase.from('catalysts').insert({
+      company_name: companyName,
+      title: form.title.trim(),
+      catalyst_date: dateEnd,
+      period: `${form.period} ${year}`,
+      original_date: dateEnd,
+      original_period: `${form.period} ${year}`,
+      status: 'Pending',
+      notes: form.notes.trim() || null,
+    }).select().single()
+    if (data) {
+      setCatalysts((prev) => [...prev, data as Catalyst].sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date)))
+      await logCatalystActivity(companyName, form.title.trim(), 'Catalyst added', `${form.period} ${year}`)
+      setForm({ title: '', period: '1Q', year: String(currentYear), notes: '' })
+      setShowForm(false)
+    }
+    setSaving(false)
+  }
+
+  async function handleDeleteCatalyst(cat: Catalyst) {
+    await supabase.from('catalysts').delete().eq('id', cat.id)
+    setCatalysts((prev) => prev.filter((c) => c.id !== cat.id))
+    await logCatalystActivity(cat.company_name, cat.title, 'Catalyst deleted', cat.period)
+  }
+
+  const today = new Date().toISOString().slice(0, 10)
+
+  return (
+    <div className="space-y-4">
+      {!showForm ? (
+        <button
+          onClick={() => setShowForm(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-slate-300 rounded-lg text-sm text-slate-500 hover:border-slate-400 hover:text-slate-700 transition"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Add Catalyst
+        </button>
+      ) : (
+        <div className="border border-slate-200 rounded-xl p-4 space-y-3 bg-slate-50">
+          <p className="text-sm font-semibold text-slate-700">New Catalyst</p>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Catalyst *</label>
+            <input
+              placeholder="e.g. Phase II topline data, FDA decision, Series B close"
+              value={form.title}
+              onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Expected Timing *</label>
+              <select
+                value={form.period}
+                onChange={(e) => setForm((p) => ({ ...p, period: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+              >
+                {CATALYST_PERIODS.map((p) => (
+                  <option key={p} value={p}>{p === 'FY' ? 'Full Year' : p}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Year *</label>
+              <input
+                type="number"
+                min={2000}
+                max={2100}
+                value={form.year}
+                onChange={(e) => setForm((p) => ({ ...p, year: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Notes</label>
+            <textarea
+              rows={2}
+              value={form.notes}
+              onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none bg-white"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setShowForm(false)} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 transition">Cancel</button>
+            <button
+              onClick={handleAdd}
+              disabled={saving || !form.title.trim()}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg disabled:opacity-40 transition"
+              style={{backgroundColor: '#023a51'}}
+            >
+              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Add
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+      ) : catalysts.length === 0 ? (
+        <p className="text-center text-sm text-slate-400 py-6">No catalysts for this company yet</p>
+      ) : (
+        <div className="space-y-2">
+          {catalysts.map((cat) => {
+            const status = cat.status ?? 'Pending'
+            const isPast = cat.catalyst_date < today
+            return (
+              <div key={cat.id} className={`border rounded-xl px-4 py-3 group ${
+                isPast && ['Done', 'Failed', 'Terminated'].includes(status) ? 'border-slate-100 bg-slate-50 opacity-70' : 'border-slate-200 bg-white'
+              }`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-lg bg-slate-100 text-xs font-bold text-slate-600 shrink-0">
+                        {cat.resolved_date
+                          ? new Date(cat.resolved_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                          : cat.period ?? cat.catalyst_date}
+                      </span>
+                      <span className="text-sm font-medium text-slate-800">{cat.title}</span>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${CATALYST_STATUS_COLORS[status] ?? 'bg-slate-100 text-slate-600'}`}>
+                        {status}
+                      </span>
+                    </div>
+                    {cat.notes && <p className="text-sm text-slate-500 mt-1 leading-relaxed">{cat.notes}</p>}
+                  </div>
+                  <button
+                    onClick={() => handleDeleteCatalyst(cat)}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
