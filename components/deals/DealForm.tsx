@@ -13,6 +13,33 @@ interface Props {
   onSaved: (deal: Deal) => void
 }
 
+const ABMS_SPECIALTIES = [
+  'Allergy & Immunology',
+  'Anesthesiology',
+  'Colon & Rectal Surgery',
+  'Dermatology',
+  'Emergency Medicine',
+  'Family Medicine',
+  'Internal Medicine',
+  'Medical Genetics and Genomics',
+  'Neurological Surgery',
+  'Nuclear Medicine',
+  'Obstetrics & Gynecology',
+  'Ophthalmology',
+  'Orthopaedic Surgery',
+  'Otolaryngology - Head and Neck Surgery',
+  'Pathology',
+  'Pediatrics',
+  'Physical Medicine & Rehabilitation',
+  'Plastic Surgery',
+  'Preventive Medicine',
+  'Psychiatry & Neurology',
+  'Radiology',
+  'Surgery',
+  'Thoracic Surgery',
+  'Urology',
+]
+
 const SERIES_OPTIONS = ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'A', 'B', 'C', 'D+']
 const CLINICAL_STAGE_OPTIONS = [
   'Preclinical',
@@ -32,7 +59,7 @@ const CORE_FIELDS = [
   { name: 'name', label: 'Company Name', type: 'text', required: true },
   { name: 'website', label: 'Website', type: 'url' },
   { name: 'contact_email', label: 'Contact Email', type: 'email' },
-  { name: 'sector', label: 'Sector', type: 'text' },
+  { name: 'sector', label: 'Sector', type: 'select', options: ABMS_SPECIALTIES },
   { name: 'city', label: 'City', type: 'text' },
   { name: 'state', label: 'State / Region', type: 'text' },
   { name: 'country', label: 'Country', type: 'text' },
