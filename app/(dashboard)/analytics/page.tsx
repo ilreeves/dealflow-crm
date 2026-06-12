@@ -116,7 +116,7 @@ export default async function AnalyticsPage() {
     lastEntered[e.deal_id] = { stage: toStage, at: e.created_at }
   }
   const historicalAverages = STAGE_ORDER
-    .filter((s) => historical[s]?.length)
+    .filter((s) => s !== 'Passed' && historical[s]?.length)
     .map((s) => ({
       stage: s,
       count: historical[s].length,
