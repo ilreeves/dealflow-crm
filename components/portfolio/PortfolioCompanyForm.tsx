@@ -146,7 +146,7 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Fund / Vehicle</label>
             <div className="flex items-center gap-2 flex-wrap">
-              {['Fund I', 'Fund II', 'EHF', 'SPV'].map((fund) => (
+              {['Fund I', 'Fund II', 'EHF', 'Solas/Sower', 'SPV'].map((fund) => (
                 <button
                   type="button"
                   key={fund}

@@ -22,7 +22,7 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
     (c.sector ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
-  const FUND_ORDER = ['Fund I', 'Fund II', 'EHF', 'SPV']
+  const FUND_ORDER = ['Fund I', 'Fund II', 'EHF', 'Solas/Sower', 'SPV']
   const SERIES_ORDER = ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'A', 'B', 'C', 'D+']
   const CLINICAL_ORDER = ['Preclinical', 'Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Pre-IDE', 'FIH', 'Pivotal', '510(k)', 'PMA', 'Approved / Marketed']
 
