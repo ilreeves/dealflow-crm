@@ -19,6 +19,7 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
   const [form, setForm] = useState({
     name: company?.name ?? '',
     sector: company?.sector ?? '',
+    funds: company?.funds ?? [] as string[],
     series: company?.series ?? '',
     clinical_stage: company?.clinical_stage ?? '',
     city: company?.city ?? '',
@@ -36,6 +37,13 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
+  function toggleFund(fund: string) {
+    setForm((prev) => ({
+      ...prev,
+      funds: prev.funds.includes(fund) ? prev.funds.filter((f: string) => f !== fund) : [...prev.funds, fund],
+    }))
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.name.trim()) return
@@ -45,6 +53,7 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
     const payload = {
       name: form.name.trim(),
       sector: form.sector || null,
+      funds: form.funds.length ? form.funds : null,
       series: form.series || null,
       clinical_stage: form.clinical_stage || null,
       city: form.city || null,
@@ -110,13 +119,13 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
               </label>
               {field.type === 'select' ? (
                 <select
-                  value={(form as Record<string, string>)[field.name]}
+                  value={(form as unknown as Record<string, string>)[field.name]}
                   onChange={(e) => set(field.name, e.target.value)}
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
                 >
                   <option value="">Select…</option>
-                  {(form as Record<string, string>)[field.name] && !(field.options ?? []).includes((form as Record<string, string>)[field.name]) && (
-                    <option value={(form as Record<string, string>)[field.name]}>{(form as Record<string, string>)[field.name]}</option>
+                  {(form as unknown as Record<string, string>)[field.name] && !(field.options ?? []).includes((form as unknown as Record<string, string>)[field.name]) && (
+                    <option value={(form as unknown as Record<string, string>)[field.name]}>{(form as unknown as Record<string, string>)[field.name]}</option>
                   )}
                   {(field.options ?? []).map((opt: string) => (
                     <option key={opt} value={opt}>{opt}</option>
@@ -126,13 +135,34 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
                 <input
                   type={field.type}
                   required={field.required}
-                  value={(form as Record<string, string>)[field.name]}
+                  value={(form as unknown as Record<string, string>)[field.name]}
                   onChange={(e) => set(field.name, e.target.value)}
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
                 />
               )}
             </div>
           ))}
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Fund / Vehicle</label>
+            <div className="flex items-center gap-2 flex-wrap">
+              {['Fund I', 'Fund II', 'EHF', 'SPV'].map((fund) => (
+                <button
+                  type="button"
+                  key={fund}
+                  onClick={() => toggleFund(fund)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${
+                    form.funds.includes(fund)
+                      ? 'border-transparent text-white'
+                      : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                  }`}
+                  style={form.funds.includes(fund) ? { backgroundColor: '#023a51' } : {}}
+                >
+                  {fund}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Description</label>

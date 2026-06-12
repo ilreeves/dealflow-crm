@@ -15,11 +15,43 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [selected, setSelected] = useState<PortfolioCompany | null>(null)
+  const [groupBy, setGroupBy] = useState<'fund' | 'series' | 'clinical'>('fund')
 
   const filtered = companies.filter((c) =>
     !search || c.name.toLowerCase().includes(search.toLowerCase()) ||
     (c.sector ?? '').toLowerCase().includes(search.toLowerCase())
   )
+
+  const FUND_ORDER = ['Fund I', 'Fund II', 'EHF', 'SPV']
+  const SERIES_ORDER = ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'A', 'B', 'C', 'D+']
+  const CLINICAL_ORDER = ['Preclinical', 'Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Pre-IDE', 'FIH', 'Pivotal', '510(k)', 'PMA', 'Approved / Marketed']
+
+  // Build groups; a company can appear in multiple fund groups
+  const groups: { label: string; items: PortfolioCompany[] }[] = []
+  function addTo(label: string, company: PortfolioCompany) {
+    let g = groups.find((x) => x.label === label)
+    if (!g) {
+      g = { label, items: [] }
+      groups.push(g)
+    }
+    g.items.push(company)
+  }
+  for (const company of filtered) {
+    if (groupBy === 'fund') {
+      const funds = company.funds?.length ? company.funds : ['Unassigned']
+      for (const f of funds) addTo(f, company)
+    } else if (groupBy === 'series') {
+      addTo(company.series?.trim() || 'Unknown', company)
+    } else {
+      addTo(company.clinical_stage?.trim() || 'Unknown', company)
+    }
+  }
+  const order = groupBy === 'fund' ? FUND_ORDER : groupBy === 'series' ? SERIES_ORDER : CLINICAL_ORDER
+  groups.sort((a, b) => {
+    const ia = order.indexOf(a.label); const ib = order.indexOf(b.label)
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.label.localeCompare(b.label)
+  })
+  for (const g of groups) g.items.sort((a, b) => a.name.localeCompare(b.name))
 
   function handleSaved(company: PortfolioCompany) {
     setCompanies((prev) => {
@@ -48,6 +80,20 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
           <p className="text-sm text-slate-500 mt-0.5">{companies.length} {companies.length === 1 ? 'company' : 'companies'}</p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg">
+            {([['fund', 'Fund'], ['series', 'Series'], ['clinical', 'Clinical Stage']] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setGroupBy(key)}
+                style={groupBy === key ? { color: '#5ba200' } : {}}
+                className={`px-3 py-1 text-sm font-medium rounded-md transition ${
+                  groupBy === key ? 'bg-white shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             <input
@@ -81,9 +127,19 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((company) => (
-              <CompanyCard key={company.id} company={company} onClick={() => setSelected(company)} />
+          <div className="space-y-8">
+            {groups.map(({ label, items }) => (
+              <div key={label}>
+                <div className="flex items-center gap-2 mb-3">
+                  <p className="text-sm font-bold text-slate-700 uppercase tracking-wide">{label}</p>
+                  <span className="text-xs text-slate-400 font-medium">{items.length}</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {items.map((company) => (
+                    <CompanyCard key={`${label}-${company.id}`} company={company} onClick={() => setSelected(company)} />
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -115,6 +171,15 @@ function CompanyCard({ company, onClick }: { company: PortfolioCompany; onClick:
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-slate-900 truncate group-hover:text-[#023a51] transition">{company.name}</h3>
           {company.sector && <p className="text-xs text-slate-500 mt-0.5">{company.sector}</p>}
+          {(company.funds?.length ?? 0) > 0 && (
+            <div className="flex items-center gap-1 flex-wrap mt-1.5">
+              {company.funds!.map((f) => (
+                <span key={f} className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide" style={{ backgroundColor: 'rgba(2,58,81,0.08)', color: '#023a51' }}>
+                  {f}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{backgroundColor: 'rgba(2,58,81,0.08)'}}>
           <Building2 className="w-4 h-4" style={{color: '#023a51'}} />
