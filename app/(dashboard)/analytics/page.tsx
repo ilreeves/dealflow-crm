@@ -32,9 +32,9 @@ export default async function AnalyticsPage() {
   const devices = deals.filter((d) => d.category === 'Devices')
   const drugs = deals.filter((d) => d.category === 'Drugs')
 
-  // Sector breakdown (active only)
+  // Sector breakdown (all deals, including passed)
   const sectorMap: Record<string, number> = {}
-  for (const d of deals.filter((d) => d.stage !== 'Passed')) {
+  for (const d of deals) {
     const key = d.sector?.trim() || 'Unknown'
     sectorMap[key] = (sectorMap[key] ?? 0) + 1
   }
@@ -308,7 +308,7 @@ export default async function AnalyticsPage() {
         {/* Active pipeline by sector */}
         {sectors.length > 0 && (
           <div>
-            <p className="text-sm font-semibold text-slate-700 mb-3">Active Pipeline by Sector</p>
+            <p className="text-sm font-semibold text-slate-700 mb-3">All Deals by Sector</p>
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <table className="w-full text-sm">
                 <tbody>
