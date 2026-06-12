@@ -8,7 +8,7 @@ export default async function AnalyticsPage() {
     supabase.from('deals').select('id,name,stage,category,source,sector,clinical_stage,series,stage_entered_at,created_at'),
     supabase.from('deal_activity').select('deal_id,details,created_at').eq('action', 'Stage changed').order('created_at', { ascending: true }),
     supabase.from('catalysts').select('company_name,catalyst_date,original_date,status'),
-    supabase.from('portfolio_companies').select('sector'),
+    supabase.from('portfolio_companies').select('name,sector,category'),
   ])
 
   const deals = (data as Deal[]) ?? []
@@ -33,22 +33,29 @@ export default async function AnalyticsPage() {
   const devices = deals.filter((d) => d.category === 'Devices')
   const drugs = deals.filter((d) => d.category === 'Drugs')
 
-  // Sector breakdown: all deals + portfolio companies, side by side
-  const portfolioSectors = (portfolioData as { sector: string | null }[]) ?? []
-  const sectorMap: Record<string, { deals: number; portfolio: number }> = {}
-  for (const d of deals) {
-    const key = d.sector?.trim() || 'Unknown'
-    if (!sectorMap[key]) sectorMap[key] = { deals: 0, portfolio: 0 }
-    sectorMap[key].deals++
+  // Sector breakdowns: deals and portfolio as separate expandable tables
+  const portfolioCompanies = (portfolioData as { name: string; sector: string | null; category: string | null }[]) ?? []
+
+  function sectorRows(items: { name: string; sector: string | null; sub: string }[]): BreakdownRow[] {
+    const map: Record<string, { name: string; stage: string }[]> = {}
+    for (const it of items) {
+      const key = it.sector?.trim() || 'Unknown'
+      if (!map[key]) map[key] = []
+      map[key].push({ name: it.name, stage: it.sub })
+    }
+    return Object.entries(map)
+      .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+      .map(([label, companies]) => ({
+        label,
+        count: companies.length,
+        companies: companies.sort((a, b) => a.name.localeCompare(b.name)),
+      }))
   }
-  for (const pc of portfolioSectors) {
-    const key = pc.sector?.trim() || 'Unknown'
-    if (!sectorMap[key]) sectorMap[key] = { deals: 0, portfolio: 0 }
-    sectorMap[key].portfolio++
-  }
-  const sectors = Object.entries(sectorMap)
-    .sort((a, b) => (b[1].deals + b[1].portfolio) - (a[1].deals + a[1].portfolio))
-  const maxSectorTotal = Math.max(...sectors.map(([, s]) => s.deals + s.portfolio), 1)
+
+  const dealSectorRows = sectorRows(deals.map((d) => ({ name: d.name, sector: d.sector, sub: d.stage })))
+  const portfolioSectorRows = sectorRows(portfolioCompanies.map((pc) => ({ name: pc.name, sector: pc.sector, sub: pc.category ?? '' })))
+  const maxDealSector = Math.max(...dealSectorRows.map((r) => r.count), 1)
+  const maxPortfolioSector = Math.max(...portfolioSectorRows.map((r) => r.count), 1)
 
   // Series + clinical stage breakdowns (active deals), with company lists
   function buildBreakdown(field: 'series' | 'clinical_stage', order: string[]): BreakdownRow[] {
@@ -315,45 +322,16 @@ export default async function AnalyticsPage() {
           <BreakdownTable title="Active Pipeline by Clinical Stage" rows={clinicalBreakdown} max={maxClinical} color="#e98925" />
         </div>
 
-        {/* Active pipeline by sector */}
-        {sectors.length > 0 && (
-          <div>
-            <p className="text-sm font-semibold text-slate-700 mb-1">By Sector</p>
-            <p className="text-xs text-slate-400 mb-3">All deals ever logged (green) alongside current portfolio companies (navy)</p>
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Sector</th>
-                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Deals</th>
-                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Portfolio</th>
-                    <th className="px-4 py-2.5 w-32"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sectors.map(([sector, { deals: dc, portfolio: pc }]) => (
-                    <tr key={sector} className="border-b border-slate-50 last:border-0">
-                      <td className="px-4 py-2.5 font-medium text-slate-700">{sector}</td>
-                      <td className="px-4 py-2.5 text-right text-slate-600">{dc || ''}</td>
-                      <td className="px-4 py-2.5 text-right font-medium" style={{ color: '#023a51' }}>{pc || ''}</td>
-                      <td className="px-4 py-2.5 w-32">
-                        <div className="w-full bg-slate-100 rounded-full h-1.5 flex overflow-hidden">
-                          <div className="h-1.5" style={{ width: `${dc / maxSectorTotal * 100}%`, backgroundColor: '#5ba200' }} />
-                          <div className="h-1.5" style={{ width: `${pc / maxSectorTotal * 100}%`, backgroundColor: '#023a51' }} />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+        {/* Deals by sector */}
+        <BreakdownTable title="All Deals by Sector" rows={dealSectorRows} max={maxDealSector} color="#5ba200" />
 
         </div>
 
-        {/* ── Right column: catalyst analytics ── */}
+        {/* ── Right column: catalyst & portfolio analytics ── */}
         <div className="space-y-8">
+        {/* Portfolio by sector */}
+        <BreakdownTable title="Portfolio Holdings by Sector" rows={portfolioSectorRows} max={maxPortfolioSector} color="#023a51" />
+
         {/* Catalyst reliability */}
         {reliability.length > 0 && (
           <div>
