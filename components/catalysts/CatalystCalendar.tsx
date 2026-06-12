@@ -235,7 +235,7 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
             <p className="text-sm text-slate-400">No catalysts yet — add data readouts, FDA decisions, fundraise closes, and other key timing.</p>
           </div>
         ) : view === 'gantt' ? (
-          <CatalystGantt catalysts={catalysts} onUpdated={(updated) => setCatalysts((prev) => prev.map((x) => x.id === updated.id ? updated : x))} />
+          <CatalystGantt catalysts={catalysts} onUpdated={(updated) => setCatalysts((prev) => prev.map((x) => x.id === updated.id ? updated : x))} onDeleted={handleDelete} />
         ) : (
           groups.map(({ key, items }) => (
             <div key={key} className="mb-8">

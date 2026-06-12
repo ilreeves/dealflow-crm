@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 interface Props {
   catalysts: Catalyst[]
   onUpdated: (c: Catalyst) => void
+  onDeleted: (id: string) => void
 }
 
 const STATUSES = ['Pending', 'On Track', 'Done', 'Delayed', 'On Hold', 'Failed', 'Terminated'] as const
@@ -20,6 +21,13 @@ const STATUS_BAR: Record<string, string> = {
   'On Hold':    'bg-slate-400',
   'Failed':     'bg-red-500',
   'Terminated': 'bg-red-700',
+}
+
+const CLOSED_STATUSES = ['Done', 'Failed', 'Terminated']
+
+const PERIOD_END: Record<string, string> = {
+  '1Q': '03-31', '2Q': '06-30', '3Q': '09-30', '4Q': '12-31',
+  '1H': '06-30', '2H': '12-31', 'FY': '12-31',
 }
 
 function periodSpan(c: Catalyst): { year: number; startQ: number; span: number } {
@@ -53,12 +61,13 @@ function dateQuarterPos(dateStr: string, minYear: number): number {
 const QUARTER_W = 48
 const LABEL_W = 260
 
-export default function CatalystGantt({ catalysts, onUpdated }: Props) {
+export default function CatalystGantt({ catalysts, onUpdated, onDeleted }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(
     () => new Set(catalysts.map((c) => c.company_name))
   )
   const [editingTitle, setEditingTitle] = useState<{ id: string; text: string } | null>(null)
   const [barMenu, setBarMenu] = useState<{ id: string; status: string; date: string } | null>(null)
+  const [drag, setDrag] = useState<{ id: string; startX: number; dx: number; moved: boolean } | null>(null)
   const supabase = createClient()
 
   function toggleCompany(name: string) {
@@ -86,6 +95,28 @@ export default function CatalystGantt({ catalysts, onUpdated }: Props) {
       .eq('id', barMenu.id).select().single()
     if (data) onUpdated(data as Catalyst)
     setBarMenu(null)
+  }
+
+  async function commitMove(cat: Catalyst, shiftQuarters: number, minYr: number, totalQ: number) {
+    if (shiftQuarters === 0) return
+    const { year, startQ, span } = periodSpan(cat)
+    let g = (year - minYr) * 4 + startQ + shiftQuarters
+    if (span === 2) g = Math.round(g / 2) * 2
+    if (span === 4) g = Math.round(g / 4) * 4
+    g = Math.max(0, Math.min(g, totalQ - span))
+    const newYear = minYr + Math.floor(g / 4)
+    const qIdx = g % 4
+    const prefix = span === 4 ? 'FY' : span === 2 ? (qIdx === 0 ? '1H' : '2H') : ['1Q', '2Q', '3Q', '4Q'][qIdx]
+    const newEnd = `${newYear}-${PERIOD_END[prefix]}`
+    if (newEnd === cat.catalyst_date && cat.period?.startsWith(prefix)) return
+
+    const status = cat.status ?? 'Pending'
+    const movedLater = newEnd > cat.catalyst_date
+    const patch: Record<string, string> = { catalyst_date: newEnd, period: `${prefix} ${newYear}` }
+    if (movedLater && !CLOSED_STATUSES.includes(status)) patch.status = 'Delayed'
+
+    const { data } = await supabase.from('catalysts').update(patch).eq('id', cat.id).select().single()
+    if (data) onUpdated(data as Catalyst)
   }
 
   if (catalysts.length === 0) {
@@ -139,13 +170,46 @@ export default function CatalystGantt({ catalysts, onUpdated }: Props) {
 
     const { year, startQ, span } = periodSpan(c)
     const offset = (year - minYear) * 4 + startQ
+    if (mini) {
+      return (
+        <div
+          key={c.id}
+          title={tip}
+          className={`absolute rounded ${color} top-2 h-3 opacity-60`}
+          style={{ left: offset * QUARTER_W + 2, width: span * QUARTER_W - 4 }}
+        />
+      )
+    }
+    const isDragging = drag?.id === c.id
+    const snappedDx = isDragging ? Math.round(drag.dx / QUARTER_W) * QUARTER_W : 0
     return (
       <div
-        key={mini ? c.id : undefined}
-        title={tip}
-        onClick={mini ? undefined : (e) => { e.stopPropagation(); setBarMenu({ id: c.id, status, date: '' }) }}
-        className={`absolute rounded ${color} ${mini ? 'top-2 h-3 opacity-60' : 'top-1 h-5 opacity-90 cursor-pointer hover:opacity-100 hover:ring-2 hover:ring-slate-300'}`}
-        style={{ left: offset * QUARTER_W + 2, width: span * QUARTER_W - 4 }}
+        title={`${tip}\nDrag to reschedule`}
+        onPointerDown={(e) => {
+          e.stopPropagation()
+          e.preventDefault()
+          ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+          setDrag({ id: c.id, startX: e.clientX, dx: 0, moved: false })
+        }}
+        onPointerMove={(e) => {
+          if (drag?.id !== c.id) return
+          const dx = e.clientX - drag.startX
+          setDrag({ ...drag, dx, moved: drag.moved || Math.abs(dx) > 5 })
+        }}
+        onPointerUp={() => {
+          if (drag?.id !== c.id) return
+          const d = drag
+          setDrag(null)
+          if (!d.moved) {
+            setBarMenu({ id: c.id, status, date: '' })
+            return
+          }
+          commitMove(c, Math.round(d.dx / QUARTER_W), minYear, totalQuarters)
+        }}
+        className={`absolute rounded ${color} top-1 h-5 opacity-90 hover:opacity-100 hover:ring-2 hover:ring-slate-300 touch-none ${
+          isDragging ? 'cursor-grabbing ring-2 ring-slate-400 opacity-100 z-10' : 'cursor-grab'
+        }`}
+        style={{ left: offset * QUARTER_W + 2 + snappedDx, width: span * QUARTER_W - 4 }}
       />
     )
   }
@@ -257,7 +321,14 @@ export default function CatalystGantt({ catalysts, onUpdated }: Props) {
                             </button>
                           )}
                         </div>
-                        <div className="flex justify-end gap-2">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => { onDeleted(c.id); setBarMenu(null) }}
+                            className="px-2.5 py-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition"
+                          >
+                            Delete
+                          </button>
+                          <div className="flex-1" />
                           <button onClick={() => setBarMenu(null)} className="px-2.5 py-1 text-xs text-slate-500 hover:text-slate-800 transition">Cancel</button>
                           <button
                             onClick={applyBarMenu}
