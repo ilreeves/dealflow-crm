@@ -198,6 +198,8 @@ export interface Catalyst {
   title: string
   catalyst_date: string
   period: string | null
+  original_date: string | null
+  original_period: string | null
   status: string | null
   resolved_date: string | null
   notes: string | null

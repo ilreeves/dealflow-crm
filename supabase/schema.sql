@@ -288,6 +288,8 @@ CREATE TABLE IF NOT EXISTS catalysts (
   title TEXT NOT NULL,
   catalyst_date DATE NOT NULL,
   period TEXT,
+  original_date DATE,
+  original_period TEXT,
   status TEXT DEFAULT 'Pending',
   resolved_date DATE,
   notes TEXT,

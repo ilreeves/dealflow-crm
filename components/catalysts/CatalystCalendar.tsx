@@ -65,6 +65,8 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
       title: form.title.trim(),
       catalyst_date: periodEndDate(form.period, year),
       period: `${form.period} ${year}`,
+      original_date: periodEndDate(form.period, year),
+      original_period: `${form.period} ${year}`,
       status: form.status,
       notes: form.notes.trim() || null,
     }).select().single()

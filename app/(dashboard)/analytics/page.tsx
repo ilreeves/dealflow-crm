@@ -4,9 +4,10 @@ import BreakdownTable, { BreakdownRow } from '@/components/analytics/BreakdownTa
 
 export default async function AnalyticsPage() {
   const supabase = await createClient()
-  const [{ data }, { data: activityData }] = await Promise.all([
+  const [{ data }, { data: activityData }, { data: catalystData }] = await Promise.all([
     supabase.from('deals').select('id,name,stage,category,source,sector,clinical_stage,series,stage_entered_at,created_at'),
     supabase.from('deal_activity').select('deal_id,details,created_at').eq('action', 'Stage changed').order('created_at', { ascending: true }),
+    supabase.from('catalysts').select('company_name,catalyst_date,original_date,status'),
   ])
 
   const deals = (data as Deal[]) ?? []
@@ -123,6 +124,30 @@ export default async function AnalyticsPage() {
     }))
   const maxHistAvg = Math.max(...historicalAverages.map((s) => s.avgDays), 1)
   const totalTransitions = historicalAverages.reduce((a, s) => a + s.count, 0)
+
+  // Catalyst reliability: per company, how many catalysts slipped vs original timeline
+  type CatalystRow = { company_name: string; catalyst_date: string; original_date: string | null; status: string | null }
+  const catalysts = (catalystData as CatalystRow[]) ?? []
+  const reliabilityMap: Record<string, { total: number; delayed: number; slipDays: number[] }> = {}
+  for (const cat of catalysts) {
+    if (!reliabilityMap[cat.company_name]) reliabilityMap[cat.company_name] = { total: 0, delayed: 0, slipDays: [] }
+    const r = reliabilityMap[cat.company_name]
+    r.total++
+    const slipped = cat.original_date && cat.catalyst_date > cat.original_date
+    if (slipped || cat.status === 'Delayed') r.delayed++
+    if (slipped && cat.original_date) {
+      r.slipDays.push((new Date(cat.catalyst_date).getTime() - new Date(cat.original_date).getTime()) / (1000 * 60 * 60 * 24))
+    }
+  }
+  const reliability = Object.entries(reliabilityMap)
+    .map(([company, r]) => ({
+      company,
+      total: r.total,
+      delayed: r.delayed,
+      rate: r.delayed / r.total,
+      avgSlip: r.slipDays.length ? r.slipDays.reduce((a, b) => a + b, 0) / r.slipDays.length : null,
+    }))
+    .sort((a, b) => b.rate - a.rate || b.total - a.total)
 
   function formatDays(days: number): string {
     if (days < 1) return '<1 day'
@@ -269,6 +294,46 @@ export default async function AnalyticsPage() {
             </div>
           )}
         </div>
+
+        {/* Catalyst reliability */}
+        {reliability.length > 0 && (
+          <div>
+            <p className="text-sm font-semibold text-slate-700 mb-1">Catalyst Reliability by Company</p>
+            <p className="text-xs text-slate-400 mb-3">
+              How often each company's catalysts slip versus their original guidance. Slip magnitude is tracked from when each catalyst was first entered (timeline snapshots began June 11, 2026).
+            </p>
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Company</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Catalysts</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Delayed</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Rate</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Avg Slip</th>
+                    <th className="px-4 py-2.5 w-28"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reliability.map(({ company, total: t, delayed, rate, avgSlip }) => (
+                    <tr key={company} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                      <td className="px-4 py-2.5 font-medium text-slate-700">{company}</td>
+                      <td className="px-4 py-2.5 text-right text-slate-600">{t}</td>
+                      <td className="px-4 py-2.5 text-right text-orange-600 font-medium">{delayed}</td>
+                      <td className="px-4 py-2.5 text-right text-slate-600">{Math.round(rate * 100)}%</td>
+                      <td className="px-4 py-2.5 text-right text-slate-500 whitespace-nowrap">{avgSlip !== null ? formatDays(avgSlip) : '\u2014'}</td>
+                      <td className="px-4 py-2.5">
+                        <div className="w-full bg-slate-100 rounded-full h-1.5">
+                          <div className="bg-orange-400 h-1.5 rounded-full" style={{ width: `${rate * 100}%` }} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Series & Clinical Stage breakdowns */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
