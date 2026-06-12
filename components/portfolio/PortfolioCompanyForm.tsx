@@ -19,6 +19,7 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
   const [form, setForm] = useState({
     name: company?.name ?? '',
     sector: company?.sector ?? '',
+    category: company?.category ?? '',
     funds: company?.funds ?? [] as string[],
     series: company?.series ?? '',
     clinical_stage: company?.clinical_stage ?? '',
@@ -53,6 +54,7 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
     const payload = {
       name: form.name.trim(),
       sector: form.sector || null,
+      category: form.category || null,
       funds: form.funds.length ? form.funds : null,
       series: form.series || null,
       clinical_stage: form.clinical_stage || null,
@@ -142,6 +144,26 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
               )}
             </div>
           ))}
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Category</label>
+            <div className="flex items-center gap-2">
+              {['Drugs', 'Devices'].map((cat) => (
+                <button
+                  type="button"
+                  key={cat}
+                  onClick={() => set('category', form.category === cat ? '' : cat)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${
+                    form.category === cat
+                      ? cat === 'Drugs' ? 'border-transparent bg-purple-100 text-purple-700' : 'border-transparent bg-blue-100 text-blue-700'
+                      : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Fund / Vehicle</label>

@@ -15,6 +15,7 @@ export async function addDealToPortfolio(supabase: SupabaseClient, deal: Deal) {
   await supabase.from('portfolio_companies').insert({
     name: deal.name,
     sector: deal.sector,
+    category: deal.category,
     series: deal.series,
     clinical_stage: deal.clinical_stage,
     website: deal.website,

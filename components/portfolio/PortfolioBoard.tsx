@@ -15,7 +15,7 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [selected, setSelected] = useState<PortfolioCompany | null>(null)
-  const [groupBy, setGroupBy] = useState<'fund' | 'clinical'>('fund')
+  const [groupBy, setGroupBy] = useState<'fund' | 'clinical'>('clinical')
 
   const filtered = companies.filter((c) =>
     !search || c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -25,7 +25,7 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
   const FUND_ORDER = ['Fund I', 'Fund II', 'EHF', 'Solas/Sower', 'SPV']
   const CLINICAL_ORDER = ['Preclinical', 'Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Pre-IDE', 'FIH', 'Pivotal', '510(k)', 'PMA', 'Approved / Marketed']
 
-  // Build groups; a company can appear in multiple fund groups
+  // Fund view: a company can appear in multiple fund groups
   const groups: { label: string; items: PortfolioCompany[] }[] = []
   function addTo(label: string, company: PortfolioCompany) {
     let g = groups.find((x) => x.label === label)
@@ -36,19 +36,33 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
     g.items.push(company)
   }
   for (const company of filtered) {
-    if (groupBy === 'fund') {
-      const funds = company.funds?.length ? company.funds : ['Unassigned']
-      for (const f of funds) addTo(f, company)
-    } else {
-      addTo(company.clinical_stage?.trim() || 'Unknown', company)
-    }
+    const funds = company.funds?.length ? company.funds : ['Unassigned']
+    for (const f of funds) addTo(f, company)
   }
-  const order = groupBy === 'fund' ? FUND_ORDER : CLINICAL_ORDER
   groups.sort((a, b) => {
-    const ia = order.indexOf(a.label); const ib = order.indexOf(b.label)
+    const ia = FUND_ORDER.indexOf(a.label); const ib = FUND_ORDER.indexOf(b.label)
     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.label.localeCompare(b.label)
   })
   for (const g of groups) g.items.sort((a, b) => a.name.localeCompare(b.name))
+
+  // Clinical view: Drugs column and Devices column, each ordered by clinical stage
+  function stageGroups(items: PortfolioCompany[]): { stage: string; items: PortfolioCompany[] }[] {
+    const map: Record<string, PortfolioCompany[]> = {}
+    for (const co of items) {
+      const key = co.clinical_stage?.trim() || 'Unknown'
+      if (!map[key]) map[key] = []
+      map[key].push(co)
+    }
+    return Object.entries(map)
+      .sort((a, b) => {
+        const ia = CLINICAL_ORDER.indexOf(a[0]); const ib = CLINICAL_ORDER.indexOf(b[0])
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a[0].localeCompare(b[0])
+      })
+      .map(([stage, list]) => ({ stage, items: list.sort((a, b) => a.name.localeCompare(b.name)) }))
+  }
+  const drugCompanies = filtered.filter((c) => c.category === 'Drugs')
+  const deviceCompanies = filtered.filter((c) => c.category === 'Devices')
+  const uncategorized = filtered.filter((c) => !c.category)
 
   function handleSaved(company: PortfolioCompany) {
     setCompanies((prev) => {
@@ -78,7 +92,7 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg">
-            {([['fund', 'Fund'], ['clinical', 'Clinical Stage']] as const).map(([key, label]) => (
+            {([['clinical', 'Clinical Stage'], ['fund', 'Fund']] as const).map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setGroupBy(key)}
@@ -124,6 +138,7 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
             )}
           </div>
         ) : (
+          groupBy === 'fund' ? (
           <div className="space-y-8">
             {groups.map(({ label, items }) => (
               <div key={label}>
@@ -139,6 +154,53 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
               </div>
             ))}
           </div>
+          ) : (
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+              {[
+                { title: 'Drugs', items: drugCompanies, accent: 'bg-purple-100 text-purple-700' },
+                { title: 'Devices', items: deviceCompanies, accent: 'bg-blue-100 text-blue-700' },
+              ].map(({ title, items, accent }) => (
+                <div key={title}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-sm font-semibold ${accent}`}>{title}</span>
+                    <span className="text-xs text-slate-400 font-medium">{items.length}</span>
+                  </div>
+                  {items.length === 0 ? (
+                    <p className="text-sm text-slate-400 py-4">No {title.toLowerCase()} companies categorized yet</p>
+                  ) : (
+                    <div className="space-y-6">
+                      {stageGroups(items).map(({ stage, items: stageItems }) => (
+                        <div key={stage}>
+                          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">{stage}</p>
+                          <div className="space-y-3">
+                            {stageItems.map((company) => (
+                              <CompanyCard key={company.id} company={company} onClick={() => setSelected(company)} />
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {uncategorized.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <p className="text-sm font-bold text-slate-500 uppercase tracking-wide">Uncategorized</p>
+                  <span className="text-xs text-slate-400 font-medium">{uncategorized.length}</span>
+                  <span className="text-xs text-slate-400">— set Drugs/Devices in each company's edit form</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {uncategorized.map((company) => (
+                    <CompanyCard key={company.id} company={company} onClick={() => setSelected(company)} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          )
         )}
       </div>
 

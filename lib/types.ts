@@ -149,6 +149,7 @@ export interface PortfolioCompany {
   id: string
   name: string
   sector: string | null
+  category: 'Devices' | 'Drugs' | null
   funds: string[] | null
   series: string | null
   clinical_stage: string | null
