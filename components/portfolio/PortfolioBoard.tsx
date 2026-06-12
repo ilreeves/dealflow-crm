@@ -15,7 +15,7 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [selected, setSelected] = useState<PortfolioCompany | null>(null)
-  const [groupBy, setGroupBy] = useState<'fund' | 'series' | 'clinical'>('fund')
+  const [groupBy, setGroupBy] = useState<'fund' | 'clinical'>('fund')
 
   const filtered = companies.filter((c) =>
     !search || c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -23,7 +23,6 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
   )
 
   const FUND_ORDER = ['Fund I', 'Fund II', 'EHF', 'Solas/Sower', 'SPV']
-  const SERIES_ORDER = ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'A', 'B', 'C', 'D+']
   const CLINICAL_ORDER = ['Preclinical', 'Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Pre-IDE', 'FIH', 'Pivotal', '510(k)', 'PMA', 'Approved / Marketed']
 
   // Build groups; a company can appear in multiple fund groups
@@ -40,13 +39,11 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
     if (groupBy === 'fund') {
       const funds = company.funds?.length ? company.funds : ['Unassigned']
       for (const f of funds) addTo(f, company)
-    } else if (groupBy === 'series') {
-      addTo(company.series?.trim() || 'Unknown', company)
     } else {
       addTo(company.clinical_stage?.trim() || 'Unknown', company)
     }
   }
-  const order = groupBy === 'fund' ? FUND_ORDER : groupBy === 'series' ? SERIES_ORDER : CLINICAL_ORDER
+  const order = groupBy === 'fund' ? FUND_ORDER : CLINICAL_ORDER
   groups.sort((a, b) => {
     const ia = order.indexOf(a.label); const ib = order.indexOf(b.label)
     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.label.localeCompare(b.label)
@@ -81,7 +78,7 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg">
-            {([['fund', 'Fund'], ['series', 'Series'], ['clinical', 'Clinical Stage']] as const).map(([key, label]) => (
+            {([['fund', 'Fund'], ['clinical', 'Clinical Stage']] as const).map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setGroupBy(key)}
