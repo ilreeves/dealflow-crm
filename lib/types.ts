@@ -206,3 +206,13 @@ export interface Catalyst {
   created_by: string | null
   created_at: string
 }
+
+export interface CatalystActivity {
+  id: string
+  company_name: string
+  catalyst_title: string
+  action: string
+  details: string | null
+  actor_name: string | null
+  created_at: string
+}

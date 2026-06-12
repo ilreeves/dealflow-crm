@@ -16,3 +16,18 @@ export async function logActivity(
     actor_name: actorName ?? null,
   })
 }
+
+export async function logCatalystActivity(
+  companyName: string,
+  catalystTitle: string,
+  action: string,
+  details?: string | null
+) {
+  const supabase = createClient()
+  await supabase.from('catalyst_activity').insert({
+    company_name: companyName,
+    catalyst_title: catalystTitle,
+    action,
+    details: details ?? null,
+  })
+}

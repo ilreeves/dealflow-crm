@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Catalyst } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
+import { logCatalystActivity } from '@/lib/activity'
 
 interface Props {
   catalysts: Catalyst[]
@@ -83,17 +84,31 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted }: Props
     const text = editingTitle.text.trim()
     if (text) {
       const { data } = await supabase.from('catalysts').update({ title: text }).eq('id', editingTitle.id).select().single()
-      if (data) onUpdated(data as Catalyst)
+      if (data) {
+        onUpdated(data as Catalyst)
+        const cat = data as Catalyst
+        await logCatalystActivity(cat.company_name, text, 'Title edited')
+      }
     }
     setEditingTitle(null)
   }
 
   async function applyBarMenu() {
     if (!barMenu) return
+    const prev = catalysts.find((c) => c.id === barMenu.id)
     const { data } = await supabase.from('catalysts')
       .update({ status: barMenu.status, resolved_date: barMenu.date || null })
       .eq('id', barMenu.id).select().single()
-    if (data) onUpdated(data as Catalyst)
+    if (data) {
+      onUpdated(data as Catalyst)
+      const cat = data as Catalyst
+      if (prev && prev.status !== barMenu.status) {
+        await logCatalystActivity(cat.company_name, cat.title, 'Status changed', `${prev.status ?? 'Pending'} \u2192 ${barMenu.status}`)
+      }
+      if (barMenu.date && prev?.resolved_date !== barMenu.date) {
+        await logCatalystActivity(cat.company_name, cat.title, 'Resolved', `Actual date: ${barMenu.date}`)
+      }
+    }
     setBarMenu(null)
   }
 
@@ -116,7 +131,11 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted }: Props
     if (movedLater && !CLOSED_STATUSES.includes(status)) patch.status = 'Delayed'
 
     const { data } = await supabase.from('catalysts').update(patch).eq('id', cat.id).select().single()
-    if (data) onUpdated(data as Catalyst)
+    if (data) {
+      onUpdated(data as Catalyst)
+      const action = movedLater ? 'Rescheduled (delayed)' : 'Rescheduled (pulled in)'
+      await logCatalystActivity(cat.company_name, cat.title, action, `${cat.period ?? cat.catalyst_date} \u2192 ${prefix} ${newYear}`)
+    }
   }
 
   if (catalysts.length === 0) {

@@ -298,3 +298,16 @@ CREATE TABLE IF NOT EXISTS catalysts (
 );
 ALTER TABLE catalysts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Auth users can manage catalysts" ON catalysts FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- Catalyst activity feed
+CREATE TABLE IF NOT EXISTS catalyst_activity (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  company_name TEXT NOT NULL,
+  catalyst_title TEXT NOT NULL,
+  action TEXT NOT NULL,
+  details TEXT,
+  actor_name TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE catalyst_activity ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Auth users can manage catalyst_activity" ON catalyst_activity FOR ALL TO authenticated USING (true) WITH CHECK (true);

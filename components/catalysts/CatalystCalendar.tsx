@@ -5,6 +5,7 @@ import { Plus, Trash2, Loader2, CalendarDays, Pencil, LayoutList, BarChartHorizo
 import { Catalyst } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import CatalystGantt from './CatalystGantt'
+import { logCatalystActivity } from '@/lib/activity'
 
 interface Props {
   initialCatalysts: Catalyst[]
@@ -72,6 +73,7 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
     }).select().single()
     if (data) {
       setCatalysts((prev) => [...prev, data as Catalyst].sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date)))
+      await logCatalystActivity(form.company_name.trim(), form.title.trim(), 'Catalyst added', `${form.period} ${year}`)
       setForm({ company_name: '', title: '', period: '1Q', year: String(currentYear), status: 'Pending', notes: '' })
       setShowForm(false)
     }
@@ -79,13 +81,21 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
   }
 
   async function handleDelete(id: string) {
+    const cat = catalysts.find((c) => c.id === id)
     await supabase.from('catalysts').delete().eq('id', id)
     setCatalysts((prev) => prev.filter((c) => c.id !== id))
+    if (cat) await logCatalystActivity(cat.company_name, cat.title, 'Catalyst deleted', cat.period)
   }
 
   async function handleStatusChange(id: string, status: string) {
+    const prev = catalysts.find((c) => c.id === id)
     const { data } = await supabase.from('catalysts').update({ status }).eq('id', id).select().single()
-    if (data) setCatalysts((prev) => prev.map((c) => c.id === id ? data as Catalyst : c))
+    if (data) {
+      setCatalysts((prevList) => prevList.map((c) => c.id === id ? data as Catalyst : c))
+      if (prev && prev.status !== status) {
+        await logCatalystActivity(prev.company_name, prev.title, 'Status changed', `${prev.status ?? 'Pending'} \u2192 ${status}`)
+      }
+    }
   }
 
   async function handleNoteSave() {
@@ -93,7 +103,11 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
     const { data } = await supabase.from('catalysts')
       .update({ notes: editingNote.text.trim() || null })
       .eq('id', editingNote.id).select().single()
-    if (data) setCatalysts((prev) => prev.map((c) => c.id === editingNote.id ? data as Catalyst : c))
+    if (data) {
+      setCatalysts((prev) => prev.map((c) => c.id === editingNote.id ? data as Catalyst : c))
+      const cat = data as Catalyst
+      await logCatalystActivity(cat.company_name, cat.title, 'Note updated')
+    }
     setEditingNote(null)
   }
 
