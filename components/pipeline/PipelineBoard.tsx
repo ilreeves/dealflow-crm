@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { Plus, LayoutList, Columns3, ChevronRight } from 'lucide-react'
 import { Deal, DealStage, DEAL_STAGES, STAGE_COLORS } from '@/lib/types'
@@ -46,18 +46,21 @@ export default function PipelineBoard({ initialDeals }: Props) {
 
   const effectiveView = isMobile ? 'list' : view
 
-  const filteredDeals = deals.filter((d) => {
-    const matchesSearch = d.name.toLowerCase().includes(search.toLowerCase()) ||
-      (d.sector?.toLowerCase() ?? '').includes(search.toLowerCase()) ||
-      (d.lead_partner?.toLowerCase() ?? '').includes(search.toLowerCase())
-    const matchesCategory = category === 'All' || d.category === category
-    return matchesSearch && matchesCategory
-  })
+  const filteredDeals = useMemo(() => {
+    const s = search.toLowerCase()
+    return deals.filter((d) => {
+      const matchesSearch = d.name.toLowerCase().includes(s) ||
+        (d.sector?.toLowerCase() ?? '').includes(s) ||
+        (d.lead_partner?.toLowerCase() ?? '').includes(s)
+      const matchesCategory = category === 'All' || d.category === category
+      return matchesSearch && matchesCategory
+    })
+  }, [deals, search, category])
 
-  const dealsByStage = DEAL_STAGES.reduce((acc, stage) => {
+  const dealsByStage = useMemo(() => DEAL_STAGES.reduce((acc, stage) => {
     acc[stage] = filteredDeals.filter((d) => d.stage === stage).sort((a, b) => a.name.localeCompare(b.name))
     return acc
-  }, {} as Record<DealStage, Deal[]>)
+  }, {} as Record<DealStage, Deal[]>), [filteredDeals])
 
   const moveDeal = useCallback(async (dealId: string, fromStage: DealStage, newStage: DealStage, passReason?: string) => {
     const deal = deals.find((d) => d.id === dealId)

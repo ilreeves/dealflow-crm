@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Catalyst } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
@@ -155,16 +155,19 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted }: Props
   const now = new Date()
   const nowQ = (now.getFullYear() - minYear) * 4 + Math.floor(now.getMonth() / 3)
 
-  const companies: { name: string; items: Catalyst[] }[] = []
-  for (const c of [...catalysts].sort((a, b) => (a.resolved_date ?? a.catalyst_date).localeCompare(b.resolved_date ?? b.catalyst_date))) {
-    let group = companies.find((g) => g.name === c.company_name)
-    if (!group) {
-      group = { name: c.company_name, items: [] }
-      companies.push(group)
+  const companies = useMemo(() => {
+    const out: { name: string; items: Catalyst[] }[] = []
+    for (const cat of [...catalysts].sort((a, b) => (a.resolved_date ?? a.catalyst_date).localeCompare(b.resolved_date ?? b.catalyst_date))) {
+      let group = out.find((g) => g.name === cat.company_name)
+      if (!group) {
+        group = { name: cat.company_name, items: [] }
+        out.push(group)
+      }
+      group.items.push(cat)
     }
-    group.items.push(c)
-  }
-  companies.sort((a, b) => a.name.localeCompare(b.name))
+    out.sort((a, b) => a.name.localeCompare(b.name))
+    return out
+  }, [catalysts])
 
   const chartWidth = LABEL_W + totalQuarters * QUARTER_W
 
@@ -385,17 +388,19 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted }: Props
 }
 
 function GridLines({ totalQuarters, nowQ }: { totalQuarters: number; nowQ: number }) {
+  // Quarter + year lines drawn as a single CSS background instead of one span
+  // per quarter (×every row), which is far lighter on large charts.
   return (
-    <div className="absolute inset-0 flex pointer-events-none">
-      {Array.from({ length: totalQuarters }, (_, i) => (
-        <span
-          key={i}
-          style={{ width: QUARTER_W }}
-          className={`shrink-0 h-full ${i % 4 === 0 ? 'border-l border-slate-200' : 'border-l border-slate-100'} ${
-            i === nowQ ? 'bg-blue-50' : ''
-          }`}
-        />
-      ))}
+    <div className="absolute inset-0 pointer-events-none">
+      {nowQ >= 0 && nowQ < totalQuarters && (
+        <span className="absolute top-0 bottom-0 bg-blue-50" style={{ left: nowQ * QUARTER_W, width: QUARTER_W }} />
+      )}
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: `repeating-linear-gradient(to right, #e2e8f0 0, #e2e8f0 1px, transparent 1px, transparent ${QUARTER_W * 4}px), repeating-linear-gradient(to right, #f1f5f9 0, #f1f5f9 1px, transparent 1px, transparent ${QUARTER_W}px)`,
+        }}
+      />
     </div>
   )
 }
