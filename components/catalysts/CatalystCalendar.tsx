@@ -123,9 +123,11 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
     setEditingNote(null)
   }
 
-  // Group by year
+  // Group by year (list view) — exclude legacy companies entirely
+  const legacySet = new Set(legacy)
   const groups: { key: string; items: Catalyst[] }[] = []
   for (const c of catalysts) {
+    if (legacySet.has(c.company_name)) continue
     const key = c.catalyst_date.slice(0, 4)
     let group = groups.find((g) => g.key === key)
     if (!group) {
@@ -140,7 +142,7 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
       <div className="px-4 md:px-6 py-4 bg-white border-b border-slate-200 flex items-center justify-between gap-4 shrink-0">
         <div>
           <h1 className="text-lg font-semibold text-slate-900">Catalyst Calendar</h1>
-          <p className="text-sm text-slate-500">{catalysts.filter((c) => !CLOSED_STATUSES.includes(c.status ?? 'Pending')).length} open</p>
+          <p className="text-sm text-slate-500">{catalysts.filter((c) => !legacySet.has(c.company_name) && !CLOSED_STATUSES.includes(c.status ?? 'Pending')).length} open</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
