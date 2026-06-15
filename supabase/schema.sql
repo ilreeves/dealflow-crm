@@ -313,3 +313,12 @@ CREATE TABLE IF NOT EXISTS catalyst_activity (
 );
 ALTER TABLE catalyst_activity ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Auth users can manage catalyst_activity" ON catalyst_activity FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- Legacy (inactive: failed/acquired) catalyst companies
+CREATE TABLE IF NOT EXISTS legacy_companies (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  company_name TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE legacy_companies ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Auth users can manage legacy_companies" ON legacy_companies FOR ALL TO authenticated USING (true) WITH CHECK (true);

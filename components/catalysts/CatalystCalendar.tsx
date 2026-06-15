@@ -10,6 +10,7 @@ import { logCatalystActivity } from '@/lib/activity'
 interface Props {
   initialCatalysts: Catalyst[]
   companyNames: string[]
+  initialLegacy: string[]
 }
 
 const PERIODS = ['1Q', '2Q', '3Q', '4Q', '1H', '2H', 'FY'] as const
@@ -46,8 +47,9 @@ function periodLabel(c: Catalyst): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export default function CatalystCalendar({ initialCatalysts, companyNames }: Props) {
+export default function CatalystCalendar({ initialCatalysts, companyNames, initialLegacy }: Props) {
   const [catalysts, setCatalysts] = useState<Catalyst[]>(initialCatalysts)
+  const [legacy, setLegacy] = useState<string[]>(initialLegacy)
   const [showForm, setShowForm] = useState(false)
   const currentYear = new Date().getFullYear()
   const [form, setForm] = useState({ company_name: '', title: '', period: '1Q', year: String(currentYear), status: 'Pending', notes: '' })
@@ -78,6 +80,16 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
       setShowForm(false)
     }
     setSaving(false)
+  }
+
+  async function toggleLegacy(name: string, makeLegacy: boolean) {
+    if (makeLegacy) {
+      setLegacy((prev) => [...prev, name])
+      await supabase.from('legacy_companies').insert({ company_name: name })
+    } else {
+      setLegacy((prev) => prev.filter((n) => n !== name))
+      await supabase.from('legacy_companies').delete().eq('company_name', name)
+    }
   }
 
   async function handleDelete(id: string) {
@@ -251,7 +263,7 @@ export default function CatalystCalendar({ initialCatalysts, companyNames }: Pro
             <p className="text-sm text-slate-400">No catalysts yet — add data readouts, FDA decisions, fundraise closes, and other key timing.</p>
           </div>
         ) : view === 'gantt' ? (
-          <CatalystGantt catalysts={catalysts} onUpdated={(updated) => setCatalysts((prev) => prev.map((x) => x.id === updated.id ? updated : x))} onDeleted={handleDelete} />
+          <CatalystGantt catalysts={catalysts} onUpdated={(updated) => setCatalysts((prev) => prev.map((x) => x.id === updated.id ? updated : x))} onDeleted={handleDelete} legacyCompanies={legacy} onToggleLegacy={toggleLegacy} />
         ) : (
           groups.map(({ key, items }) => (
             <div key={key} className="mb-8">
