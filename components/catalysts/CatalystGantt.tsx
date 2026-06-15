@@ -266,7 +266,7 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, legacyC
               </div>
               <div className="flex-1 h-7 relative">
                 <GridLines totalQuarters={totalQuarters} nowQ={nowQ} />
-                {collapsed.has(name) && items.map((c) => renderBar(c, true))}
+                {collapsed.has(name) && !isLegacy && items.map((c) => renderBar(c, true))}
               </div>
             </div>
             {!collapsed.has(name) && items.map((c) => {
