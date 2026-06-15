@@ -185,6 +185,10 @@ export default async function AnalyticsPage() {
 
         {/* ── Left column: pipeline analytics ── */}
         <div className="space-y-8">
+        <div>
+          <h2 className="text-base font-bold text-slate-900">Pipeline Data</h2>
+          <div className="h-0.5 w-12 mt-1 rounded-full" style={{ backgroundColor: '#5ba200' }} />
+        </div>
 
         {/* Overview cards */}
         <div className="grid grid-cols-3 gap-4">
@@ -222,39 +226,6 @@ export default async function AnalyticsPage() {
                 </p>
               </div>
             ))}
-          </div>
-        </div>
-
-        {/* Source breakdown */}
-        <div>
-          <p className="text-sm font-semibold text-slate-700 mb-3">By Source</p>
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Source</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Total</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Active</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Passed</th>
-                  <th className="px-4 py-2.5 w-32"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {sources.map(({ name, total: t, active: a, passed: p }) => (
-                  <tr key={name} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
-                    <td className="px-4 py-2.5 font-medium text-slate-700">{name}</td>
-                    <td className="px-4 py-2.5 text-right text-slate-600">{t}</td>
-                    <td className="px-4 py-2.5 text-right text-green-600 font-medium">{a}</td>
-                    <td className="px-4 py-2.5 text-right text-red-400">{p}</td>
-                    <td className="px-4 py-2.5">
-                      <div className="w-full bg-slate-100 rounded-full h-1.5">
-                        <div className="bg-slate-400 h-1.5 rounded-full" style={{ width: `${t / maxSourceTotal * 100}%` }} />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </div>
 
@@ -325,10 +296,47 @@ export default async function AnalyticsPage() {
         {/* Deals by sector */}
         <BreakdownTable title="All Deals by Sector" rows={dealSectorRows} max={maxDealSector} color="#5ba200" />
 
+        {/* Source breakdown */}
+        <div>
+          <p className="text-sm font-semibold text-slate-700 mb-3">By Source</p>
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Source</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Total</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Active</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Passed</th>
+                  <th className="px-4 py-2.5 w-32"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {sources.map(({ name, total: t, active: a, passed: p }) => (
+                  <tr key={name} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                    <td className="px-4 py-2.5 font-medium text-slate-700">{name}</td>
+                    <td className="px-4 py-2.5 text-right text-slate-600">{t}</td>
+                    <td className="px-4 py-2.5 text-right text-green-600 font-medium">{a}</td>
+                    <td className="px-4 py-2.5 text-right text-red-400">{p}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="w-full bg-slate-100 rounded-full h-1.5">
+                        <div className="bg-slate-400 h-1.5 rounded-full" style={{ width: `${t / maxSourceTotal * 100}%` }} />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         </div>
 
         {/* ── Right column: catalyst & portfolio analytics ── */}
         <div className="space-y-8">
+        <div>
+          <h2 className="text-base font-bold text-slate-900">Portfolio Data</h2>
+          <div className="h-0.5 w-12 mt-1 rounded-full" style={{ backgroundColor: '#5ba200' }} />
+        </div>
         {/* Portfolio by sector */}
         <BreakdownTable title="Portfolio Holdings by Sector" rows={portfolioSectorRows} max={maxPortfolioSector} color="#023a51" />
 
