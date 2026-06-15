@@ -131,7 +131,7 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
   const fields = [
     { name: 'name', label: 'Company Name', type: 'text', required: true },
     { name: 'sector', label: 'Sector / Therapeutic Area', type: 'select', options: ABMS_SPECIALTIES },
-    { name: 'series', label: 'Series', type: 'select', options: ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'A', 'B', 'C', 'D+'] },
+    { name: 'series', label: 'Series', type: 'select', options: ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'A', 'B', 'C', 'D+', 'Crossover', 'Public'] },
     { name: 'clinical_stage', label: 'Clinical Stage', type: 'select', options: ['Preclinical', 'Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Pre-IDE', 'FIH', 'Pivotal', '510(k)', 'PMA', 'Approved / Marketed'] },
     { name: 'city', label: 'City', type: 'text' },
     { name: 'state', label: 'State / Region', type: 'text' },

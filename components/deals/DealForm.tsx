@@ -56,7 +56,7 @@ const ABMS_SPECIALTIES = [
   'Urology',
 ]
 
-const SERIES_OPTIONS = ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'A', 'B', 'C', 'D+']
+const SERIES_OPTIONS = ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'A', 'B', 'C', 'D+', 'Crossover', 'Public']
 const CLINICAL_STAGE_OPTIONS = [
   'Preclinical',
   'Pre-IND',

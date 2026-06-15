@@ -80,7 +80,7 @@ export default async function AnalyticsPage() {
       }))
   }
 
-  const SERIES_ORDER = ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'Bridge', 'A', 'B', 'C', 'D+']
+  const SERIES_ORDER = ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'Bridge', 'A', 'B', 'C', 'D+', 'Crossover', 'Public']
   const CLINICAL_ORDER = ['Preclinical', 'Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Pre-IDE', 'FIH', 'Pivotal', '510(k)', 'PMA', 'Approved / Marketed']
   const seriesBreakdown = buildBreakdown('series', SERIES_ORDER)
   const clinicalBreakdown = buildBreakdown('clinical_stage', CLINICAL_ORDER)
