@@ -4,11 +4,12 @@ import BreakdownTable, { BreakdownRow } from '@/components/analytics/BreakdownTa
 
 export default async function AnalyticsPage() {
   const supabase = await createClient()
-  const [{ data }, { data: activityData }, { data: catalystData }, { data: portfolioData }] = await Promise.all([
+  const [{ data }, { data: activityData }, { data: catalystData }, { data: portfolioData }, { data: legacyData }] = await Promise.all([
     supabase.from('deals').select('id,name,stage,category,source,sector,clinical_stage,series,stage_entered_at,created_at'),
     supabase.from('deal_activity').select('deal_id,details,created_at').eq('action', 'Stage changed').order('created_at', { ascending: true }),
     supabase.from('catalysts').select('company_name,catalyst_date,original_date,status'),
-    supabase.from('portfolio_companies').select('name,sector,category'),
+    supabase.from('portfolio_companies').select('name,sector,category,series,clinical_stage'),
+    supabase.from('legacy_companies').select('company_name'),
   ])
 
   const deals = (data as Deal[]) ?? []
@@ -34,7 +35,9 @@ export default async function AnalyticsPage() {
   const drugs = deals.filter((d) => d.category === 'Drugs')
 
   // Sector breakdowns: deals and portfolio as separate expandable tables
-  const portfolioCompanies = (portfolioData as { name: string; sector: string | null; category: string | null }[]) ?? []
+  const legacyNames = new Set(((legacyData as { company_name: string }[]) ?? []).map((l) => l.company_name))
+  const portfolioCompaniesAll = (portfolioData as { name: string; sector: string | null; category: string | null; series: string | null; clinical_stage: string | null }[]) ?? []
+  const portfolioCompanies = portfolioCompaniesAll.filter((pc) => !legacyNames.has(pc.name))
 
   function sectorRows(items: { name: string; sector: string | null; sub: string }[]): BreakdownRow[] {
     const map: Record<string, { name: string; stage: string }[]> = {}
@@ -83,6 +86,25 @@ export default async function AnalyticsPage() {
   const clinicalBreakdown = buildBreakdown('clinical_stage', CLINICAL_ORDER)
   const maxSeries = Math.max(...seriesBreakdown.map((r) => r.count), 1)
   const maxClinical = Math.max(...clinicalBreakdown.map((r) => r.count), 1)
+
+  function portfolioRows(field: 'series' | 'clinical_stage', order: string[]): BreakdownRow[] {
+    const map: Record<string, { name: string; stage: string }[]> = {}
+    for (const pc of portfolioCompanies) {
+      const key = pc[field]?.trim() || 'Unknown'
+      if (!map[key]) map[key] = []
+      map[key].push({ name: pc.name, stage: pc.category ?? '' })
+    }
+    return Object.entries(map)
+      .sort((a, b) => {
+        const ia = order.indexOf(a[0]); const ib = order.indexOf(b[0])
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
+      })
+      .map(([label, companies]) => ({ label, count: companies.length, companies: companies.sort((a, b) => a.name.localeCompare(b.name)) }))
+  }
+  const portfolioSeriesRows = portfolioRows('series', SERIES_ORDER)
+  const portfolioClinicalRows = portfolioRows('clinical_stage', CLINICAL_ORDER)
+  const maxPortfolioSeries = Math.max(...portfolioSeriesRows.map((r) => r.count), 1)
+  const maxPortfolioClinical = Math.max(...portfolioClinicalRows.map((r) => r.count), 1)
 
   // Average time in current stage, per stage
   const STAGE_ORDER = ['Sourced', 'First Meeting', 'Science Committee', 'Finance Committee', 'Investment Committee', 'Term Sheet', 'Invested', 'Passed']
@@ -339,6 +361,12 @@ export default async function AnalyticsPage() {
         </div>
         {/* Portfolio by sector */}
         <BreakdownTable title="Portfolio Holdings by Sector" rows={portfolioSectorRows} max={maxPortfolioSector} color="#023a51" />
+
+        {/* Portfolio by clinical stage */}
+        <BreakdownTable title="Portfolio by Clinical Stage" rows={portfolioClinicalRows} max={maxPortfolioClinical} color="#e98925" />
+
+        {/* Portfolio by series */}
+        <BreakdownTable title="Portfolio by Series" rows={portfolioSeriesRows} max={maxPortfolioSeries} color="#5ba200" />
 
         {/* Catalyst reliability */}
         {reliability.length > 0 && (
