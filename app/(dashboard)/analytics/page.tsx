@@ -26,6 +26,7 @@ export default async function AnalyticsPage() {
     if (d.stage === 'Passed') sourceMap[key].passed++
   }
   const sources = Object.entries(sourceMap)
+    .filter(([name]) => name !== 'Unknown')
     .map(([name, s]) => ({ name, ...s, active: s.total - s.passed }))
     .sort((a, b) => b.total - a.total)
   const maxSourceTotal = Math.max(...sources.map((s) => s.total), 1)
@@ -47,6 +48,7 @@ export default async function AnalyticsPage() {
       map[key].push({ name: it.name, stage: it.sub })
     }
     return Object.entries(map)
+      .filter(([k]) => k !== 'Unknown')
       .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
       .map(([label, companies]) => ({
         label,
@@ -69,6 +71,7 @@ export default async function AnalyticsPage() {
       map[key].push({ name: d.name, stage: d.stage })
     }
     return Object.entries(map)
+      .filter(([k]) => k !== 'Unknown')
       .sort((a, b) => {
         const ia = order.indexOf(a[0]); const ib = order.indexOf(b[0])
         return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
@@ -95,6 +98,7 @@ export default async function AnalyticsPage() {
       map[key].push({ name: pc.name, stage: pc.category ?? '' })
     }
     return Object.entries(map)
+      .filter(([k]) => k !== 'Unknown')
       .sort((a, b) => {
         const ia = order.indexOf(a[0]); const ib = order.indexOf(b[0])
         return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
