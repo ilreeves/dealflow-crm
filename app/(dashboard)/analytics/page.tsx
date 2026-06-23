@@ -15,7 +15,8 @@ export default async function AnalyticsPage() {
   const deals = (data as Deal[]) ?? []
   const total = deals.length
   const passed = deals.filter((d) => d.stage === 'Passed').length
-  const active = total - passed
+  const invested = deals.filter((d) => d.stage === 'Invested').length
+  const active = total - passed - invested
 
   // Source breakdown
   const sourceMap: Record<string, { total: number; passed: number }> = {}
@@ -217,10 +218,11 @@ export default async function AnalyticsPage() {
         </div>
 
         {/* Overview cards */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: 'Total Deals', value: total, color: 'text-slate-900' },
-            { label: 'Active', value: active, color: 'text-green-700' },
+            { label: 'Active', value: active, color: 'text-blue-600' },
+            { label: 'Invested', value: invested, sub: total ? `${Math.round(invested / total * 100)}% invested` : undefined, color: 'text-green-700' },
             { label: 'Passed', value: passed, sub: total ? `${Math.round(passed / total * 100)}% pass rate` : undefined, color: 'text-red-600' },
           ].map(({ label, value, sub, color }) => (
             <div key={label} className="bg-white rounded-xl border border-slate-200 px-5 py-4">
@@ -236,22 +238,33 @@ export default async function AnalyticsPage() {
           <p className="text-sm font-semibold text-slate-700 mb-3">Devices vs. Drugs</p>
           <div className="grid grid-cols-2 gap-4">
             {[
-              { label: 'Devices', items: devices, color: 'bg-blue-500' },
-              { label: 'Drugs', items: drugs, color: 'bg-purple-500' },
-            ].map(({ label, items, color }) => (
-              <div key={label} className="bg-white rounded-xl border border-slate-200 px-5 py-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-slate-700">{label}</span>
-                  <span className="text-lg font-bold text-slate-900">{items.length}</span>
+              { label: 'Devices', items: devices },
+              { label: 'Drugs', items: drugs },
+            ].map(({ label, items }) => {
+              const aCount = items.filter(d => d.stage !== 'Passed' && d.stage !== 'Invested').length
+              const iCount = items.filter(d => d.stage === 'Invested').length
+              const pCount = items.filter(d => d.stage === 'Passed').length
+              return (
+                <div key={label} className="bg-white rounded-xl border border-slate-200 px-5 py-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-slate-700">{label}</span>
+                    <span className="text-lg font-bold text-slate-900">{items.length}</span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-1.5 flex overflow-hidden">
+                    <div className="h-1.5 bg-blue-500" style={{ width: total ? `${aCount / total * 100}%` : '0%' }} />
+                    <div className="h-1.5" style={{ width: total ? `${iCount / total * 100}%` : '0%', backgroundColor: '#5ba200' }} />
+                    <div className="h-1.5 bg-red-300" style={{ width: total ? `${pCount / total * 100}%` : '0%' }} />
+                  </div>
+                  <p className="text-xs mt-1.5">
+                    <span className="text-blue-600">{aCount} active</span>
+                    <span className="text-slate-300"> · </span>
+                    <span className="text-green-700">{iCount} invested</span>
+                    <span className="text-slate-300"> · </span>
+                    <span className="text-red-400">{pCount} passed</span>
+                  </p>
                 </div>
-                <div className="w-full bg-slate-100 rounded-full h-1.5">
-                  <div className={`${color} h-1.5 rounded-full`} style={{ width: total ? `${items.length / total * 100}%` : '0%' }} />
-                </div>
-                <p className="text-xs text-slate-400 mt-1.5">
-                  {items.filter(d => d.stage !== 'Passed').length} active · {items.filter(d => d.stage === 'Passed').length} passed
-                </p>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 
