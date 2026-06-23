@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, Settings, LogOut, Building2, Activity, BarChart2, CalendarDays } from 'lucide-react'
+import { LayoutDashboard, Settings, LogOut, Building2, Activity, BarChart2, CalendarDays, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 
@@ -28,6 +28,7 @@ export default function Sidebar({ user }: SidebarProps) {
     { href: '/catalysts', label: 'Catalyst Calendar', icon: CalendarDays },
     { href: '/activity', label: 'Activity', icon: Activity },
     { href: '/analytics', label: 'Analytics', icon: BarChart2 },
+    { href: '/report', label: 'Report', icon: FileText },
     { href: '/settings', label: 'Settings', icon: Settings },
   ]
 
