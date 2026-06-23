@@ -322,3 +322,12 @@ CREATE TABLE IF NOT EXISTS legacy_companies (
 );
 ALTER TABLE legacy_companies ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Auth users can manage legacy_companies" ON legacy_companies FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- Shared dismissed catalyst reminders (signature ties to catalyst timing+status)
+CREATE TABLE IF NOT EXISTS dismissed_reminders (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  signature TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE dismissed_reminders ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Auth users can manage dismissed_reminders" ON dismissed_reminders FOR ALL TO authenticated USING (true) WITH CHECK (true);

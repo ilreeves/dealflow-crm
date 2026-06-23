@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Plus, Trash2, Loader2, CalendarDays, Pencil, LayoutList, BarChartHorizontal, Check, X, Bell, ChevronDown } from 'lucide-react'
 import { Catalyst } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
@@ -12,6 +12,7 @@ interface Props {
   initialCatalysts: Catalyst[]
   companyNames: string[]
   initialLegacy: string[]
+  initialDismissed: string[]
 }
 
 const PERIODS = ['1Q', '2Q', '3Q', '4Q', '1H', '2H', 'FY'] as const
@@ -48,32 +49,25 @@ function periodLabel(c: Catalyst): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export default function CatalystCalendar({ initialCatalysts, companyNames, initialLegacy }: Props) {
+export default function CatalystCalendar({ initialCatalysts, companyNames, initialLegacy, initialDismissed }: Props) {
   const [catalysts, setCatalysts] = useState<Catalyst[]>(initialCatalysts)
   const [legacy, setLegacy] = useState<string[]>(initialLegacy)
   const [remindersOpen, setRemindersOpen] = useState(true)
   const [editingCatalyst, setEditingCatalyst] = useState<Catalyst | null>(null)
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set(initialDismissed))
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem('catalyst-reminders-dismissed')
-      if (raw) setDismissed(new Set(JSON.parse(raw) as string[]))
-    } catch {}
-  }, [])
-
-  function persistDismissed(next: Set<string>) {
-    setDismissed(next)
-    try { localStorage.setItem('catalyst-reminders-dismissed', JSON.stringify([...next])) } catch {}
-  }
   // Signature ties a dismissal to the catalyst's current timing/status, so it
-  // reappears if the situation changes (rescheduled, status edited).
+  // reappears for everyone if the situation changes (rescheduled, status edited).
   const reminderSig = (c: Catalyst) => `${c.id}|${c.catalyst_date}|${c.status ?? 'Pending'}`
-  function dismissReminder(c: Catalyst) {
-    const next = new Set(dismissed); next.add(reminderSig(c)); persistDismissed(next)
+  async function dismissReminder(c: Catalyst) {
+    const sig = reminderSig(c)
+    setDismissed((prev) => new Set(prev).add(sig))
+    await supabase.from('dismissed_reminders').upsert({ signature: sig }, { onConflict: 'signature', ignoreDuplicates: true })
   }
-  function clearAllReminders(items: Catalyst[]) {
-    const next = new Set(dismissed); items.forEach((c) => next.add(reminderSig(c))); persistDismissed(next)
+  async function clearAllReminders(items: Catalyst[]) {
+    const sigs = items.map(reminderSig)
+    setDismissed((prev) => { const n = new Set(prev); sigs.forEach((s) => n.add(s)); return n })
+    if (sigs.length) await supabase.from('dismissed_reminders').upsert(sigs.map((s) => ({ signature: s })), { onConflict: 'signature', ignoreDuplicates: true })
   }
   const [showForm, setShowForm] = useState(false)
   const currentYear = new Date().getFullYear()
