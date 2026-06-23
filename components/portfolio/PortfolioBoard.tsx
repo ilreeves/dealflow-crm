@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Search, Globe, DollarSign, Building2, Mail } from 'lucide-react'
 import { PortfolioCompany } from '@/lib/types'
 import PortfolioCompanyForm from './PortfolioCompanyForm'
@@ -16,6 +16,15 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [selected, setSelected] = useState<PortfolioCompany | null>(null)
   const [groupBy, setGroupBy] = useState<'fund' | 'clinical'>('clinical')
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('open')
+    if (id) {
+      const co = companies.find((c) => c.id === id)
+      if (co) setSelected(co)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const filtered = companies.filter((c) =>
     !search || c.name.toLowerCase().includes(search.toLowerCase()) ||

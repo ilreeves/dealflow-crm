@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, Settings, LogOut, Building2, Activity, BarChart2, CalendarDays, FileText } from 'lucide-react'
+import { LayoutDashboard, Settings, LogOut, Building2, Activity, BarChart2, CalendarDays, FileText, Search } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 
@@ -50,6 +50,14 @@ export default function Sidebar({ user }: SidebarProps) {
 
       {/* Nav */}
       <nav className="flex-1 px-2 py-3 space-y-0.5">
+        <button
+          onClick={() => window.dispatchEvent(new Event('open-global-search'))}
+          className="w-full flex items-center gap-2.5 px-3 py-2 mb-1 text-sm font-medium rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition"
+        >
+          <Search className="w-4 h-4" />
+          <span>Search</span>
+          <kbd className="ml-auto text-[10px] text-slate-500 border border-slate-600 rounded px-1.5 py-0.5">⌘K</kbd>
+        </button>
         {navItems.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}

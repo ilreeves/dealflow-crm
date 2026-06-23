@@ -11,6 +11,7 @@ import DealCard from './DealCard'
 import DealForm from '@/components/deals/DealForm'
 import DealsTable from './DealsTable'
 import PassReasonModal from '@/components/deals/PassReasonModal'
+import DealDetailModal from '@/components/deals/DealDetailModal'
 
 interface Props {
   initialDeals: Deal[]
@@ -26,6 +27,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
   const [actorName, setActorName] = useState<string | null>(null)
   const [pendingPass, setPendingPass] = useState<{ id: string; name: string; fromStage: DealStage } | null>(null)
   const [isMobile, setIsMobile] = useState(false)
+  const [openDealId, setOpenDealId] = useState<string | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -33,6 +35,11 @@ export default function PipelineBoard({ initialDeals }: Props) {
     check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
+  }, [])
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('open')
+    if (id) setOpenDealId(id)
   }, [])
 
   useEffect(() => {
@@ -289,6 +296,15 @@ export default function PipelineBoard({ initialDeals }: Props) {
         <DealForm
           onClose={() => setShowForm(false)}
           onSaved={handleDealCreated}
+        />
+      )}
+
+      {openDealId && deals.find((d) => d.id === openDealId) && (
+        <DealDetailModal
+          deal={deals.find((d) => d.id === openDealId)!}
+          onClose={() => { setOpenDealId(null); window.history.replaceState({}, '', '/') }}
+          onUpdated={handleDealUpdated}
+          onDeleted={handleDealDeleted}
         />
       )}
 
