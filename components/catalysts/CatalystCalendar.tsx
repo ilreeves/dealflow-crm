@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Trash2, Loader2, CalendarDays, Pencil, LayoutList, BarChartHorizontal, Check, X } from 'lucide-react'
+import { Plus, Trash2, Loader2, CalendarDays, Pencil, LayoutList, BarChartHorizontal, Check, X, Bell, ChevronDown } from 'lucide-react'
 import { Catalyst } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import CatalystGantt from './CatalystGantt'
@@ -50,6 +50,7 @@ function periodLabel(c: Catalyst): string {
 export default function CatalystCalendar({ initialCatalysts, companyNames, initialLegacy }: Props) {
   const [catalysts, setCatalysts] = useState<Catalyst[]>(initialCatalysts)
   const [legacy, setLegacy] = useState<string[]>(initialLegacy)
+  const [remindersOpen, setRemindersOpen] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const currentYear = new Date().getFullYear()
   const [form, setForm] = useState({ company_name: '', title: '', period: '1Q', year: String(currentYear), status: 'Pending', notes: '' })
@@ -125,6 +126,14 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
 
   // Group by year (list view) — exclude legacy companies entirely
   const legacySet = new Set(legacy)
+  // Catalyst reminders: open (non-closed, non-legacy, unresolved) catalysts that are overdue or due soon
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const horizonStr = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10)
+  const openForReminders = catalysts.filter(
+    (c) => !legacySet.has(c.company_name) && !CLOSED_STATUSES.includes(c.status ?? 'Pending') && !c.resolved_date
+  )
+  const overdue = openForReminders.filter((c) => c.catalyst_date < todayStr).sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date))
+  const dueSoon = openForReminders.filter((c) => c.catalyst_date >= todayStr && c.catalyst_date <= horizonStr).sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date))
   const groups: { key: string; items: Catalyst[] }[] = []
   for (const c of catalysts) {
     if (legacySet.has(c.company_name)) continue
@@ -173,6 +182,31 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
       </div>
 
       <div className={`flex-1 overflow-y-auto px-4 md:px-6 py-6 ${view === 'list' ? 'max-w-3xl' : ''}`}>
+        {(overdue.length > 0 || dueSoon.length > 0) && (
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 overflow-hidden max-w-3xl">
+            <button onClick={() => setRemindersOpen((o) => !o)} className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-amber-100/50 transition">
+              <Bell className="w-4 h-4 text-amber-600 shrink-0" />
+              <span className="text-sm font-semibold text-amber-800">
+                {overdue.length > 0 && `${overdue.length} overdue`}
+                {overdue.length > 0 && dueSoon.length > 0 && ' \u00b7 '}
+                {dueSoon.length > 0 && `${dueSoon.length} due soon`}
+              </span>
+              <ChevronDown className={`w-4 h-4 text-amber-600 ml-auto transition-transform ${remindersOpen ? '' : '-rotate-90'}`} />
+            </button>
+            {remindersOpen && (
+              <div className="px-4 pb-3 space-y-1">
+                {[...overdue.map((c) => ({ c, kind: 'overdue' as const })), ...dueSoon.map((c) => ({ c, kind: 'soon' as const }))].map(({ c, kind }) => (
+                  <div key={c.id} className="flex items-center gap-2 text-sm">
+                    <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${kind === 'overdue' ? 'bg-red-500' : 'bg-amber-500'}`} />
+                    <span className="font-medium text-slate-800">{c.company_name}</span>
+                    <span className="text-slate-600 truncate">{c.title}</span>
+                    <span className="text-xs text-slate-400 ml-auto shrink-0 whitespace-nowrap">{c.period ?? c.catalyst_date}{kind === 'overdue' ? ' \u2014 overdue' : ''}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {showForm && (
           <div className="border border-slate-200 rounded-xl p-4 space-y-3 bg-slate-50 mb-6">
             <p className="text-sm font-semibold text-slate-700">New Catalyst</p>
