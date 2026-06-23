@@ -22,7 +22,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
   const [view, setView] = useState<'board' | 'list'>('board')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<'All' | 'Devices' | 'Drugs'>('All')
-  const [collapsedStages, setCollapsedStages] = useState<Set<DealStage>>(new Set(['Passed']))
+  const [collapsedStages, setCollapsedStages] = useState<Set<DealStage>>(new Set(['Passed', 'Invested']))
   const [actorName, setActorName] = useState<string | null>(null)
   const [pendingPass, setPendingPass] = useState<{ id: string; name: string; fromStage: DealStage } | null>(null)
   const [isMobile, setIsMobile] = useState(false)
@@ -187,7 +187,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
       {effectiveView === 'board' ? (
         <div className="flex-1 overflow-x-auto">
           <DragDropContext onDragEnd={handleDragEnd}>
-            <div className="flex gap-3 p-4 h-full min-w-max">
+            <div className="flex gap-3 p-4 h-full min-w-max lg:min-w-0">
               {DEAL_STAGES.map((stage) => {
                 const colors = STAGE_COLORS[stage]
                 const stageDeals = dealsByStage[stage]
@@ -222,7 +222,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
                 }
 
                 return (
-                  <div key={stage} className={`flex flex-col shrink-0 h-full ${stage === 'Passed' ? 'w-56' : 'w-64'}`}>
+                  <div key={stage} className="flex flex-col h-full w-72 shrink-0 lg:w-auto lg:flex-1 lg:min-w-[15rem]">
                     <div
                       className="flex items-center justify-between mb-2 px-1 cursor-pointer group"
                       onClick={() => toggleCollapse(stage)}
