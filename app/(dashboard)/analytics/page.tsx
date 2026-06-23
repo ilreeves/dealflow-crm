@@ -111,11 +111,11 @@ export default async function AnalyticsPage() {
   const maxPortfolioClinical = Math.max(...portfolioClinicalRows.map((r) => r.count), 1)
 
   // Average time in current stage, per stage
-  const STAGE_ORDER = ['Sourced', 'First Meeting', 'Science Committee', 'Finance Committee', 'Investment Committee', 'Term Sheet', 'Invested', 'Passed']
+  const STAGE_ORDER = ['Sourced', 'Science Committee', 'Finance Committee', 'Investment Committee', 'Term Sheet', 'Invested', 'Passed']
   const stageTime: Record<string, number[]> = {}
   const now = Date.now()
   for (const d of deals) {
-    if (!d.stage_entered_at || d.stage === 'Passed') continue
+    if (!d.stage_entered_at || d.stage === 'Passed' || d.stage === 'Invested') continue
     const days = (now - new Date(d.stage_entered_at).getTime()) / (1000 * 60 * 60 * 24)
     if (!stageTime[d.stage]) stageTime[d.stage] = []
     stageTime[d.stage].push(days)
