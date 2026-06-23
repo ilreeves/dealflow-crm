@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Trash2, Loader2, CalendarDays, Pencil, LayoutList, BarChartHorizontal, Check, X, Bell, ChevronDown } from 'lucide-react'
 import { Catalyst } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
@@ -53,6 +53,28 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
   const [legacy, setLegacy] = useState<string[]>(initialLegacy)
   const [remindersOpen, setRemindersOpen] = useState(true)
   const [editingCatalyst, setEditingCatalyst] = useState<Catalyst | null>(null)
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('catalyst-reminders-dismissed')
+      if (raw) setDismissed(new Set(JSON.parse(raw) as string[]))
+    } catch {}
+  }, [])
+
+  function persistDismissed(next: Set<string>) {
+    setDismissed(next)
+    try { localStorage.setItem('catalyst-reminders-dismissed', JSON.stringify([...next])) } catch {}
+  }
+  // Signature ties a dismissal to the catalyst's current timing/status, so it
+  // reappears if the situation changes (rescheduled, status edited).
+  const reminderSig = (c: Catalyst) => `${c.id}|${c.catalyst_date}|${c.status ?? 'Pending'}`
+  function dismissReminder(c: Catalyst) {
+    const next = new Set(dismissed); next.add(reminderSig(c)); persistDismissed(next)
+  }
+  function clearAllReminders(items: Catalyst[]) {
+    const next = new Set(dismissed); items.forEach((c) => next.add(reminderSig(c))); persistDismissed(next)
+  }
   const [showForm, setShowForm] = useState(false)
   const currentYear = new Date().getFullYear()
   const [form, setForm] = useState({ company_name: '', title: '', period: '1Q', year: String(currentYear), status: 'Pending', notes: '' })
@@ -133,10 +155,11 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
   // 30-day grace: a window that just ended isn't "overdue" yet — only flag overdue once it's comfortably past
   const graceStr = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
   const openForReminders = catalysts.filter(
-    (c) => !legacySet.has(c.company_name) && !CLOSED_STATUSES.includes(c.status ?? 'Pending') && c.status !== 'Delayed' && !c.resolved_date
+    (c) => !legacySet.has(c.company_name) && !CLOSED_STATUSES.includes(c.status ?? 'Pending') && c.status !== 'Delayed' && c.status !== 'On Hold' && !c.resolved_date
   )
-  const overdue = openForReminders.filter((c) => c.catalyst_date < graceStr).sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date))
-  const dueSoon = openForReminders.filter((c) => c.catalyst_date >= graceStr && c.catalyst_date <= horizonStr).sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date))
+  const notDismissed = (c: Catalyst) => !dismissed.has(reminderSig(c))
+  const overdue = openForReminders.filter((c) => c.catalyst_date < graceStr && notDismissed(c)).sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date))
+  const dueSoon = openForReminders.filter((c) => c.catalyst_date >= graceStr && c.catalyst_date <= horizonStr && notDismissed(c)).sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date))
   const groups: { key: string; items: Catalyst[] }[] = []
   for (const c of catalysts) {
     if (legacySet.has(c.company_name)) continue
@@ -188,24 +211,43 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
       <div className={`flex-1 overflow-y-auto px-4 md:px-6 py-6 ${view === 'list' ? 'max-w-3xl' : ''}`}>
         {(overdue.length > 0 || dueSoon.length > 0) && (
           <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 overflow-hidden max-w-3xl">
-            <button onClick={() => setRemindersOpen((o) => !o)} className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-amber-100/50 transition">
-              <Bell className="w-4 h-4 text-amber-600 shrink-0" />
-              <span className="text-sm font-semibold text-amber-800">
-                {overdue.length > 0 && `${overdue.length} overdue`}
-                {overdue.length > 0 && dueSoon.length > 0 && ' \u00b7 '}
-                {dueSoon.length > 0 && `${dueSoon.length} due soon`}
-              </span>
-              <ChevronDown className={`w-4 h-4 text-amber-600 ml-auto transition-transform ${remindersOpen ? '' : '-rotate-90'}`} />
-            </button>
+            <div className="w-full flex items-center gap-2 px-4 py-2.5">
+              <button onClick={() => setRemindersOpen((o) => !o)} className="flex items-center gap-2 flex-1 text-left">
+                <Bell className="w-4 h-4 text-amber-600 shrink-0" />
+                <span className="text-sm font-semibold text-amber-800">
+                  {overdue.length > 0 && `${overdue.length} overdue`}
+                  {overdue.length > 0 && dueSoon.length > 0 && ' \u00b7 '}
+                  {dueSoon.length > 0 && `${dueSoon.length} due soon`}
+                </span>
+              </button>
+              <button
+                onClick={() => clearAllReminders([...overdue, ...dueSoon])}
+                className="text-xs font-medium text-amber-700 hover:text-amber-900 hover:underline shrink-0"
+              >
+                Clear all
+              </button>
+              <button onClick={() => setRemindersOpen((o) => !o)} className="shrink-0">
+                <ChevronDown className={`w-4 h-4 text-amber-600 transition-transform ${remindersOpen ? '' : '-rotate-90'}`} />
+              </button>
+            </div>
             {remindersOpen && (
               <div className="px-4 pb-3 space-y-1">
                 {[...overdue.map((c) => ({ c, kind: 'overdue' as const })), ...dueSoon.map((c) => ({ c, kind: 'soon' as const }))].map(({ c, kind }) => (
-                  <button key={c.id} onClick={() => setEditingCatalyst(c)} className="w-full flex items-center gap-2 text-sm text-left rounded-md px-1.5 py-1 hover:bg-amber-100/60 transition">
+                  <div key={c.id} className="group/rem flex items-center gap-2 text-sm rounded-md px-1.5 py-1 hover:bg-amber-100/60 transition">
                     <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${kind === 'overdue' ? 'bg-red-500' : 'bg-amber-500'}`} />
-                    <span className="font-medium text-slate-800">{c.company_name}</span>
-                    <span className="text-slate-600 truncate">{c.title}</span>
-                    <span className="text-xs text-slate-400 ml-auto shrink-0 whitespace-nowrap">{c.period ?? c.catalyst_date}{kind === 'overdue' ? ' \u2014 overdue' : ''}</span>
-                  </button>
+                    <button onClick={() => setEditingCatalyst(c)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
+                      <span className="font-medium text-slate-800 shrink-0">{c.company_name}</span>
+                      <span className="text-slate-600 truncate">{c.title}</span>
+                      <span className="text-xs text-slate-400 ml-auto shrink-0 whitespace-nowrap">{c.period ?? c.catalyst_date}{kind === 'overdue' ? ' \u2014 overdue' : ''}</span>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); dismissReminder(c) }}
+                      title="Dismiss reminder"
+                      className="shrink-0 p-0.5 text-amber-400 hover:text-amber-700 opacity-0 group-hover/rem:opacity-100 transition"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
