@@ -5,6 +5,7 @@ import { Plus, Trash2, Loader2, CalendarDays, Pencil, LayoutList, BarChartHorizo
 import { Catalyst } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import CatalystGantt from './CatalystGantt'
+import CatalystEditModal from './CatalystEditModal'
 import { logCatalystActivity } from '@/lib/activity'
 
 interface Props {
@@ -51,6 +52,7 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
   const [catalysts, setCatalysts] = useState<Catalyst[]>(initialCatalysts)
   const [legacy, setLegacy] = useState<string[]>(initialLegacy)
   const [remindersOpen, setRemindersOpen] = useState(true)
+  const [editingCatalyst, setEditingCatalyst] = useState<Catalyst | null>(null)
   const [showForm, setShowForm] = useState(false)
   const currentYear = new Date().getFullYear()
   const [form, setForm] = useState({ company_name: '', title: '', period: '1Q', year: String(currentYear), status: 'Pending', notes: '' })
@@ -127,13 +129,14 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
   // Group by year (list view) — exclude legacy companies entirely
   const legacySet = new Set(legacy)
   // Catalyst reminders: open (non-closed, non-legacy, unresolved) catalysts that are overdue or due soon
-  const todayStr = new Date().toISOString().slice(0, 10)
   const horizonStr = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10)
+  // 30-day grace: a window that just ended isn't "overdue" yet — only flag overdue once it's comfortably past
+  const graceStr = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
   const openForReminders = catalysts.filter(
     (c) => !legacySet.has(c.company_name) && !CLOSED_STATUSES.includes(c.status ?? 'Pending') && !c.resolved_date
   )
-  const overdue = openForReminders.filter((c) => c.catalyst_date < todayStr).sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date))
-  const dueSoon = openForReminders.filter((c) => c.catalyst_date >= todayStr && c.catalyst_date <= horizonStr).sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date))
+  const overdue = openForReminders.filter((c) => c.catalyst_date < graceStr).sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date))
+  const dueSoon = openForReminders.filter((c) => c.catalyst_date >= graceStr && c.catalyst_date <= horizonStr).sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date))
   const groups: { key: string; items: Catalyst[] }[] = []
   for (const c of catalysts) {
     if (legacySet.has(c.company_name)) continue
@@ -147,6 +150,7 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
   }
 
   return (
+    <>
     <div className="flex flex-col h-full">
       <div className="px-4 md:px-6 py-4 bg-white border-b border-slate-200 flex items-center justify-between gap-4 shrink-0">
         <div>
@@ -196,12 +200,12 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
             {remindersOpen && (
               <div className="px-4 pb-3 space-y-1">
                 {[...overdue.map((c) => ({ c, kind: 'overdue' as const })), ...dueSoon.map((c) => ({ c, kind: 'soon' as const }))].map(({ c, kind }) => (
-                  <div key={c.id} className="flex items-center gap-2 text-sm">
+                  <button key={c.id} onClick={() => setEditingCatalyst(c)} className="w-full flex items-center gap-2 text-sm text-left rounded-md px-1.5 py-1 hover:bg-amber-100/60 transition">
                     <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${kind === 'overdue' ? 'bg-red-500' : 'bg-amber-500'}`} />
                     <span className="font-medium text-slate-800">{c.company_name}</span>
                     <span className="text-slate-600 truncate">{c.title}</span>
                     <span className="text-xs text-slate-400 ml-auto shrink-0 whitespace-nowrap">{c.period ?? c.catalyst_date}{kind === 'overdue' ? ' \u2014 overdue' : ''}</span>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -376,5 +380,15 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
         )}
       </div>
     </div>
+
+    {editingCatalyst && (
+      <CatalystEditModal
+        catalyst={editingCatalyst}
+        onClose={() => setEditingCatalyst(null)}
+        onSaved={(u) => setCatalysts((prev) => prev.map((x) => x.id === u.id ? u : x))}
+        onDeleted={(id) => setCatalysts((prev) => prev.filter((x) => x.id !== id))}
+      />
+    )}
+    </>
   )
 }
