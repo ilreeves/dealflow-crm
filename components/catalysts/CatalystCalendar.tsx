@@ -133,7 +133,7 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
   // 30-day grace: a window that just ended isn't "overdue" yet — only flag overdue once it's comfortably past
   const graceStr = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
   const openForReminders = catalysts.filter(
-    (c) => !legacySet.has(c.company_name) && !CLOSED_STATUSES.includes(c.status ?? 'Pending') && !c.resolved_date
+    (c) => !legacySet.has(c.company_name) && !CLOSED_STATUSES.includes(c.status ?? 'Pending') && c.status !== 'Delayed' && !c.resolved_date
   )
   const overdue = openForReminders.filter((c) => c.catalyst_date < graceStr).sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date))
   const dueSoon = openForReminders.filter((c) => c.catalyst_date >= graceStr && c.catalyst_date <= horizonStr).sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date))
