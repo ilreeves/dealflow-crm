@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react'
 import { Plus, Trash2, GripVertical, Save, X, Loader2 } from 'lucide-react'
 import { CustomFieldDefinition, CustomFieldType } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
+import ProfileSettings from '@/components/settings/ProfileSettings'
+import TeamMembers from '@/components/settings/TeamMembers'
+import ListManager from '@/components/settings/ListManager'
+import DataExport from '@/components/settings/DataExport'
 
 const FIELD_TYPES: { value: CustomFieldType; label: string }[] = [
   { value: 'text', label: 'Text' },
@@ -95,8 +99,13 @@ export default function SettingsPage() {
     <div className="max-w-2xl mx-auto px-6 py-8">
       <div className="mb-8">
         <h1 className="text-xl font-semibold text-slate-900">Settings</h1>
-        <p className="text-sm text-slate-500 mt-1">Manage custom fields for your deals</p>
+        <p className="text-sm text-slate-500 mt-1">Profile, team, custom fields, dropdown lists, and data export</p>
       </div>
+
+      <div className="space-y-6">
+
+      <ProfileSettings />
+      <TeamMembers />
 
       {/* Custom Fields */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
@@ -244,10 +253,17 @@ export default function SettingsPage() {
       </div>
 
       {/* Info box */}
-      <div className="mt-4 px-4 py-3 bg-blue-50 rounded-xl border border-blue-100">
+      <div className="px-4 py-3 bg-blue-50 rounded-xl border border-blue-100">
         <p className="text-xs text-blue-700">
           <strong>Note:</strong> Custom fields are added to the deal form for all deals. Existing deals will show the field as empty until filled in. Deleting a field removes it from the form but does not delete data already saved.
         </p>
+      </div>
+
+      <ListManager listKey="series" title="Series Options" description="Funding stages available on the deal and portfolio forms" />
+      <ListManager listKey="clinical_stage" title="Clinical Stage Options" description="Clinical / regulatory stages available on the forms" />
+      <ListManager listKey="fund" title="Fund / Vehicle Options" description="Funds and vehicles for grouping portfolio companies" />
+      <DataExport />
+
       </div>
     </div>
   )
