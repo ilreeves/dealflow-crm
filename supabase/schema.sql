@@ -331,3 +331,19 @@ CREATE TABLE IF NOT EXISTS dismissed_reminders (
 );
 ALTER TABLE dismissed_reminders ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Auth users can manage dismissed_reminders" ON dismissed_reminders FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- Editable dropdown lists (series, clinical_stage, fund) managed from Settings
+CREATE TABLE IF NOT EXISTS list_options (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  list_key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE list_options ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Auth users can manage list_options" ON list_options FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+INSERT INTO list_options (list_key, value, sort_order) VALUES
+('series','Pre-Seed',0),('series','Seed',1),('series','Convertible Note/SAFE',2),('series','A',3),('series','B',4),('series','C',5),('series','D+',6),('series','Crossover',7),('series','Public',8),
+('clinical_stage','Preclinical',0),('clinical_stage','Pre-IND',1),('clinical_stage','Phase I',2),('clinical_stage','Phase II',3),('clinical_stage','Phase III',4),('clinical_stage','Pre-IDE',5),('clinical_stage','FIH',6),('clinical_stage','Pivotal',7),('clinical_stage','510(k)',8),('clinical_stage','PMA',9),('clinical_stage','Approved / Marketed',10),
+('fund','Fund I',0),('fund','Fund II',1),('fund','EHF',2),('fund','Solas/Sower',3),('fund','SPV',4);

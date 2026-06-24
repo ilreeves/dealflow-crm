@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { PortfolioCompany } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
+import { fetchListOptions, FALLBACK_LISTS, ListKey } from '@/lib/listOptions'
 
 interface Props {
   company?: PortfolioCompany
@@ -58,6 +59,12 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [lists, setLists] = useState<Record<ListKey, string[]>>(FALLBACK_LISTS)
+
+  useEffect(() => { fetchListOptions().then(setLists) }, [])
+
+  const fieldOpts = (field: { name: string; options?: string[] }) =>
+    field.name === 'series' ? lists.series : field.name === 'clinical_stage' ? lists.clinical_stage : (field.options ?? [])
 
   const [form, setForm] = useState({
     name: company?.name ?? '',
@@ -169,10 +176,10 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
                 >
                   <option value="">Select…</option>
-                  {(form as unknown as Record<string, string>)[field.name] && !(field.options ?? []).includes((form as unknown as Record<string, string>)[field.name]) && (
+                  {(form as unknown as Record<string, string>)[field.name] && !fieldOpts(field).includes((form as unknown as Record<string, string>)[field.name]) && (
                     <option value={(form as unknown as Record<string, string>)[field.name]}>{(form as unknown as Record<string, string>)[field.name]}</option>
                   )}
-                  {(field.options ?? []).map((opt: string) => (
+                  {fieldOpts(field).map((opt: string) => (
                     <option key={opt} value={opt}>{opt}</option>
                   ))}
                 </select>
@@ -211,7 +218,7 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Fund / Vehicle</label>
             <div className="flex items-center gap-2 flex-wrap">
-              {['Fund I', 'Fund II', 'EHF', 'Solas/Sower', 'SPV'].map((fund) => (
+              {lists.fund.map((fund) => (
                 <button
                   type="button"
                   key={fund}

@@ -4,12 +4,13 @@ import BreakdownTable, { BreakdownRow } from '@/components/analytics/BreakdownTa
 
 export default async function AnalyticsPage() {
   const supabase = await createClient()
-  const [{ data }, { data: activityData }, { data: catalystData }, { data: portfolioData }, { data: legacyData }] = await Promise.all([
+  const [{ data }, { data: activityData }, { data: catalystData }, { data: portfolioData }, { data: legacyData }, { data: listData }] = await Promise.all([
     supabase.from('deals').select('id,name,stage,category,source,sector,clinical_stage,series,stage_entered_at,created_at'),
     supabase.from('deal_activity').select('deal_id,details,created_at').eq('action', 'Stage changed').order('created_at', { ascending: true }),
     supabase.from('catalysts').select('company_name,catalyst_date,original_date,status'),
     supabase.from('portfolio_companies').select('name,sector,category,series,clinical_stage'),
     supabase.from('legacy_companies').select('company_name'),
+    supabase.from('list_options').select('list_key,value,sort_order').order('sort_order'),
   ])
 
   const deals = (data as Deal[]) ?? []
@@ -84,8 +85,13 @@ export default async function AnalyticsPage() {
       }))
   }
 
-  const SERIES_ORDER = ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'Bridge', 'A', 'B', 'C', 'D+', 'Crossover', 'Public']
-  const CLINICAL_ORDER = ['Preclinical', 'Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Pre-IDE', 'FIH', 'Pivotal', '510(k)', 'PMA', 'Approved / Marketed']
+  const listRows = (listData as { list_key: string; value: string }[]) ?? []
+  const fromList = (key: string, fallback: string[]) => {
+    const v = listRows.filter((r) => r.list_key === key).map((r) => r.value)
+    return v.length ? v : fallback
+  }
+  const SERIES_ORDER = fromList('series', ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'Bridge', 'A', 'B', 'C', 'D+', 'Crossover', 'Public'])
+  const CLINICAL_ORDER = fromList('clinical_stage', ['Preclinical', 'Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Pre-IDE', 'FIH', 'Pivotal', '510(k)', 'PMA', 'Approved / Marketed'])
   const seriesBreakdown = buildBreakdown('series', SERIES_ORDER)
   const clinicalBreakdown = buildBreakdown('clinical_stage', CLINICAL_ORDER)
   const maxSeries = Math.max(...seriesBreakdown.map((r) => r.count), 1)

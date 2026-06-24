@@ -1,0 +1,22 @@
+import { createClient } from '@/lib/supabase/client'
+
+export const LIST_KEYS = ['series', 'clinical_stage', 'fund'] as const
+export type ListKey = typeof LIST_KEYS[number]
+
+// Fallbacks used if the list_options table is empty or unavailable.
+export const FALLBACK_LISTS: Record<ListKey, string[]> = {
+  series: ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'A', 'B', 'C', 'D+', 'Crossover', 'Public'],
+  clinical_stage: ['Preclinical', 'Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Pre-IDE', 'FIH', 'Pivotal', '510(k)', 'PMA', 'Approved / Marketed'],
+  fund: ['Fund I', 'Fund II', 'EHF', 'Solas/Sower', 'SPV'],
+}
+
+export async function fetchListOptions(): Promise<Record<ListKey, string[]>> {
+  const supabase = createClient()
+  const { data } = await supabase.from('list_options').select('list_key,value,sort_order').order('sort_order')
+  const out: Record<ListKey, string[]> = { series: [], clinical_stage: [], fund: [] }
+  for (const row of (data ?? []) as { list_key: ListKey; value: string }[]) {
+    if (out[row.list_key]) out[row.list_key].push(row.value)
+  }
+  for (const k of LIST_KEYS) if (!out[k].length) out[k] = FALLBACK_LISTS[k]
+  return out
+}

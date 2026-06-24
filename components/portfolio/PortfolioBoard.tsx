@@ -8,9 +8,10 @@ import PortfolioCompanyDetail from './PortfolioCompanyDetail'
 
 interface Props {
   initialCompanies: PortfolioCompany[]
+  fundOrder?: string[]
 }
 
-export default function PortfolioBoard({ initialCompanies }: Props) {
+export default function PortfolioBoard({ initialCompanies, fundOrder }: Props) {
   const [companies, setCompanies] = useState(initialCompanies)
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
@@ -31,7 +32,7 @@ export default function PortfolioBoard({ initialCompanies }: Props) {
     (c.sector ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
-  const FUND_ORDER = ['Fund I', 'Fund II', 'EHF', 'Solas/Sower', 'SPV']
+  const FUND_ORDER = fundOrder && fundOrder.length ? fundOrder : ['Fund I', 'Fund II', 'EHF', 'Solas/Sower', 'SPV']
   const CLINICAL_ORDER = ['Preclinical', 'Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Pre-IDE', 'FIH', 'Pivotal', '510(k)', 'PMA', 'Approved / Marketed']
 
   // Fund view: a company can appear in multiple fund groups

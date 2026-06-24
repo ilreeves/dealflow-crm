@@ -5,6 +5,7 @@ import { X } from 'lucide-react'
 import { Deal, DealStage, DEAL_STAGES, CustomFieldDefinition } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
+import { fetchListOptions, ListKey } from '@/lib/listOptions'
 import { addDealToPortfolio } from '@/lib/portfolio'
 
 interface Props {
@@ -95,6 +96,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
   const [error, setError] = useState('')
   const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDefinition[]>([])
   const [passReason, setPassReason] = useState('')
+  const [lists, setLists] = useState<Record<ListKey, string[]> | null>(null)
 
   const [form, setForm] = useState({
     name: deal?.name ?? '',
@@ -124,6 +126,10 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
       .select('*')
       .order('sort_order')
       .then(({ data }) => setCustomFieldDefs((data as CustomFieldDefinition[]) ?? []))
+  }, [])
+
+  useEffect(() => {
+    fetchListOptions().then(setLists)
   }, [])
 
   function setField(key: string, value: unknown) {
@@ -276,6 +282,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
           {/* Core fields */}
           {CORE_FIELDS.map((field) => {
             const value = (form as Record<string, unknown>)[field.name] as string
+            const fieldOptions = (lists && (field.name in lists) ? lists[field.name as ListKey] : field.options) ?? []
             return (
               <div key={field.name}>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
@@ -288,10 +295,10 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
                     className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
                   >
                     <option value="">Select…</option>
-                    {value && !(field.options ?? []).includes(value) && (
+                    {value && !fieldOptions.includes(value) && (
                       <option value={value}>{value}</option>
                     )}
-                    {(field.options ?? []).map((opt) => (
+                    {fieldOptions.map((opt) => (
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
                   </select>
