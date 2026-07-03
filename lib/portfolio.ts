@@ -16,6 +16,7 @@ export async function addDealToPortfolio(supabase: SupabaseClient, deal: Deal) {
     name: deal.name,
     sector: deal.sector,
     category: deal.category,
+    sharepoint_link: deal.sharepoint_link,
     series: deal.series,
     clinical_stage: deal.clinical_stage,
     website: deal.website,

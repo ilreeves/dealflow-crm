@@ -264,6 +264,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
 function OverviewTab({ deal }: { deal: Deal }) {
   const fields = [
     { icon: Globe, label: 'Website', value: deal.website, href: deal.website ?? undefined },
+    { icon: Link, label: 'SharePoint', value: deal.sharepoint_link, href: deal.sharepoint_link ?? undefined },
     { icon: Mail, label: 'Contact Email', value: deal.contact_email, href: deal.contact_email ? `mailto:${deal.contact_email}` : undefined },
     { icon: Building2, label: 'Sector', value: deal.sector },
     { icon: MapPin, label: 'Location', value: [deal.city, deal.state, deal.country].filter(Boolean).join(', ') || null },

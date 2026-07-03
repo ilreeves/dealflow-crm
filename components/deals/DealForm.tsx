@@ -75,6 +75,7 @@ const CLINICAL_STAGE_OPTIONS = [
 const CORE_FIELDS = [
   { name: 'name', label: 'Company Name', type: 'text', required: true },
   { name: 'website', label: 'Website', type: 'url' },
+  { name: 'sharepoint_link', label: 'SharePoint Link', type: 'url' },
   { name: 'contact_email', label: 'Contact Email', type: 'email' },
   { name: 'sector', label: 'Sector', type: 'select', options: ABMS_SPECIALTIES },
   { name: 'city', label: 'City', type: 'text' },
@@ -101,6 +102,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
   const [form, setForm] = useState({
     name: deal?.name ?? '',
     website: deal?.website ?? '',
+    sharepoint_link: deal?.sharepoint_link ?? '',
     contact_email: deal?.contact_email ?? '',
     sector: deal?.sector ?? '',
     city: deal?.city ?? '',
@@ -159,6 +161,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
     const payload = {
       name: form.name.trim(),
       website: form.website || null,
+      sharepoint_link: form.sharepoint_link || null,
       contact_email: form.contact_email || null,
       sector: form.sector || null,
       city: form.city || null,

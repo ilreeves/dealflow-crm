@@ -61,6 +61,7 @@ export interface Deal {
   fundraising_to_date: string | null
   series: string | null
   current_valuation: string | null
+  sharepoint_link: string | null
   custom_fields: Record<string, unknown>
   stage_entered_at: string | null
   created_by: string | null

@@ -347,3 +347,6 @@ INSERT INTO list_options (list_key, value, sort_order) VALUES
 ('series','Pre-Seed',0),('series','Seed',1),('series','Convertible Note/SAFE',2),('series','A',3),('series','B',4),('series','C',5),('series','D+',6),('series','Crossover',7),('series','Public',8),
 ('clinical_stage','Preclinical',0),('clinical_stage','Pre-IND',1),('clinical_stage','Phase I',2),('clinical_stage','Phase II',3),('clinical_stage','Phase III',4),('clinical_stage','Pre-IDE',5),('clinical_stage','FIH',6),('clinical_stage','Pivotal',7),('clinical_stage','510(k)',8),('clinical_stage','PMA',9),('clinical_stage','Approved / Marketed',10),
 ('fund','Fund I',0),('fund','Fund II',1),('fund','EHF',2),('fund','Solas/Sower',3),('fund','SPV',4);
+
+-- SharePoint link on deals
+ALTER TABLE deals ADD COLUMN IF NOT EXISTS sharepoint_link TEXT;
