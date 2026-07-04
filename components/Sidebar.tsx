@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, Settings, LogOut, Building2, Activity, BarChart2, CalendarDays, Search } from 'lucide-react'
+import { LayoutDashboard, Settings, LogOut, Building2, Activity, BarChart2, CalendarDays, Search, TrendingUp } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 
@@ -25,6 +25,7 @@ export default function Sidebar({ user }: SidebarProps) {
   const navItems = [
     { href: '/', label: 'Pipeline', icon: LayoutDashboard },
     { href: '/portfolio', label: 'Portfolio Companies', icon: Building2 },
+    { href: '/fund-performance', label: 'Fund Performance', icon: TrendingUp },
     { href: '/catalysts', label: 'Catalyst Calendar', icon: CalendarDays },
     { href: '/activity', label: 'Activity', icon: Activity },
     { href: '/analytics', label: 'Analytics', icon: BarChart2 },

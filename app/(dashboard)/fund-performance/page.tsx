@@ -1,0 +1,122 @@
+import { createClient } from "@/lib/supabase/server"
+import { PortfolioFundraiseRound, PortfolioPosition } from "@/lib/types"
+import FundPerformanceView, { FundRow, TopPosition, RiskFlag, CompanyInFund } from "@/components/fund/FundPerformanceView"
+
+export const dynamic = "force-dynamic"
+
+type CompRow = { id: string; name: string }
+
+export default async function FundPerformancePage() {
+  const supabase = await createClient()
+  const [{ data: companies }, { data: rounds }, { data: positions }, { data: funds }] = await Promise.all([
+    supabase.from("portfolio_companies").select("id,name"),
+    supabase.from("portfolio_fundraise_rounds").select("id,company_id,round_name,date,post_money,security_type,status,terms"),
+    supabase.from("portfolio_positions").select("*"),
+    supabase.from("list_options").select("value,sort_order").eq("list_key", "fund").order("sort_order"),
+  ])
+
+  const comps = (companies as CompRow[]) ?? []
+  const rs = (rounds as PortfolioFundraiseRound[]) ?? []
+  const ps = (positions as PortfolioPosition[]) ?? []
+  const fundOrder = ((funds as { value: string }[]) ?? []).map((f) => f.value)
+
+  const nameById: Record<string, string> = {}
+  for (const c of comps) nameById[c.id] = c.name
+
+  // latest post-money per company (most recent round with a post-money value)
+  const latestPost: Record<string, number> = {}
+  for (const c of comps) {
+    const crs = rs
+      .filter((r) => r.company_id === c.id && r.post_money != null)
+      .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
+    if (crs.length) latestPost[c.id] = Number(crs[0].post_money)
+  }
+
+  const posValue = (p: PortfolioPosition): number | null => {
+    const lp = latestPost[p.company_id]
+    if (lp == null || p.ownership_pct == null) return null
+    return (Number(p.ownership_pct) / 100) * lp
+  }
+
+  // ── by fund → company ──
+  const fundMap = new Map<string, Map<string, CompanyInFund>>()
+  for (const p of ps) {
+    const fund = p.fund || "Unassigned"
+    if (!fundMap.has(fund)) fundMap.set(fund, new Map())
+    const cm = fundMap.get(fund)!
+    const cname = nameById[p.company_id] ?? "Unknown"
+    const e = cm.get(cname) ?? { name: cname, invested: 0, value: 0, ownership: 0 }
+    e.invested += Number(p.invested_amount) || 0
+    const v = posValue(p)
+    if (v != null) e.value = (e.value ?? 0) + v
+    e.ownership += Number(p.ownership_pct) || 0
+    cm.set(cname, e)
+  }
+
+  const orderIdx = (f: string) => {
+    const i = fundOrder.indexOf(f)
+    return i === -1 ? 99 : i
+  }
+  const funds_: FundRow[] = Array.from(fundMap.entries())
+    .map(([fund, cm]) => {
+      const companiesArr = Array.from(cm.values()).sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
+      const invested = companiesArr.reduce((s, c) => s + c.invested, 0)
+      const value = companiesArr.reduce((s, c) => s + (c.value ?? 0), 0)
+      return { fund, invested, value, moic: invested > 0 && value > 0 ? value / invested : null, companies: companiesArr }
+    })
+    .sort((a, b) => orderIdx(a.fund) - orderIdx(b.fund) || b.invested - a.invested)
+
+  // ── per company (for totals + top positions) ──
+  const compMap = new Map<string, { name: string; fund: string; fundInvested: Record<string, number>; invested: number; value: number; ownership: number }>()
+  for (const p of ps) {
+    const cname = nameById[p.company_id] ?? "Unknown"
+    const e = compMap.get(cname) ?? { name: cname, fund: "", fundInvested: {}, invested: 0, value: 0, ownership: 0 }
+    const inv = Number(p.invested_amount) || 0
+    e.invested += inv
+    const f = p.fund || "Unassigned"
+    e.fundInvested[f] = (e.fundInvested[f] ?? 0) + inv
+    const v = posValue(p)
+    if (v != null) e.value += v
+    e.ownership += Number(p.ownership_pct) || 0
+    compMap.set(cname, e)
+  }
+  for (const e of compMap.values()) {
+    e.fund = Object.entries(e.fundInvested).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—"
+  }
+
+  const totalInvested = Array.from(compMap.values()).reduce((s, c) => s + c.invested, 0)
+  const totalValue = Array.from(compMap.values()).reduce((s, c) => s + c.value, 0)
+  const totals = {
+    invested: totalInvested,
+    value: totalValue,
+    moic: totalInvested > 0 && totalValue > 0 ? totalValue / totalInvested : null,
+    gain: totalValue - totalInvested,
+  }
+
+  const top: TopPosition[] = Array.from(compMap.values())
+    .map((c) => ({ name: c.name, fund: c.fund, ownership: c.ownership, invested: c.invested, value: c.value || null, moic: c.invested > 0 && c.value > 0 ? c.value / c.invested : null }))
+    .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
+    .slice(0, 6)
+
+  // ── risk flags: unconverted notes/SAFEs at/near maturity ──
+  const flags: RiskFlag[] = []
+  const now = new Date()
+  for (const r of rs) {
+    if ((r.security_type === "Convertible note" || r.security_type === "SAFE") && r.status !== "Converted") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const md = (r.terms as any)?.maturity_date
+      if (md) {
+        const d = new Date(String(md) + "T00:00:00")
+        const days = Math.round((d.getTime() - now.getTime()) / 86400000)
+        const company = nameById[r.company_id] ?? "A company"
+        if (days < 0) flags.push({ kind: "overdue", company, text: `${r.security_type.toLowerCase()} matured ${Math.abs(days)} days ago and is still unconverted.` })
+        else if (days <= 90) flags.push({ kind: "maturing", company, text: `${r.security_type.toLowerCase()} matures in ${days} days, still unconverted.` })
+      }
+    }
+  }
+  flags.sort((a, b) => (a.kind === "overdue" ? -1 : 1) - (b.kind === "overdue" ? -1 : 1))
+
+  const asOf = now.toLocaleDateString("en-US", { month: "short", year: "numeric" })
+
+  return <FundPerformanceView totals={totals} funds={funds_} top={top} flags={flags} asOf={asOf} />
+}
