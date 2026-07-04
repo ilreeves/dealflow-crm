@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { X, Pencil, Trash2, Plus, Globe, Mail, Building2, DollarSign, Loader2, Check, Link, MapPin, Tag } from 'lucide-react'
-import { PortfolioCompany, PortfolioFundraiseRound, PortfolioInvestorIntro, INTRO_STATUSES, Catalyst } from '@/lib/types'
+import { PortfolioCompany, PortfolioInvestorIntro, INTRO_STATUSES, Catalyst } from '@/lib/types'
 import { logCatalystActivity } from '@/lib/activity'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
 import PortfolioCompanyForm from './PortfolioCompanyForm'
+import CapRoundsTab from './CapRoundsTab'
 
 type Tab = 'overview' | 'rounds' | 'intros' | 'catalysts'
 
@@ -40,7 +41,7 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'overview', label: 'Overview' },
-    { key: 'rounds', label: 'Fundraise Rounds' },
+    { key: 'rounds', label: 'Ownership' },
     { key: 'intros', label: 'Investor Intros' },
     { key: 'catalysts', label: 'Catalysts' },
   ]
@@ -91,7 +92,7 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
 
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {tab === 'overview' && <OverviewTab company={company} />}
-            {tab === 'rounds' && <FundraiseRoundsTab companyId={company.id} />}
+            {tab === 'rounds' && <CapRoundsTab companyId={company.id} />}
             {tab === 'intros' && <InvestorIntrosTab companyId={company.id} />}
             {tab === 'catalysts' && <CatalystsTab companyName={company.name} />}
           </div>
@@ -175,157 +176,6 @@ function OverviewTab({ company }: { company: PortfolioCompany }) {
         </div>
       </div>
       <p className="text-xs text-slate-400">Added {formatDate(company.created_at)}</p>
-    </div>
-  )
-}
-
-// ─── Fundraise Rounds Tab ─────────────────────────────────────────────────────
-function FundraiseRoundsTab({ companyId }: { companyId: string }) {
-  const [rounds, setRounds] = useState<PortfolioFundraiseRound[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ round_name: '', amount: '', date: '', lead_investor: '', notes: '' })
-  const [saving, setSaving] = useState(false)
-  const supabase = createClient()
-
-  useEffect(() => {
-    supabase.from('portfolio_fundraise_rounds').select('*').eq('company_id', companyId)
-      .order('date', { ascending: false })
-      .then(({ data }) => { setRounds((data as PortfolioFundraiseRound[]) ?? []); setLoading(false) })
-  }, [companyId])
-
-  async function handleAdd() {
-    if (!form.round_name.trim()) return
-    setSaving(true)
-    const { data } = await supabase.from('portfolio_fundraise_rounds').insert({
-      company_id: companyId,
-      round_name: form.round_name.trim(),
-      amount: form.amount || null,
-      date: form.date || null,
-      lead_investor: form.lead_investor || null,
-      notes: form.notes || null,
-    }).select().single()
-    if (data) {
-      setRounds((prev) => [data as PortfolioFundraiseRound, ...prev])
-      setForm({ round_name: '', amount: '', date: '', lead_investor: '', notes: '' })
-      setShowForm(false)
-    }
-    setSaving(false)
-  }
-
-  async function handleDelete(id: string) {
-    await supabase.from('portfolio_fundraise_rounds').delete().eq('id', id)
-    setRounds((prev) => prev.filter((r) => r.id !== id))
-  }
-
-  return (
-    <div className="space-y-4">
-      {!showForm ? (
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-slate-300 rounded-lg text-sm text-slate-500 hover:border-slate-400 hover:text-slate-700 transition"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Add Round
-        </button>
-      ) : (
-        <div className="border border-slate-200 rounded-xl p-4 space-y-3 bg-slate-50">
-          <p className="text-sm font-semibold text-slate-700">New Fundraise Round</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Round Name *</label>
-              <input
-                placeholder="e.g. Series A"
-                value={form.round_name}
-                onChange={(e) => setForm((p) => ({ ...p, round_name: e.target.value }))}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Amount Raised</label>
-              <input
-                placeholder="e.g. $10M"
-                value={form.amount}
-                onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Date</label>
-              <input
-                type="date"
-                value={form.date}
-                onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Lead Investor</label>
-              <input
-                placeholder="e.g. Andreessen Horowitz"
-                value={form.lead_investor}
-                onChange={(e) => setForm((p) => ({ ...p, lead_investor: e.target.value }))}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Notes</label>
-            <textarea
-              rows={2}
-              value={form.notes}
-              onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none bg-white"
-            />
-          </div>
-          <div className="flex justify-end gap-2">
-            <button onClick={() => setShowForm(false)} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 transition">Cancel</button>
-            <button
-              onClick={handleAdd}
-              disabled={saving || !form.round_name.trim()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg disabled:opacity-40 transition"
-              style={{backgroundColor: '#023a51'}}
-            >
-              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              Add Round
-            </button>
-          </div>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
-      ) : rounds.length === 0 ? (
-        <p className="text-center text-sm text-slate-400 py-6">No fundraise rounds recorded yet</p>
-      ) : (
-        <div className="space-y-2">
-          {rounds.map((r) => (
-            <div key={r.id} className="border border-slate-200 rounded-xl px-4 py-3 bg-white group">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-slate-800">{r.round_name}</span>
-                    {r.amount && <span className="text-sm text-green-700 font-medium">{r.amount}</span>}
-                    {r.date && (
-                      <span className="text-xs text-slate-400">
-                        {new Date(r.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                      </span>
-                    )}
-                  </div>
-                  {r.lead_investor && <p className="text-xs text-slate-500 mt-0.5">Lead: {r.lead_investor}</p>}
-                  {r.notes && <p className="text-sm text-slate-600 mt-1 leading-relaxed">{r.notes}</p>}
-                </div>
-                <button
-                  onClick={() => handleDelete(r.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition shrink-0"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   )
 }

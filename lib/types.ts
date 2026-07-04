@@ -173,8 +173,31 @@ export interface PortfolioFundraiseRound {
   date: string | null
   lead_investor: string | null
   notes: string | null
+  security_type: string | null
+  round_size: number | null
+  pre_money: number | null
+  post_money: number | null
+  price_per_share: number | null
+  status: string | null
+  terms: Record<string, unknown> | null
   created_at: string
 }
+
+export interface PortfolioPosition {
+  id: string
+  company_id: string
+  round_id: string | null
+  fund: string | null
+  invested_amount: number | null
+  shares: number | null
+  ownership_pct: number | null
+  accrued_interest: number | null
+  notes: string | null
+  created_at: string
+}
+
+export const SECURITY_TYPES = ['Priced equity', 'SAFE', 'Convertible note'] as const
+export type SecurityType = typeof SECURITY_TYPES[number]
 
 export const INTRO_STATUSES = ['Introduced', 'Meeting Scheduled', 'In Diligence', 'Passed', 'Invested'] as const
 export type IntroStatus = typeof INTRO_STATUSES[number]

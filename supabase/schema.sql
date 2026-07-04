@@ -350,3 +350,32 @@ INSERT INTO list_options (list_key, value, sort_order) VALUES
 
 -- SharePoint link on deals
 ALTER TABLE deals ADD COLUMN IF NOT EXISTS sharepoint_link TEXT;
+
+
+-- ============================================================
+-- Cap & Rounds: structured round terms + Solas positions
+-- Run these in Supabase SQL Editor (safe to re-run)
+-- ============================================================
+ALTER TABLE portfolio_fundraise_rounds ADD COLUMN IF NOT EXISTS security_type TEXT DEFAULT 'Priced equity';
+ALTER TABLE portfolio_fundraise_rounds ADD COLUMN IF NOT EXISTS round_size NUMERIC;
+ALTER TABLE portfolio_fundraise_rounds ADD COLUMN IF NOT EXISTS pre_money NUMERIC;
+ALTER TABLE portfolio_fundraise_rounds ADD COLUMN IF NOT EXISTS post_money NUMERIC;
+ALTER TABLE portfolio_fundraise_rounds ADD COLUMN IF NOT EXISTS price_per_share NUMERIC;
+ALTER TABLE portfolio_fundraise_rounds ADD COLUMN IF NOT EXISTS status TEXT;
+ALTER TABLE portfolio_fundraise_rounds ADD COLUMN IF NOT EXISTS terms JSONB DEFAULT '{}';
+
+CREATE TABLE IF NOT EXISTS portfolio_positions (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  company_id UUID REFERENCES portfolio_companies(id) ON DELETE CASCADE NOT NULL,
+  round_id UUID REFERENCES portfolio_fundraise_rounds(id) ON DELETE CASCADE,
+  fund TEXT,
+  invested_amount NUMERIC,
+  shares NUMERIC,
+  ownership_pct NUMERIC,
+  accrued_interest NUMERIC,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE portfolio_positions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Auth users can manage portfolio_positions" ON portfolio_positions;
+CREATE POLICY "Auth users can manage portfolio_positions" ON portfolio_positions FOR ALL TO authenticated USING (true) WITH CHECK (true);
