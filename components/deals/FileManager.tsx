@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Upload, FileText, Download, Trash2, File, Loader2 } from 'lucide-react'
+import { Upload, FileText, Download, Trash2, File, Loader2, Eye } from 'lucide-react'
 import { DealFile } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { formatBytes, formatDate } from '@/lib/utils'
+import PdfViewer from './PdfViewer'
 
 interface Props {
   dealId: string
@@ -14,12 +15,17 @@ function fileIcon(mimeType: string | null) {
   return <File className="w-4 h-4 text-slate-400" />
 }
 
+function isPdf(f: DealFile) {
+  return f.mime_type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')
+}
+
 export default function FileManager({ dealId }: Props) {
   const [files, setFiles] = useState<DealFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [isDragging, setIsDragging] = useState(false)
+  const [viewing, setViewing] = useState<DealFile | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
@@ -149,20 +155,41 @@ export default function FileManager({ dealId }: Props) {
         <p className="text-center text-sm text-slate-400 py-6">No files uploaded yet</p>
       ) : (
         <div className="space-y-1.5">
-          {files.map((file) => (
+          {files.map((file) => {
+            const pdf = isPdf(file)
+            return (
             <div
               key={file.id}
               className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-100 hover:bg-slate-50 group transition"
             >
-              <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+              <FileText className={`w-4 h-4 shrink-0 ${pdf ? '' : 'text-slate-400'}`} style={pdf ? { color: '#e98925' } : undefined} />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-700 truncate">{file.name}</p>
+                {pdf ? (
+                  <button
+                    onClick={() => setViewing(file)}
+                    className="text-sm font-medium text-slate-700 truncate block text-left hover:text-slate-900 hover:underline"
+                    title="View deck"
+                  >
+                    {file.name}
+                  </button>
+                ) : (
+                  <p className="text-sm font-medium text-slate-700 truncate">{file.name}</p>
+                )}
                 <p className="text-xs text-slate-400">
                   {file.size ? formatBytes(file.size) : ''}{file.size && ' · '}
                   {formatDate(file.created_at)}
                 </p>
               </div>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                {pdf && (
+                  <button
+                    onClick={() => setViewing(file)}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-white rounded-lg transition"
+                    title="View deck"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
+                )}
                 <button
                   onClick={() => handleDownload(file)}
                   className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-white rounded-lg transition"
@@ -179,9 +206,12 @@ export default function FileManager({ dealId }: Props) {
                 </button>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
+
+      {viewing && <PdfViewer file={viewing} onClose={() => setViewing(null)} />}
     </div>
   )
 }
