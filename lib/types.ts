@@ -192,6 +192,9 @@ export interface PortfolioPosition {
   shares: number | null
   ownership_pct: number | null
   accrued_interest: number | null
+  fair_value: number | null
+  fair_value_date: string | null
+  fair_value_source: string | null
   notes: string | null
   created_at: string
 }

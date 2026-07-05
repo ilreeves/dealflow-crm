@@ -36,6 +36,7 @@ export default async function FundPerformancePage() {
   }
 
   const posValue = (p: PortfolioPosition): number | null => {
+    if (p.fair_value != null) return Number(p.fair_value)
     const lp = latestPost[p.company_id]
     if (lp == null || p.ownership_pct == null) return null
     return (Number(p.ownership_pct) / 100) * lp

@@ -398,3 +398,12 @@ CREATE TABLE IF NOT EXISTS portfolio_valuation_marks (
 ALTER TABLE portfolio_valuation_marks ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Auth users can manage portfolio_valuation_marks" ON portfolio_valuation_marks;
 CREATE POLICY "Auth users can manage portfolio_valuation_marks" ON portfolio_valuation_marks FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+
+-- ============================================================
+-- Position-level fair-value marks (from audited financials / interim marks)
+-- Run in Supabase SQL Editor (safe to re-run)
+-- ============================================================
+ALTER TABLE portfolio_positions ADD COLUMN IF NOT EXISTS fair_value NUMERIC;
+ALTER TABLE portfolio_positions ADD COLUMN IF NOT EXISTS fair_value_date DATE;
+ALTER TABLE portfolio_positions ADD COLUMN IF NOT EXISTS fair_value_source TEXT;

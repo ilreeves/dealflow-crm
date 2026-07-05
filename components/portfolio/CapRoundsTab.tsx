@@ -60,6 +60,9 @@ type Staged = {
   shares: string
   ownership_pct: string
   accrued_interest: string
+  fair_value: string
+  fair_value_date: string
+  fair_value_source: string
 }
 
 // ─── main tab ───────────────────────────────────────────────────────────────
@@ -108,7 +111,16 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
     candidates.sort((a, b) => (b.date || "").localeCompare(a.date || ""))
     return candidates[0] ?? null
   })()
-  const currentValue = valuation != null ? (ownership / 100) * valuation.value : null
+  const usesFairValue = positions.some((p) => p.fair_value != null)
+  const currentValue = (() => {
+    if (!positions.length) return null
+    if (!usesFairValue && valuation == null) return null
+    return positions.reduce((s, p) => {
+      if (p.fair_value != null) return s + Number(p.fair_value)
+      if (valuation != null && p.ownership_pct != null) return s + (Number(p.ownership_pct) / 100) * valuation.value
+      return s
+    }, 0)
+  })()
   const moic = currentValue != null && totalInvested > 0 ? currentValue / totalInvested : null
 
   async function handleDeleteRound(id: string) {
@@ -139,9 +151,11 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
         <Stat label="MOIC" value={moic != null ? `${moic.toFixed(2)}×` : "—"} />
       </div>
       <p className="text-xs text-slate-400 -mt-1.5 px-0.5">
-        {valuation != null
-          ? `Value = ownership × ${valuation.source} (${fmtMoney(valuation.value)}${valuation.date ? `, ${monthYear(valuation.date)}` : ""}). Unrealized.`
-          : "Add a round post-money or a valuation mark to compute current value."}
+        {currentValue == null
+          ? "Add a round post-money, a valuation mark, or a position fair value to compute current value."
+          : usesFairValue
+            ? `Value uses position fair-value marks where set${valuation != null ? `, else ownership × ${valuation.source}` : ""}. Unrealized.`
+            : `Value = ownership × ${valuation!.source} (${fmtMoney(valuation!.value)}${valuation!.date ? `, ${monthYear(valuation!.date)}` : ""}). Unrealized.`}
       </p>
 
       {/* Valuation marks */}
@@ -259,6 +273,7 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
                               {p.shares != null && ` · ${Number(p.shares).toLocaleString()} sh`}
                               {p.ownership_pct != null && <span style={{ color: "#3b6d11" }}> · {fmtPct(p.ownership_pct)}</span>}
                               {p.accrued_interest != null && Number(p.accrued_interest) > 0 && <span className="text-slate-400"> · accrued {fmtMoney(p.accrued_interest)}</span>}
+                              {p.fair_value != null && <span className="text-slate-500"> · FV {fmtMoney(p.fair_value)}{p.fair_value_source ? ` (${p.fair_value_source})` : ""}</span>}
                             </span>
                           </div>
                         ))}
@@ -291,6 +306,9 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
                         shares: numToStr(p.shares),
                         ownership_pct: numToStr(p.ownership_pct),
                         accrued_interest: numToStr(p.accrued_interest),
+                        fair_value: numToStr(p.fair_value),
+                        fair_value_date: p.fair_value_date ?? "",
+                        fair_value_source: p.fair_value_source ?? "",
                       }))}
                       onCancel={() => setEditingId(null)}
                       onDone={() => { setEditingId(null); load() }}
@@ -401,7 +419,7 @@ function RoundEditor({
   const roundSizeLabel = isNote ? "Principal" : "Round size"
 
   function addPos() {
-    setPosList((p) => [...p, { _k: keyCounter, fund: funds[0] ?? "", invested_amount: "", shares: "", ownership_pct: "", accrued_interest: "" }])
+    setPosList((p) => [...p, { _k: keyCounter, fund: funds[0] ?? "", invested_amount: "", shares: "", ownership_pct: "", accrued_interest: "", fair_value: "", fair_value_date: "", fair_value_source: "" }])
     setKeyCounter((c) => c + 1)
   }
   function setPos(k: number, key: keyof Staged, v: string) {
@@ -463,7 +481,7 @@ function RoundEditor({
       // sync positions: replace all for this round
       await supabase.from("portfolio_positions").delete().eq("round_id", roundId)
       const rows = posList
-        .filter((p) => p.fund || p.invested_amount || p.shares || p.ownership_pct)
+        .filter((p) => p.fund || p.invested_amount || p.shares || p.ownership_pct || p.fair_value)
         .map((p) => ({
           company_id: companyId,
           round_id: roundId,
@@ -472,6 +490,9 @@ function RoundEditor({
           shares: parseNum(p.shares),
           ownership_pct: parseNum(p.ownership_pct),
           accrued_interest: isNote ? parseNum(p.accrued_interest) : null,
+          fair_value: parseNum(p.fair_value),
+          fair_value_date: p.fair_value_date || null,
+          fair_value_source: p.fair_value_source || null,
         }))
       if (rows.length) {
         const { error: e } = await supabase.from("portfolio_positions").insert(rows)
@@ -570,18 +591,26 @@ function RoundEditor({
         <p className="text-[11px] text-slate-400 mb-1.5">Solas positions in this round</p>
         <div className="space-y-2">
           {posList.map((p) => (
-            <div key={p._k} className="grid grid-cols-12 gap-2 items-center">
-              <select value={p.fund} onChange={(e) => setPos(p._k, "fund", e.target.value)} className={`${inputCls} col-span-3`}>
-                <option value="">Fund…</option>
-                {funds.map((fd) => <option key={fd} value={fd}>{fd}</option>)}
-              </select>
-              <input placeholder="$ invested" value={p.invested_amount} onChange={(e) => setPos(p._k, "invested_amount", e.target.value)} className={`${inputCls} col-span-3`} />
-              <input placeholder="Shares" value={p.shares} onChange={(e) => setPos(p._k, "shares", e.target.value)} className={`${inputCls} col-span-2`} />
-              <input placeholder="Own %" value={p.ownership_pct} onChange={(e) => setPos(p._k, "ownership_pct", e.target.value)} className={`${inputCls} col-span-2`} />
-              {isNote ? (
-                <input placeholder="Accrued $" value={p.accrued_interest} onChange={(e) => setPos(p._k, "accrued_interest", e.target.value)} className={`${inputCls} col-span-1`} />
-              ) : <span className="col-span-1" />}
-              <button onClick={() => removePos(p._k)} className="col-span-1 flex justify-center text-slate-300 hover:text-red-500 transition"><Trash2 className="w-4 h-4" /></button>
+            <div key={p._k} className="border border-slate-100 rounded-lg p-2 bg-white space-y-2">
+              <div className="grid grid-cols-12 gap-2 items-center">
+                <select value={p.fund} onChange={(e) => setPos(p._k, "fund", e.target.value)} className={`${inputCls} col-span-3`}>
+                  <option value="">Fund…</option>
+                  {funds.map((fd) => <option key={fd} value={fd}>{fd}</option>)}
+                </select>
+                <input placeholder="$ invested" value={p.invested_amount} onChange={(e) => setPos(p._k, "invested_amount", e.target.value)} className={`${inputCls} col-span-3`} />
+                <input placeholder="Shares" value={p.shares} onChange={(e) => setPos(p._k, "shares", e.target.value)} className={`${inputCls} col-span-2`} />
+                <input placeholder="Own %" value={p.ownership_pct} onChange={(e) => setPos(p._k, "ownership_pct", e.target.value)} className={`${inputCls} col-span-2`} />
+                {isNote ? (
+                  <input placeholder="Accrued $" value={p.accrued_interest} onChange={(e) => setPos(p._k, "accrued_interest", e.target.value)} className={`${inputCls} col-span-1`} />
+                ) : <span className="col-span-1" />}
+                <button onClick={() => removePos(p._k)} className="col-span-1 flex justify-center text-slate-300 hover:text-red-500 transition"><Trash2 className="w-4 h-4" /></button>
+              </div>
+              <div className="grid grid-cols-12 gap-2 items-center">
+                <span className="col-span-3 text-[11px] text-slate-400 pl-1">Fair-value mark</span>
+                <input placeholder="$ fair value" value={p.fair_value} onChange={(e) => setPos(p._k, "fair_value", e.target.value)} className={`${inputCls} col-span-3`} />
+                <input type="date" value={p.fair_value_date} onChange={(e) => setPos(p._k, "fair_value_date", e.target.value)} className={`${inputCls} col-span-3`} />
+                <input placeholder="Source (e.g. audited financials)" value={p.fair_value_source} onChange={(e) => setPos(p._k, "fair_value_source", e.target.value)} className={`${inputCls} col-span-3`} />
+              </div>
             </div>
           ))}
         </div>
