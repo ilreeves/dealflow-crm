@@ -111,15 +111,21 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
     candidates.sort((a, b) => (b.date || "").localeCompare(a.date || ""))
     return candidates[0] ?? null
   })()
-  const usesFairValue = positions.some((p) => p.fair_value != null)
+  // per-position value = the most recent of (its own fair-value mark) and (ownership × latest company valuation)
   const currentValue = (() => {
     if (!positions.length) return null
-    if (!usesFairValue && valuation == null) return null
-    return positions.reduce((s, p) => {
-      if (p.fair_value != null) return s + Number(p.fair_value)
-      if (valuation != null && p.ownership_pct != null) return s + (Number(p.ownership_pct) / 100) * valuation.value
-      return s
-    }, 0)
+    let total = 0
+    let any = false
+    for (const p of positions) {
+      const cands: { v: number; d: string }[] = []
+      if (p.fair_value != null) cands.push({ v: Number(p.fair_value), d: p.fair_value_date || "" })
+      if (valuation != null && p.ownership_pct != null) cands.push({ v: (Number(p.ownership_pct) / 100) * valuation.value, d: valuation.date || "" })
+      if (!cands.length) continue
+      cands.sort((a, b) => (b.d || "").localeCompare(a.d || ""))
+      total += cands[0].v
+      any = true
+    }
+    return any ? total : null
   })()
   const moic = currentValue != null && totalInvested > 0 ? currentValue / totalInvested : null
 
@@ -153,9 +159,7 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
       <p className="text-xs text-slate-400 -mt-1.5 px-0.5">
         {currentValue == null
           ? "Add a round post-money, a valuation mark, or a position fair value to compute current value."
-          : usesFairValue
-            ? `Value uses position fair-value marks where set${valuation != null ? `, else ownership × ${valuation.source}` : ""}. Unrealized.`
-            : `Value = ownership × ${valuation!.source} (${fmtMoney(valuation!.value)}${valuation!.date ? `, ${monthYear(valuation!.date)}` : ""}). Unrealized.`}
+          : "Value uses the most recent mark per position — a position fair value, or ownership × company valuation, whichever is newer. Unrealized."}
       </p>
 
       {/* Valuation marks */}

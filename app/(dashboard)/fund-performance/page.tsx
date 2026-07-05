@@ -26,20 +26,23 @@ export default async function FundPerformancePage() {
 
   // effective current valuation per company = most recent by date among round post-moneys and manual marks
   const marks = (valMarks as { company_id: string; as_of_date: string | null; valuation: number | null }[]) ?? []
-  const latestPost: Record<string, number> = {}
+  const latestVal: Record<string, { value: number; date: string }> = {}
   for (const c of comps) {
     const cand: { value: number; date: string }[] = []
     for (const r of rs) if (r.company_id === c.id && r.post_money != null) cand.push({ value: Number(r.post_money), date: r.date ?? "" })
     for (const m of marks) if (m.company_id === c.id && m.valuation != null) cand.push({ value: Number(m.valuation), date: m.as_of_date ?? "" })
     cand.sort((a, b) => (b.date || "").localeCompare(a.date || ""))
-    if (cand.length) latestPost[c.id] = cand[0].value
+    if (cand.length) latestVal[c.id] = cand[0]
   }
 
   const posValue = (p: PortfolioPosition): number | null => {
-    if (p.fair_value != null) return Number(p.fair_value)
-    const lp = latestPost[p.company_id]
-    if (lp == null || p.ownership_pct == null) return null
-    return (Number(p.ownership_pct) / 100) * lp
+    const cands: { v: number; d: string }[] = []
+    if (p.fair_value != null) cands.push({ v: Number(p.fair_value), d: p.fair_value_date || "" })
+    const lv = latestVal[p.company_id]
+    if (lv && p.ownership_pct != null) cands.push({ v: (Number(p.ownership_pct) / 100) * lv.value, d: lv.date || "" })
+    if (!cands.length) return null
+    cands.sort((a, b) => (b.d || "").localeCompare(a.d || ""))
+    return cands[0].v
   }
 
   // ── by fund → company ──
