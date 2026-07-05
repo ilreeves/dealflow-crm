@@ -379,3 +379,22 @@ CREATE TABLE IF NOT EXISTS portfolio_positions (
 ALTER TABLE portfolio_positions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Auth users can manage portfolio_positions" ON portfolio_positions;
 CREATE POLICY "Auth users can manage portfolio_positions" ON portfolio_positions FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+
+-- ============================================================
+-- Valuation marks: interim fair-value updates between rounds
+-- Run in Supabase SQL Editor (safe to re-run)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS portfolio_valuation_marks (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  company_id UUID REFERENCES portfolio_companies(id) ON DELETE CASCADE NOT NULL,
+  as_of_date DATE,
+  valuation NUMERIC,
+  basis TEXT,
+  notes TEXT,
+  created_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE portfolio_valuation_marks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Auth users can manage portfolio_valuation_marks" ON portfolio_valuation_marks;
+CREATE POLICY "Auth users can manage portfolio_valuation_marks" ON portfolio_valuation_marks FOR ALL TO authenticated USING (true) WITH CHECK (true);

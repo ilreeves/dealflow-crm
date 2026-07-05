@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
-import { PortfolioFundraiseRound, PortfolioPosition } from "@/lib/types"
+import { PortfolioFundraiseRound, PortfolioPosition, PortfolioValuationMark } from "@/lib/types"
 import FundPerformanceView, { FundRow, TopPosition, RiskFlag, CompanyInFund } from "@/components/fund/FundPerformanceView"
 
 export const dynamic = "force-dynamic"
@@ -8,11 +8,12 @@ type CompRow = { id: string; name: string }
 
 export default async function FundPerformancePage() {
   const supabase = await createClient()
-  const [{ data: companies }, { data: rounds }, { data: positions }, { data: funds }] = await Promise.all([
+  const [{ data: companies }, { data: rounds }, { data: positions }, { data: funds }, { data: valMarks }] = await Promise.all([
     supabase.from("portfolio_companies").select("id,name"),
     supabase.from("portfolio_fundraise_rounds").select("id,company_id,round_name,date,post_money,security_type,status,terms"),
     supabase.from("portfolio_positions").select("*"),
     supabase.from("list_options").select("value,sort_order").eq("list_key", "fund").order("sort_order"),
+    supabase.from("portfolio_valuation_marks").select("company_id,as_of_date,valuation"),
   ])
 
   const comps = (companies as CompRow[]) ?? []
@@ -23,13 +24,15 @@ export default async function FundPerformancePage() {
   const nameById: Record<string, string> = {}
   for (const c of comps) nameById[c.id] = c.name
 
-  // latest post-money per company (most recent round with a post-money value)
+  // effective current valuation per company = most recent by date among round post-moneys and manual marks
+  const marks = (valMarks as { company_id: string; as_of_date: string | null; valuation: number | null }[]) ?? []
   const latestPost: Record<string, number> = {}
   for (const c of comps) {
-    const crs = rs
-      .filter((r) => r.company_id === c.id && r.post_money != null)
-      .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
-    if (crs.length) latestPost[c.id] = Number(crs[0].post_money)
+    const cand: { value: number; date: string }[] = []
+    for (const r of rs) if (r.company_id === c.id && r.post_money != null) cand.push({ value: Number(r.post_money), date: r.date ?? "" })
+    for (const m of marks) if (m.company_id === c.id && m.valuation != null) cand.push({ value: Number(m.valuation), date: m.as_of_date ?? "" })
+    cand.sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+    if (cand.length) latestPost[c.id] = cand[0].value
   }
 
   const posValue = (p: PortfolioPosition): number | null => {

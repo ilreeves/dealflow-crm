@@ -199,6 +199,18 @@ export interface PortfolioPosition {
 export const SECURITY_TYPES = ['Priced equity', 'SAFE', 'Convertible note'] as const
 export type SecurityType = typeof SECURITY_TYPES[number]
 
+export interface PortfolioValuationMark {
+  id: string
+  company_id: string
+  as_of_date: string | null
+  valuation: number | null
+  basis: string | null
+  notes: string | null
+  created_at: string
+}
+
+export const VALUATION_BASES = ['409A', 'Secondary transaction', 'Lead investor mark', 'Internal mark', 'Public comps', 'Impairment / write-down'] as const
+
 export const INTRO_STATUSES = ['Introduced', 'Meeting Scheduled', 'In Diligence', 'Passed', 'Invested'] as const
 export type IntroStatus = typeof INTRO_STATUSES[number]
 

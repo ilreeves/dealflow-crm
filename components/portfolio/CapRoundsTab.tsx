@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Trash2, Loader2, ChevronDown, ChevronRight, Pencil, Building2, ArrowRightCircle } from "lucide-react"
-import { PortfolioFundraiseRound, PortfolioPosition, SECURITY_TYPES } from "@/lib/types"
+import { Plus, Trash2, Loader2, ChevronDown, ChevronRight, Pencil, Building2, ArrowRightCircle, TrendingUp } from "lucide-react"
+import { PortfolioFundraiseRound, PortfolioPosition, PortfolioValuationMark, SECURITY_TYPES, VALUATION_BASES } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -68,7 +68,10 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
   const [rounds, setRounds] = useState<PortfolioFundraiseRound[]>([])
   const [positions, setPositions] = useState<PortfolioPosition[]>([])
   const [funds, setFunds] = useState<string[]>([])
+  const [marks, setMarks] = useState<PortfolioValuationMark[]>([])
   const [loading, setLoading] = useState(true)
+  const [addingMark, setAddingMark] = useState(false)
+  const [editingMarkId, setEditingMarkId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -80,14 +83,16 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
 
   async function load() {
     setLoading(true)
-    const [{ data: rd }, { data: ps }, { data: fu }] = await Promise.all([
+    const [{ data: rd }, { data: ps }, { data: fu }, { data: mk }] = await Promise.all([
       supabase.from("portfolio_fundraise_rounds").select("*").eq("company_id", companyId).order("date", { ascending: false }),
       supabase.from("portfolio_positions").select("*").eq("company_id", companyId),
       supabase.from("list_options").select("value,sort_order").eq("list_key", "fund").order("sort_order"),
+      supabase.from("portfolio_valuation_marks").select("*").eq("company_id", companyId).order("as_of_date", { ascending: false }),
     ])
     setRounds((rd as PortfolioFundraiseRound[]) ?? [])
     setPositions((ps as PortfolioPosition[]) ?? [])
     setFunds(((fu as { value: string }[]) ?? []).map((f) => f.value))
+    setMarks((mk as PortfolioValuationMark[]) ?? [])
     setLoading(false)
   }
 
@@ -95,11 +100,15 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
 
   const totalInvested = positions.reduce((s, p) => s + (Number(p.invested_amount) || 0), 0)
   const ownership = positions.reduce((s, p) => s + (Number(p.ownership_pct) || 0), 0)
-  const latestPostMoney = (() => {
-    for (const r of rounds) if (r.post_money != null) return Number(r.post_money)
-    return null
+  // effective current valuation = most recent by date among round post-moneys and manual marks
+  const valuation = (() => {
+    const candidates: { value: number; date: string; source: string }[] = []
+    for (const r of rounds) if (r.post_money != null) candidates.push({ value: Number(r.post_money), date: r.date ?? "", source: `${r.round_name} post-money` })
+    for (const m of marks) if (m.valuation != null) candidates.push({ value: Number(m.valuation), date: m.as_of_date ?? "", source: m.basis || "mark" })
+    candidates.sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+    return candidates[0] ?? null
   })()
-  const currentValue = latestPostMoney != null ? (ownership / 100) * latestPostMoney : null
+  const currentValue = valuation != null ? (ownership / 100) * valuation.value : null
   const moic = currentValue != null && totalInvested > 0 ? currentValue / totalInvested : null
 
   async function handleDeleteRound(id: string) {
@@ -108,6 +117,12 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
     setRounds((prev) => prev.filter((r) => r.id !== id))
     setPositions((prev) => prev.filter((p) => p.round_id !== id))
     if (editingId === id) setEditingId(null)
+  }
+
+  async function handleDeleteMark(id: string) {
+    await supabase.from("portfolio_valuation_marks").delete().eq("id", id)
+    setMarks((prev) => prev.filter((m) => m.id !== id))
+    if (editingMarkId === id) setEditingMarkId(null)
   }
 
   if (loading) {
@@ -124,10 +139,51 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
         <Stat label="MOIC" value={moic != null ? `${moic.toFixed(2)}×` : "—"} />
       </div>
       <p className="text-xs text-slate-400 -mt-1.5 px-0.5">
-        {latestPostMoney != null
-          ? `Value = ownership × latest post-money (${fmtMoney(latestPostMoney)}). Unrealized.`
-          : "Add a round with a post-money valuation to compute current value."}
+        {valuation != null
+          ? `Value = ownership × ${valuation.source} (${fmtMoney(valuation.value)}${valuation.date ? `, ${monthYear(valuation.date)}` : ""}). Unrealized.`
+          : "Add a round post-money or a valuation mark to compute current value."}
       </p>
+
+      {/* Valuation marks */}
+      <div className="border border-slate-200 rounded-xl bg-white">
+        <div className="flex items-center justify-between px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-slate-400" />
+            <span className="text-sm font-medium text-slate-600">Valuation marks</span>
+            <span className="text-xs text-slate-400">interim fair value between rounds</span>
+          </div>
+          {!addingMark && !editingMarkId && (
+            <button onClick={() => setAddingMark(true)} className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 hover:border-slate-300 transition">
+              <Plus className="w-3.5 h-3.5" /> Add mark
+            </button>
+          )}
+        </div>
+        {addingMark && (
+          <div className="border-t border-slate-100">
+            <MarkEditor companyId={companyId} onCancel={() => setAddingMark(false)} onDone={() => { setAddingMark(false); load() }} />
+          </div>
+        )}
+        {marks.length > 0 && (
+          <div className="border-t border-slate-100 divide-y divide-slate-50">
+            {marks.map((m) => (
+              editingMarkId === m.id ? (
+                <div key={m.id}><MarkEditor companyId={companyId} initial={m} onCancel={() => setEditingMarkId(null)} onDone={() => { setEditingMarkId(null); load() }} /></div>
+              ) : (
+                <div key={m.id} className="flex items-center gap-3 px-4 py-2.5 text-sm group">
+                  <span className="text-slate-400 text-xs w-20 shrink-0">{m.as_of_date ? monthYear(m.as_of_date) : "—"}</span>
+                  <span className="font-medium text-slate-800 shrink-0">{fmtMoney(m.valuation)}</span>
+                  <span className="text-xs px-2 py-0.5 rounded-md shrink-0" style={{ backgroundColor: "#e6eef1", color: "#023a51" }}>{m.basis || "mark"}</span>
+                  <span className="flex-1 min-w-0 truncate text-xs text-slate-500">{m.notes}</span>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
+                    <button onClick={() => { setEditingMarkId(m.id); setAddingMark(false) }} className="p-1 text-slate-400 hover:text-slate-700"><Pencil className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => handleDeleteMark(m.id)} className="p-1 text-slate-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                </div>
+              )
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Add round */}
       <div className="flex items-center justify-between">
@@ -551,6 +607,74 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label className="block text-xs text-slate-500 mb-1">{label}</label>
       {children}
+    </div>
+  )
+}
+
+
+// ─── valuation mark editor ────────────────────────────────────────────────────
+function MarkEditor({
+  companyId, initial, onDone, onCancel,
+}: {
+  companyId: string
+  initial?: PortfolioValuationMark
+  onDone: () => void
+  onCancel: () => void
+}) {
+  const supabase = createClient()
+  const isNew = !initial
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+  const [f, setF] = useState({
+    as_of_date: initial?.as_of_date ?? "",
+    valuation: numToStr(initial?.valuation),
+    basis: initial?.basis ?? VALUATION_BASES[0],
+    notes: initial?.notes ?? "",
+  })
+  function set<K extends keyof typeof f>(k: K, v: (typeof f)[K]) { setF((p) => ({ ...p, [k]: v })) }
+
+  async function save() {
+    if (!f.valuation.trim()) { setError("Enter a valuation amount."); return }
+    setSaving(true)
+    setError("")
+    const payload = {
+      company_id: companyId,
+      as_of_date: f.as_of_date || null,
+      valuation: parseNum(f.valuation),
+      basis: f.basis || null,
+      notes: f.notes || null,
+    }
+    const q = isNew
+      ? supabase.from("portfolio_valuation_marks").insert(payload)
+      : supabase.from("portfolio_valuation_marks").update(payload).eq("id", initial!.id)
+    const { error: e } = await q
+    if (e) { setError(saveHint(e.message)); setSaving(false); return }
+    setSaving(false)
+    onDone()
+  }
+
+  return (
+    <div className="p-4 space-y-3 bg-slate-50">
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="As-of date"><input type="date" value={f.as_of_date} onChange={(e) => set("as_of_date", e.target.value)} className={inputCls} /></Field>
+        <Field label="Valuation *"><input placeholder="$ implied post-money" value={f.valuation} onChange={(e) => set("valuation", e.target.value)} className={inputCls} /></Field>
+        <Field label="Basis">
+          <select value={f.basis} onChange={(e) => set("basis", e.target.value)} className={inputCls}>
+            {VALUATION_BASES.map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+        </Field>
+      </div>
+      <div>
+        <label className="block text-xs text-slate-500 mb-1">Notes</label>
+        <textarea rows={2} value={f.notes} onChange={(e) => set("notes", e.target.value)} className={`${inputCls} resize-none`} placeholder="Source / rationale for the mark" />
+      </div>
+      {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancel} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 transition">Cancel</button>
+        <button onClick={save} disabled={saving || !f.valuation.trim()} className="flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg disabled:opacity-40 transition" style={{ backgroundColor: "#023a51" }}>
+          {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Save mark
+        </button>
+      </div>
     </div>
   )
 }
