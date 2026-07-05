@@ -85,7 +85,8 @@ export default async function FundPerformancePage() {
     compMap.set(cname, e)
   }
   for (const e of compMap.values()) {
-    e.fund = Object.entries(e.fundInvested).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—"
+    // list every fund the company is held in, largest allocation first
+    e.fund = Object.entries(e.fundInvested).sort((a, b) => b[1] - a[1]).map(([f]) => f).join(", ") || "—"
   }
 
   const totalInvested = Array.from(compMap.values()).reduce((s, c) => s + c.invested, 0)
