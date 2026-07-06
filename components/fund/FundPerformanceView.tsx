@@ -41,7 +41,6 @@ export default function FundPerformanceView({
   asOf: string
 }) {
   const [open, setOpen] = useState<string | null>(null)
-  const maxFundValue = Math.max(...funds.map((f) => f.value), 1)
   const empty = totals.invested === 0 && funds.length === 0
 
   return (
@@ -84,9 +83,6 @@ export default function FundPerformanceView({
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-slate-800">{f.fund}</span>
                             <span className="text-xs text-slate-400">{f.companies.length} {f.companies.length === 1 ? "company" : "companies"}</span>
-                          </div>
-                          <div className="h-1.5 rounded-full bg-slate-100 mt-1.5 overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${(f.value / maxFundValue) * 100}%`, backgroundColor: color }} />
                           </div>
                         </div>
                         <div className="text-right shrink-0">
