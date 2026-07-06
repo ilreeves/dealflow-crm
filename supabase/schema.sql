@@ -415,3 +415,24 @@ ALTER TABLE portfolio_positions ADD COLUMN IF NOT EXISTS fair_value_source TEXT;
 -- ============================================================
 ALTER TABLE portfolio_companies ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Active';
 UPDATE portfolio_companies SET status = 'Legacy' WHERE name = 'Areteia' AND (status IS NULL OR status = 'Active');
+
+
+-- ============================================================
+-- Pass reason / passed date (first-class) — run in Supabase SQL Editor
+-- ============================================================
+ALTER TABLE deals ADD COLUMN IF NOT EXISTS pass_reason TEXT;
+ALTER TABLE deals ADD COLUMN IF NOT EXISTS passed_at TIMESTAMPTZ;
+
+-- Backfill from the latest "Passed: ..." note on each passed deal
+UPDATE deals d SET
+  pass_reason = sub.reason,
+  passed_at   = COALESCE(d.passed_at, sub.created_at, d.stage_entered_at)
+FROM (
+  SELECT DISTINCT ON (deal_id) deal_id,
+         regexp_replace(content, '^Passed:\s*', '') AS reason,
+         created_at
+  FROM deal_notes
+  WHERE content ILIKE 'Passed:%'
+  ORDER BY deal_id, created_at DESC
+) sub
+WHERE d.id = sub.deal_id AND d.stage = 'Passed' AND d.pass_reason IS NULL;

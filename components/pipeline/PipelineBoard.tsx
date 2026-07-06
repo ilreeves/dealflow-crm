@@ -76,9 +76,9 @@ export default function PipelineBoard({ initialDeals }: Props) {
     if (!deal) return
 
     const now = new Date().toISOString()
-    setDeals((prev) => prev.map((d) => d.id === dealId ? { ...d, stage: newStage, stage_entered_at: now } : d))
+    setDeals((prev) => prev.map((d) => d.id === dealId ? { ...d, stage: newStage, stage_entered_at: now, ...(newStage === 'Passed' ? { pass_reason: passReason ?? null, passed_at: now } : {}) } : d))
 
-    await supabase.from('deals').update({ stage: newStage, stage_entered_at: now }).eq('id', dealId)
+    await supabase.from('deals').update({ stage: newStage, stage_entered_at: now, ...(newStage === 'Passed' ? { pass_reason: passReason ?? null, passed_at: now } : {}) }).eq('id', dealId)
     const details = passReason ? `${fromStage} \u2192 ${newStage}: ${passReason}` : `${fromStage} \u2192 ${newStage}`
     await logActivity(dealId, deal.name, 'Stage changed', details, actorName)
 
@@ -97,6 +97,10 @@ export default function PipelineBoard({ initialDeals }: Props) {
       })
     }
   }, [supabase, deals, actorName])
+
+  const reopenDeal = useCallback((deal: Deal) => {
+    moveDeal(deal.id, deal.stage, 'Sourced')
+  }, [moveDeal])
 
   const handleDragEnd = useCallback((result: DropResult) => {
     const { destination, source, draggableId } = result
@@ -269,6 +273,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
                                     onUpdated={handleDealUpdated}
                                     onDeleted={handleDealDeleted}
                                     compact={stage === 'Passed'}
+                                    onReopen={stage === 'Passed' ? reopenDeal : undefined}
                                   />
                                 </div>
                               )}

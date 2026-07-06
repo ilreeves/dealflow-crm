@@ -64,6 +64,8 @@ export interface Deal {
   sharepoint_link: string | null
   custom_fields: Record<string, unknown>
   stage_entered_at: string | null
+  pass_reason: string | null
+  passed_at: string | null
   created_by: string | null
   created_at: string
   updated_at: string

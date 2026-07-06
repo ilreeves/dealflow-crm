@@ -282,6 +282,15 @@ function OverviewTab({ deal }: { deal: Deal }) {
 
   return (
     <div className="space-y-6">
+      {deal.pass_reason && (
+        <div className="rounded-lg border px-3 py-2" style={{ borderColor: '#f0997b', backgroundColor: '#faece7' }}>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: '#993c1d' }}>
+            Passed{deal.passed_at ? ` · ${formatDate(deal.passed_at)}` : ''}
+          </p>
+          <p className="text-sm" style={{ color: '#712b13' }}>{deal.pass_reason}</p>
+        </div>
+      )}
+
       {deal.description && (
         <div>
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Description</p>
