@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Deal, STAGE_COLORS } from '@/lib/types'
-import { Building2, User, DollarSign, FlaskConical, RotateCcw } from 'lucide-react'
+import { Building2, User, DollarSign, FlaskConical } from 'lucide-react'
 import DealDetailModal from '@/components/deals/DealDetailModal'
 
 interface Props {
@@ -10,7 +10,6 @@ interface Props {
   onUpdated: (deal: Deal) => void
   onDeleted: (id: string) => void
   compact?: boolean
-  onReopen?: (deal: Deal) => void
 }
 
 function getAgingText(stageEnteredAt: string | null): string | null {
@@ -23,15 +22,18 @@ function getAgingText(stageEnteredAt: string | null): string | null {
   return `${Math.floor(days / 30)}mo`
 }
 
-export default function DealCard({ deal, onUpdated, onDeleted, compact, onReopen }: Props) {
+export default function DealCard({ deal, onUpdated, onDeleted, compact }: Props) {
   const [showDetail, setShowDetail] = useState(false)
   const aging = getAgingText(deal.stage_entered_at)
 
   return (
     <>
       {compact ? (
-        <div className="bg-white rounded-md border border-slate-200 px-2.5 py-2 hover:border-slate-300 hover:shadow-sm transition-all">
-          <div onClick={() => setShowDetail(true)} className="flex items-center justify-between gap-2 cursor-pointer">
+        <div
+          onClick={() => setShowDetail(true)}
+          className="bg-white rounded-md border border-slate-200 px-2.5 py-1.5 cursor-pointer hover:border-slate-300 hover:shadow-sm transition-all"
+        >
+          <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-medium text-slate-800 truncate">{deal.name}</span>
             <div className="flex items-center gap-1.5 shrink-0">
               {aging && <span className="text-xs text-slate-300">{aging}</span>}
@@ -45,15 +47,7 @@ export default function DealCard({ deal, onUpdated, onDeleted, compact, onReopen
             </div>
           </div>
           {deal.pass_reason && (
-            <p onClick={() => setShowDetail(true)} className="text-[11px] text-slate-400 mt-1 line-clamp-2 cursor-pointer" title={deal.pass_reason}>{deal.pass_reason}</p>
-          )}
-          {onReopen && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onReopen(deal) }}
-              className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-slate-800 border border-slate-200 hover:border-slate-300 rounded px-1.5 py-0.5 transition"
-            >
-              <RotateCcw className="w-3 h-3" /> Re-open
-            </button>
+            <p className="text-[11px] text-slate-400 mt-1 line-clamp-2" title={deal.pass_reason}>{deal.pass_reason}</p>
           )}
         </div>
       ) : (

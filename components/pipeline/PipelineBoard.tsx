@@ -98,10 +98,6 @@ export default function PipelineBoard({ initialDeals }: Props) {
     }
   }, [supabase, deals, actorName])
 
-  const reopenDeal = useCallback((deal: Deal) => {
-    moveDeal(deal.id, deal.stage, 'Sourced')
-  }, [moveDeal])
-
   const handleDragEnd = useCallback((result: DropResult) => {
     const { destination, source, draggableId } = result
     if (!destination || destination.droppableId === source.droppableId) return
@@ -273,7 +269,6 @@ export default function PipelineBoard({ initialDeals }: Props) {
                                     onUpdated={handleDealUpdated}
                                     onDeleted={handleDealDeleted}
                                     compact={stage === 'Passed'}
-                                    onReopen={stage === 'Passed' ? reopenDeal : undefined}
                                   />
                                 </div>
                               )}
