@@ -17,7 +17,7 @@ export default function PortfolioBoard({ initialCompanies, fundOrder }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [selected, setSelected] = useState<PortfolioCompany | null>(null)
   const [groupBy, setGroupBy] = useState<'fund' | 'clinical'>('clinical')
-  const [showLegacy, setShowLegacy] = useState(true)
+  const [showLegacy, setShowLegacy] = useState(false)
 
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get('open')
