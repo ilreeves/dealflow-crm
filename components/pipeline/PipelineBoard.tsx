@@ -23,7 +23,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
   const [view, setView] = useState<'board' | 'list'>('board')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<'All' | 'Devices' | 'Drugs'>('All')
-  const [collapsedStages, setCollapsedStages] = useState<Set<DealStage>>(new Set(['Passed', 'Invested']))
+  const [collapsedStages, setCollapsedStages] = useState<Set<DealStage>>(new Set(['Passed']))
   const [actorName, setActorName] = useState<string | null>(null)
   const [pendingPass, setPendingPass] = useState<{ id: string; name: string; fromStage: DealStage } | null>(null)
   const [isMobile, setIsMobile] = useState(false)
@@ -52,6 +52,8 @@ export default function PipelineBoard({ initialDeals }: Props) {
   }, [])
 
   const effectiveView = isMobile ? 'list' : view
+  // Invested deals graduate to Portfolio — keep the stage in data, but drop it from the pipeline view
+  const boardStages = DEAL_STAGES.filter((st) => st !== 'Invested')
 
   const filteredDeals = useMemo(() => {
     const s = search.toLowerCase()
@@ -195,7 +197,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
         <div className="flex-1 overflow-x-auto">
           <DragDropContext onDragEnd={handleDragEnd}>
             <div className="flex gap-3 p-4 h-full min-w-max lg:min-w-0">
-              {DEAL_STAGES.map((stage) => {
+              {boardStages.map((stage) => {
                 const colors = STAGE_COLORS[stage]
                 const stageDeals = dealsByStage[stage]
                 const isCollapsed = collapsedStages.has(stage)
@@ -285,7 +287,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
       ) : (
         <div className="flex-1 overflow-auto p-4 md:p-6">
           <DealsTable
-            deals={filteredDeals}
+            deals={filteredDeals.filter((d) => d.stage !== 'Invested')}
             onUpdated={handleDealUpdated}
             onDeleted={handleDealDeleted}
           />
