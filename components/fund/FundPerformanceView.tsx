@@ -27,6 +27,13 @@ function fmtPct(n: number | null | undefined): string {
 function fmtMoic(n: number | null | undefined): string {
   return n == null ? "—" : `${Number(n).toFixed(2)}×`
 }
+function valueColor(value: number | null, cost: number): string {
+  if (value == null) return "#64748b"   // unknown
+  if (value === 0) return "#dc2626"      // written to zero — red
+  if (value > cost) return "#5ba200"     // up — brand green
+  if (value < cost) return "#e98925"     // down — brand orange
+  return "#023a51"                        // flat — brand navy
+}
 function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("")
 }
@@ -88,7 +95,7 @@ export default function FundPerformanceView({
                         <div className="text-right shrink-0">
                           <div className="text-sm">
                             <span className="text-slate-400">{fmtMoney(f.invested)} → </span>
-                            <span className="font-medium" style={{ color: "#3b6d11" }}>{fmtMoney(f.value)}</span>
+                            <span className="font-medium" style={{ color: valueColor(f.value, f.invested) }}>{fmtMoney(f.value)}</span>
                           </div>
                           <MoicPill moic={f.moic} />
                         </div>
@@ -99,7 +106,7 @@ export default function FundPerformanceView({
                             <div key={c.name} className="flex items-center gap-2 text-[13px] text-slate-600">
                               <span className="flex-1 min-w-0 truncate">{c.name} <span className="text-slate-400">· {fmtPct(c.ownership)}</span></span>
                               <span className="text-slate-400">{fmtMoney(c.invested)} → </span>
-                              <span style={{ color: c.value != null && c.value >= c.invested ? "#3b6d11" : "#64748b" }}>{fmtMoney(c.value)}</span>
+                              <span style={{ color: valueColor(c.value, c.invested) }}>{fmtMoney(c.value)}</span>
                             </div>
                           ))}
                         </div>
@@ -121,7 +128,7 @@ export default function FundPerformanceView({
                       <span className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] text-white shrink-0" style={{ backgroundColor: FUND_COLORS[i % FUND_COLORS.length] }}>{initials(p.name)}</span>
                       <span className="flex-1 min-w-0 truncate text-sm text-slate-800">{p.name} <span className="text-xs text-slate-400">· {p.fund} · {fmtPct(p.ownership)}</span></span>
                       <span className="text-sm text-slate-400 shrink-0">{fmtMoney(p.invested)} → </span>
-                      <span className="text-sm shrink-0" style={{ color: p.value != null && p.value >= p.invested ? "#3b6d11" : "#64748b" }}>{fmtMoney(p.value)}</span>
+                      <span className="text-sm shrink-0" style={{ color: valueColor(p.value, p.invested) }}>{fmtMoney(p.value)}</span>
                       <MoicPill moic={p.moic} />
                     </div>
                   ))}
