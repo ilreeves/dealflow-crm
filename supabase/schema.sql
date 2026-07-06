@@ -407,3 +407,11 @@ CREATE POLICY "Auth users can manage portfolio_valuation_marks" ON portfolio_val
 ALTER TABLE portfolio_positions ADD COLUMN IF NOT EXISTS fair_value NUMERIC;
 ALTER TABLE portfolio_positions ADD COLUMN IF NOT EXISTS fair_value_date DATE;
 ALTER TABLE portfolio_positions ADD COLUMN IF NOT EXISTS fair_value_source TEXT;
+
+
+-- ============================================================
+-- Portfolio company status (Active / Legacy / Exited)
+-- Run in Supabase SQL Editor (safe to re-run)
+-- ============================================================
+ALTER TABLE portfolio_companies ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Active';
+UPDATE portfolio_companies SET status = 'Legacy' WHERE name = 'Areteia' AND (status IS NULL OR status = 'Active');

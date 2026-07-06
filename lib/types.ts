@@ -148,6 +148,7 @@ export interface PortfolioCompany {
   name: string
   sector: string | null
   category: 'Devices' | 'Drugs' | null
+  status: string | null
   funds: string[] | null
   series: string | null
   clinical_stage: string | null
@@ -164,6 +165,8 @@ export interface PortfolioCompany {
   created_at: string
   updated_at: string
 }
+
+export const PORTFOLIO_STATUSES = ['Active', 'Legacy', 'Exited'] as const
 
 export interface PortfolioFundraiseRound {
   id: string

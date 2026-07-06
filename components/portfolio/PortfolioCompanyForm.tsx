@@ -70,6 +70,7 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
     name: company?.name ?? '',
     sector: company?.sector ?? '',
     category: company?.category ?? '',
+    status: company?.status ?? 'Active',
     funds: company?.funds ?? [] as string[],
     series: company?.series ?? '',
     clinical_stage: company?.clinical_stage ?? '',
@@ -105,6 +106,7 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
       name: form.name.trim(),
       sector: form.sector || null,
       category: form.category || null,
+      status: form.status || 'Active',
       funds: form.funds.length ? form.funds : null,
       series: form.series || null,
       clinical_stage: form.clinical_stage || null,
@@ -210,6 +212,26 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
                   }`}
                 >
                   {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Status</label>
+            <div className="flex items-center gap-2">
+              {['Active', 'Legacy', 'Exited'].map((st) => (
+                <button
+                  type="button"
+                  key={st}
+                  onClick={() => set('status', st)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${
+                    form.status === st
+                      ? 'border-transparent bg-slate-800 text-white'
+                      : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                  }`}
+                >
+                  {st}
                 </button>
               ))}
             </div>

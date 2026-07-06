@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Search, Globe, DollarSign, Building2, Mail } from 'lucide-react'
+import { Plus, Search, Globe, DollarSign, Building2, Mail, ChevronDown, ChevronRight } from 'lucide-react'
 import { PortfolioCompany } from '@/lib/types'
 import PortfolioCompanyForm from './PortfolioCompanyForm'
 import PortfolioCompanyDetail from './PortfolioCompanyDetail'
@@ -17,6 +17,7 @@ export default function PortfolioBoard({ initialCompanies, fundOrder }: Props) {
   const [showForm, setShowForm] = useState(false)
   const [selected, setSelected] = useState<PortfolioCompany | null>(null)
   const [groupBy, setGroupBy] = useState<'fund' | 'clinical'>('clinical')
+  const [showLegacy, setShowLegacy] = useState(true)
 
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get('open')
@@ -31,6 +32,9 @@ export default function PortfolioBoard({ initialCompanies, fundOrder }: Props) {
     !search || c.name.toLowerCase().includes(search.toLowerCase()) ||
     (c.sector ?? '').toLowerCase().includes(search.toLowerCase())
   )
+  const isLegacy = (c: PortfolioCompany) => c.status === 'Legacy' || c.status === 'Exited'
+  const activeFiltered = filtered.filter((c) => !isLegacy(c))
+  const legacyFiltered = filtered.filter(isLegacy)
 
   const FUND_ORDER = fundOrder && fundOrder.length ? fundOrder : ['Fund I', 'Fund II', 'EHF', 'Solas/Sower', 'SPV']
   const CLINICAL_ORDER = ['Preclinical', 'Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Pre-IDE', 'FIH', 'Pivotal', '510(k)', 'PMA', 'Approved / Marketed']
@@ -45,7 +49,7 @@ export default function PortfolioBoard({ initialCompanies, fundOrder }: Props) {
     }
     g.items.push(company)
   }
-  for (const company of filtered) {
+  for (const company of activeFiltered) {
     const funds = company.funds?.length ? company.funds : ['Unassigned']
     for (const f of funds) addTo(f, company)
   }
@@ -70,9 +74,9 @@ export default function PortfolioBoard({ initialCompanies, fundOrder }: Props) {
       })
       .map(([stage, list]) => ({ stage, items: list.sort((a, b) => a.name.localeCompare(b.name)) }))
   }
-  const drugCompanies = filtered.filter((c) => c.category === 'Drugs')
-  const deviceCompanies = filtered.filter((c) => c.category === 'Devices')
-  const uncategorized = filtered.filter((c) => !c.category)
+  const drugCompanies = activeFiltered.filter((c) => c.category === 'Drugs')
+  const deviceCompanies = activeFiltered.filter((c) => c.category === 'Devices')
+  const uncategorized = activeFiltered.filter((c) => !c.category)
 
   function handleSaved(company: PortfolioCompany) {
     setCompanies((prev) => {
@@ -91,6 +95,23 @@ export default function PortfolioBoard({ initialCompanies, fundOrder }: Props) {
     setCompanies((prev) => prev.filter((c) => c.id !== id))
     setSelected(null)
   }
+
+  const legacySection = legacyFiltered.length > 0 ? (
+    <div>
+      <button onClick={() => setShowLegacy((v) => !v)} className="flex items-center gap-2 mb-3">
+        {showLegacy ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+        <span className="text-sm font-bold text-slate-700 uppercase tracking-wide">Legacy / Exited</span>
+        <span className="text-xs text-slate-400 font-medium">{legacyFiltered.length}</span>
+      </button>
+      {showLegacy && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {legacyFiltered.map((company) => (
+            <CompanyCard key={`legacy-${company.id}`} company={company} onClick={() => setSelected(company)} />
+          ))}
+        </div>
+      )}
+    </div>
+  ) : null
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -164,6 +185,7 @@ export default function PortfolioBoard({ initialCompanies, fundOrder }: Props) {
                 </div>
               </div>
             ))}
+            {legacySection}
           </div>
         </div>
       ) : (
@@ -214,6 +236,7 @@ export default function PortfolioBoard({ initialCompanies, fundOrder }: Props) {
               </div>
             ))}
           </div>
+          {legacySection}
         </div>
       )}
 
@@ -243,6 +266,9 @@ function CompanyCard({ company, onClick }: { company: PortfolioCompany; onClick:
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-slate-900 truncate group-hover:text-[#023a51] transition">{company.name}</h3>
           {company.sector && <p className="text-xs text-slate-500 mt-0.5">{company.sector}</p>}
+          {(company.status === 'Legacy' || company.status === 'Exited') && (
+            <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-slate-200 text-slate-600">{company.status}</span>
+          )}
           {(company.funds?.length ?? 0) > 0 && (
             <div className="flex items-center gap-1 flex-wrap mt-1.5">
               {company.funds!.map((f) => (
