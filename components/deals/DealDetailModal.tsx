@@ -9,6 +9,7 @@ import DealForm from './DealForm'
 import { logActivity } from '@/lib/activity'
 import { addDealToPortfolio } from '@/lib/portfolio'
 import PassReasonModal from './PassReasonModal'
+import InvestModal from './InvestModal'
 import FileManager from './FileManager'
 import NotesList from './NotesList'
 import MeetingsList from './MeetingsList'
@@ -31,6 +32,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
   const supabase = createClient()
   const [actorName, setActorName] = useState<string | null>(null)
   const [showPassReason, setShowPassReason] = useState(false)
+  const [showInvest, setShowInvest] = useState(false)
   const colors = STAGE_COLORS[deal.stage]
 
   useEffect(() => {
@@ -45,6 +47,10 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
   async function handleStageChange(newStage: string, passReason?: string) {
     if (newStage === 'Passed' && deal.stage !== 'Passed' && !passReason) {
       setShowPassReason(true)
+      return
+    }
+    if (newStage === 'Invested' && deal.stage !== 'Invested') {
+      setShowInvest(true)
       return
     }
     const prevStage = deal.stage
@@ -219,6 +225,20 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
 
       {showEdit && (
         <DealForm deal={deal} onClose={() => setShowEdit(false)} onSaved={handleUpdated} />
+      )}
+
+      {showInvest && (
+        <InvestModal
+          deal={deal}
+          actorName={actorName}
+          onCancel={() => setShowInvest(false)}
+          onDone={(updated) => {
+            setShowInvest(false)
+            setDeal(updated)
+            onUpdated(updated)
+            onClose()
+          }}
+        />
       )}
 
       {showPassReason && (
