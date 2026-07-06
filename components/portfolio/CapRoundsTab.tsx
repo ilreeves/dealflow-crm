@@ -49,6 +49,14 @@ const SECURITY_COLOR: Record<string, string> = {
   "Convertible note": "#e98925",
   "SAFE": "#023a51",
 }
+function valueColor(value: number | null | undefined, cost: number | null | undefined): string {
+  if (value == null) return "#64748b"
+  if (Number(value) === 0) return "#dc2626"
+  const c = Number(cost) || 0
+  if (Number(value) > c) return "#5ba200"
+  if (Number(value) < c) return "#e98925"
+  return "#023a51"
+}
 const inputCls =
   "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
 
@@ -152,7 +160,7 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
       {/* Position stat cards */}
       <div className="grid grid-cols-4 gap-2.5">
         <Stat label="Invested" value={fmtMoney(totalInvested)} />
-        <Stat label="Current value" value={fmtMoney(currentValue)} accent="#3b6d11" />
+        <Stat label="Current value" value={fmtMoney(currentValue)} accent={valueColor(currentValue, totalInvested)} />
         <Stat label="Ownership" value={fmtPct(ownership)} />
         <Stat label="MOIC" value={moic != null ? `${moic.toFixed(2)}×` : "—"} />
       </div>
@@ -277,7 +285,7 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
                               {p.shares != null && ` · ${Number(p.shares).toLocaleString()} sh`}
                               {p.ownership_pct != null && <span style={{ color: "#3b6d11" }}> · {fmtPct(p.ownership_pct)}</span>}
                               {p.accrued_interest != null && Number(p.accrued_interest) > 0 && <span className="text-slate-400"> · accrued {fmtMoney(p.accrued_interest)}</span>}
-                              {p.fair_value != null && <span className="text-slate-500"> · FV {fmtMoney(p.fair_value)}{p.fair_value_source ? ` (${p.fair_value_source})` : ""}</span>}
+                              {p.fair_value != null && <span style={{ color: valueColor(p.fair_value, p.invested_amount) }}> · FV {fmtMoney(p.fair_value)}{p.fair_value_source ? ` (${p.fair_value_source})` : ""}</span>}
                             </span>
                           </div>
                         ))}
