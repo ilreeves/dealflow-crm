@@ -7,7 +7,7 @@ export default async function AnalyticsPage() {
   const [{ data }, { data: activityData }, { data: catalystData }, { data: portfolioData }, { data: legacyData }, { data: listData }] = await Promise.all([
     supabase.from('deals').select('id,name,stage,category,source,sector,clinical_stage,series,stage_entered_at,created_at'),
     supabase.from('deal_activity').select('deal_id,details,created_at').eq('action', 'Stage changed').order('created_at', { ascending: true }),
-    supabase.from('catalysts').select('company_name,catalyst_date,original_date,status'),
+    supabase.from('catalysts').select('company_name,catalyst_date,original_date,status,resolved_date'),
     supabase.from('portfolio_companies').select('name,sector,category,series,clinical_stage'),
     supabase.from('legacy_companies').select('company_name'),
     supabase.from('list_options').select('list_key,value,sort_order').order('sort_order'),
@@ -176,17 +176,19 @@ export default async function AnalyticsPage() {
   const totalTransitions = historicalAverages.reduce((a, s) => a + s.count, 0)
 
   // Catalyst reliability: per company, how many catalysts slipped vs original timeline
-  type CatalystRow = { company_name: string; catalyst_date: string; original_date: string | null; status: string | null }
+  type CatalystRow = { company_name: string; catalyst_date: string; original_date: string | null; status: string | null; resolved_date: string | null }
   const catalysts = (catalystData as CatalystRow[]) ?? []
   const reliabilityMap: Record<string, { total: number; delayed: number; slipDays: number[] }> = {}
   for (const cat of catalysts) {
     if (!reliabilityMap[cat.company_name]) reliabilityMap[cat.company_name] = { total: 0, delayed: 0, slipDays: [] }
     const r = reliabilityMap[cat.company_name]
     r.total++
-    const slipped = cat.original_date && cat.catalyst_date > cat.original_date
+    // Once resolved, judge against the date it actually happened, not the (possibly never-moved) expected date
+    const effectiveDate = cat.resolved_date ?? cat.catalyst_date
+    const slipped = cat.original_date && effectiveDate > cat.original_date
     if (slipped || cat.status === 'Delayed') r.delayed++
     if (slipped && cat.original_date) {
-      r.slipDays.push((new Date(cat.catalyst_date).getTime() - new Date(cat.original_date).getTime()) / (1000 * 60 * 60 * 24))
+      r.slipDays.push((new Date(effectiveDate).getTime() - new Date(cat.original_date).getTime()) / (1000 * 60 * 60 * 24))
     }
   }
   const reliability = Object.entries(reliabilityMap)
