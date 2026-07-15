@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Upload, FileText, Download, Trash2, Eye, Loader2, RefreshCw } from 'lucide-react'
+import { Upload, FileText, Download, Trash2, Eye, Loader2, RefreshCw, Mail } from 'lucide-react'
 import { DealFile } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import PdfViewer from '@/components/deals/PdfViewer'
@@ -12,9 +12,11 @@ interface Props {
   path: string | null
   name: string | null
   onChange?: (path: string | null, name: string | null) => void
+  // Builds the draft; receives a time-limited download link to the deck (null if it couldn't be signed)
+  buildEmail?: (deckUrl: string | null) => { subject: string; body: string }
 }
 
-export default function NonConDeckSection({ table, id, path, name, onChange }: Props) {
+export default function NonConDeckSection({ table, id, path, name, onChange, buildEmail }: Props) {
   const supabase = createClient()
   const [deckPath, setDeckPath] = useState(path)
   const [deckName, setDeckName] = useState(name)
@@ -22,6 +24,7 @@ export default function NonConDeckSection({ table, id, path, name, onChange }: P
   const [error, setError] = useState('')
   const [isDragging, setIsDragging] = useState(false)
   const [viewing, setViewing] = useState(false)
+  const [emailing, setEmailing] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const isPdf = !!deckName && deckName.toLowerCase().endsWith('.pdf')
@@ -73,6 +76,16 @@ export default function NonConDeckSection({ table, id, path, name, onChange }: P
     onChange?.(null, null)
   }
 
+  // Opens a pre-drafted email (Outlook, if it's the default mail client) with a 7-day link to the deck in the body
+  async function handleEmail() {
+    if (!deckPath || !buildEmail) return
+    setEmailing(true)
+    const { data } = await supabase.storage.from('deal-files').createSignedUrl(deckPath, 60 * 60 * 24 * 7)
+    const { subject, body } = buildEmail(data?.signedUrl ?? null)
+    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    setEmailing(false)
+  }
+
   const deckFile = deckPath && deckName
     ? ({ id: 'noncon-deck', name: deckName, storage_path: deckPath, size: null, mime_type: null, deal_id: '', uploaded_by: null, created_at: '' } as unknown as DealFile)
     : null
@@ -95,6 +108,11 @@ export default function NonConDeckSection({ table, id, path, name, onChange }: P
             )}
           </div>
           <div className="flex items-center gap-1">
+            {buildEmail && (
+              <button onClick={handleEmail} disabled={emailing} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition disabled:opacity-50" title="Draft investor email with deck link">
+                {emailing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+              </button>
+            )}
             {isPdf && (
               <button onClick={() => setViewing(true)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition" title="View deck">
                 <Eye className="w-3.5 h-3.5" />

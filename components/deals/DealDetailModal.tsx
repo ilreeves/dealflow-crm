@@ -330,6 +330,30 @@ function OverviewTab({ deal, onDeckChange }: { deal: Deal; onDeckChange: (path: 
         path={deal.non_con_deck_path}
         name={deal.non_con_deck_name}
         onChange={onDeckChange}
+        buildEmail={(deckUrl) => {
+          const details = [
+            deal.sector ? `Sector: ${deal.sector}` : null,
+            deal.series ? `Series: ${deal.series}` : null,
+            deal.clinical_stage ? `Clinical stage: ${deal.clinical_stage}` : null,
+            deal.current_fundraise ? `Current raise: ${deal.current_fundraise}` : null,
+            deal.current_valuation ? `Valuation: ${deal.current_valuation}` : null,
+            deal.fundraising_to_date ? `Raised to date: ${deal.fundraising_to_date}` : null,
+            deal.website ? `Website: ${deal.website}` : null,
+          ].filter(Boolean) as string[]
+          const body = [
+            'Hi,',
+            '',
+            `I wanted to share a non-confidential overview of ${deal.name}.`,
+            '',
+            ...details,
+            '',
+            deckUrl ? `Deck: ${deckUrl}` : 'Deck: (attaching separately)',
+            deckUrl ? '(link valid for 7 days)' : '',
+            '',
+            'Best,',
+          ].filter((line, i, arr) => !(line === '' && arr[i - 1] === '')).join('\n')
+          return { subject: `${deal.name} — non-confidential overview`, body }
+        }}
       />
 
       {deal.description && (
