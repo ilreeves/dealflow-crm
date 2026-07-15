@@ -436,3 +436,61 @@ FROM (
   ORDER BY deal_id, created_at DESC
 ) sub
 WHERE d.id = sub.deal_id AND d.stage = 'Passed' AND d.pass_reason IS NULL;
+
+
+-- ============================================================
+-- Non-confidential deck + pipeline investor intros + shared investor directory
+-- Run in Supabase SQL Editor (safe to re-run)
+-- ============================================================
+
+-- Dedicated single-slot "non-confidential deck" pointer (file lives in the deal-files bucket)
+ALTER TABLE deals ADD COLUMN IF NOT EXISTS non_con_deck_path TEXT;
+ALTER TABLE deals ADD COLUMN IF NOT EXISTS non_con_deck_name TEXT;
+ALTER TABLE portfolio_companies ADD COLUMN IF NOT EXISTS non_con_deck_path TEXT;
+ALTER TABLE portfolio_companies ADD COLUMN IF NOT EXISTS non_con_deck_name TEXT;
+
+-- Investor intros for pipeline deals (mirrors portfolio_investor_intros)
+CREATE TABLE IF NOT EXISTS deal_investor_intros (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  deal_id UUID REFERENCES deals(id) ON DELETE CASCADE NOT NULL,
+  investor_name TEXT NOT NULL,
+  investor_firm TEXT,
+  contact_email TEXT,
+  intro_date DATE,
+  status TEXT DEFAULT 'Introduced',
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE deal_investor_intros ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Auth users can manage deal_investor_intros" ON deal_investor_intros;
+CREATE POLICY "Auth users can manage deal_investor_intros" ON deal_investor_intros FOR ALL TO authenticated USING (true) WITH CHECK (true);
+DROP TRIGGER IF EXISTS update_deal_investor_intros_updated_at ON deal_investor_intros;
+CREATE TRIGGER update_deal_investor_intros_updated_at
+  BEFORE UPDATE ON deal_investor_intros
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- Shared, ever-growing investor directory that powers firm/email autocomplete
+CREATE TABLE IF NOT EXISTS investor_contacts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  firm TEXT,
+  contact_email TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE investor_contacts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Auth users can manage investor_contacts" ON investor_contacts;
+CREATE POLICY "Auth users can manage investor_contacts" ON investor_contacts FOR ALL TO authenticated USING (true) WITH CHECK (true);
+DROP TRIGGER IF EXISTS update_investor_contacts_updated_at ON investor_contacts;
+CREATE TRIGGER update_investor_contacts_updated_at
+  BEFORE UPDATE ON investor_contacts
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- Seed the directory from existing portfolio intros (one row per investor, most recent firm/email wins)
+INSERT INTO investor_contacts (name, firm, contact_email)
+SELECT DISTINCT ON (lower(investor_name)) trim(investor_name), investor_firm, contact_email
+FROM portfolio_investor_intros
+WHERE investor_name IS NOT NULL AND trim(investor_name) <> ''
+ORDER BY lower(investor_name), updated_at DESC NULLS LAST
+ON CONFLICT (name) DO NOTHING;

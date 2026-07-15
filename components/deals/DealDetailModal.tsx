@@ -13,8 +13,10 @@ import InvestModal from './InvestModal'
 import FileManager from './FileManager'
 import NotesList from './NotesList'
 import MeetingsList from './MeetingsList'
+import InvestorIntrosTab from '@/components/shared/InvestorIntrosTab'
+import NonConDeckSection from '@/components/shared/NonConDeckSection'
 
-type Tab = 'overview' | 'files' | 'notes' | 'meetings'
+type Tab = 'overview' | 'files' | 'notes' | 'meetings' | 'intros'
 
 interface Props {
   deal: Deal
@@ -98,6 +100,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
   const tabs: { key: Tab; label: string }[] = [
     { key: 'overview', label: 'Overview' },
     { key: 'meetings', label: 'Meetings' },
+    { key: 'intros', label: 'Investor Intros' },
     { key: 'files', label: 'Files' },
     { key: 'notes', label: 'Notes' },
   ]
@@ -215,8 +218,18 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto px-6 py-4">
-            {tab === 'overview' && <OverviewTab deal={deal} />}
+            {tab === 'overview' && (
+              <OverviewTab
+                deal={deal}
+                onDeckChange={(path, name) => {
+                  const updated = { ...deal, non_con_deck_path: path, non_con_deck_name: name }
+                  setDeal(updated)
+                  onUpdated(updated)
+                }}
+              />
+            )}
             {tab === 'meetings' && <MeetingsList dealId={deal.id} />}
+            {tab === 'intros' && <InvestorIntrosTab table="deal_investor_intros" fkColumn="deal_id" entityId={deal.id} />}
             {tab === 'files' && <FileManager dealId={deal.id} />}
             {tab === 'notes' && <NotesList dealId={deal.id} />}
           </div>
@@ -281,7 +294,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
   )
 }
 
-function OverviewTab({ deal }: { deal: Deal }) {
+function OverviewTab({ deal, onDeckChange }: { deal: Deal; onDeckChange: (path: string | null, name: string | null) => void }) {
   const fields = [
     { icon: Globe, label: 'Website', value: deal.website, href: deal.website ?? undefined },
     { icon: Link, label: 'SharePoint', value: deal.sharepoint_link, href: deal.sharepoint_link ?? undefined },
@@ -310,6 +323,14 @@ function OverviewTab({ deal }: { deal: Deal }) {
           <p className="text-sm" style={{ color: '#712b13' }}>{deal.pass_reason}</p>
         </div>
       )}
+
+      <NonConDeckSection
+        table="deals"
+        id={deal.id}
+        path={deal.non_con_deck_path}
+        name={deal.non_con_deck_name}
+        onChange={onDeckChange}
+      />
 
       {deal.description && (
         <div>

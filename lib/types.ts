@@ -62,6 +62,8 @@ export interface Deal {
   series: string | null
   current_valuation: string | null
   sharepoint_link: string | null
+  non_con_deck_path: string | null
+  non_con_deck_name: string | null
   custom_fields: Record<string, unknown>
   stage_entered_at: string | null
   pass_reason: string | null
@@ -163,6 +165,8 @@ export interface PortfolioCompany {
   current_valuation: string | null
   current_fundraise: string | null
   sharepoint_link: string | null
+  non_con_deck_path: string | null
+  non_con_deck_name: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -231,6 +235,29 @@ export interface PortfolioInvestorIntro {
   intro_date: string | null
   status: string
   notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Shape shared by portfolio_investor_intros and deal_investor_intros (FK column omitted — not needed in the UI)
+export interface InvestorIntro {
+  id: string
+  investor_name: string
+  investor_firm: string | null
+  contact_email: string | null
+  intro_date: string | null
+  status: string
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Ever-growing directory of investors we've introduced companies to (autocomplete source)
+export interface InvestorContact {
+  id: string
+  name: string
+  firm: string | null
+  contact_email: string | null
   created_at: string
   updated_at: string
 }
