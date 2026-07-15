@@ -14,7 +14,7 @@ import FileManager from './FileManager'
 import NotesList from './NotesList'
 import MeetingsList from './MeetingsList'
 import InvestorIntrosTab from '@/components/shared/InvestorIntrosTab'
-import NonConDeckSection from '@/components/shared/NonConDeckSection'
+import DecksSection from '@/components/shared/DecksSection'
 
 type Tab = 'overview' | 'files' | 'notes' | 'meetings' | 'intros'
 
@@ -218,16 +218,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto px-6 py-4">
-            {tab === 'overview' && (
-              <OverviewTab
-                deal={deal}
-                onDeckChange={(path, name) => {
-                  const updated = { ...deal, non_con_deck_path: path, non_con_deck_name: name }
-                  setDeal(updated)
-                  onUpdated(updated)
-                }}
-              />
-            )}
+            {tab === 'overview' && <OverviewTab deal={deal} />}
             {tab === 'meetings' && <MeetingsList dealId={deal.id} />}
             {tab === 'intros' && <InvestorIntrosTab table="deal_investor_intros" fkColumn="deal_id" entityId={deal.id} />}
             {tab === 'files' && <FileManager dealId={deal.id} />}
@@ -294,7 +285,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
   )
 }
 
-function OverviewTab({ deal, onDeckChange }: { deal: Deal; onDeckChange: (path: string | null, name: string | null) => void }) {
+function OverviewTab({ deal }: { deal: Deal }) {
   const fields = [
     { icon: Globe, label: 'Website', value: deal.website, href: deal.website ?? undefined },
     { icon: Link, label: 'SharePoint', value: deal.sharepoint_link, href: deal.sharepoint_link ?? undefined },
@@ -324,16 +315,12 @@ function OverviewTab({ deal, onDeckChange }: { deal: Deal; onDeckChange: (path: 
         </div>
       )}
 
-      <NonConDeckSection
-        table="deals"
-        id={deal.id}
+      <DecksSection
+        entityType="deal"
+        entityId={deal.id}
         entityName={deal.name}
-        path={deal.non_con_deck_path}
-        name={deal.non_con_deck_name}
-        token={deal.non_con_deck_token}
-        sharedAt={deal.non_con_deck_shared_at}
-        onChange={onDeckChange}
-        buildEmail={(deckUrl) => {
+        buildEmail={(deckUrl, label) => {
+          const named = label && label.toLowerCase() !== 'deck'
           const details = [
             deal.sector ? `Sector: ${deal.sector}` : null,
             deal.series ? `Series: ${deal.series}` : null,
@@ -346,16 +333,16 @@ function OverviewTab({ deal, onDeckChange }: { deal: Deal; onDeckChange: (path: 
           const body = [
             'Hi,',
             '',
-            `I wanted to share a non-confidential overview of ${deal.name}.`,
+            `I wanted to share the ${named ? label + ' ' : ''}non-confidential deck for ${deal.name}.`,
             '',
             ...details,
             '',
-            deckUrl ? `View the deck here: ${deckUrl}` : 'Deck: (attaching separately)',
-            deckUrl ? '(link active for 4 weeks)' : '',
+            `View the deck here: ${deckUrl}`,
+            '(link active for 4 weeks)',
             '',
             'Best,',
           ].filter((line, i, arr) => !(line === '' && arr[i - 1] === '')).join('\n')
-          return { subject: `${deal.name} — non-confidential overview`, body }
+          return { subject: named ? `${deal.name} — ${label} deck` : `${deal.name} — non-confidential overview`, body }
         }}
       />
 

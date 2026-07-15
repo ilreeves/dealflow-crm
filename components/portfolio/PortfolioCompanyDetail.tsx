@@ -9,7 +9,7 @@ import { formatDate } from '@/lib/utils'
 import PortfolioCompanyForm from './PortfolioCompanyForm'
 import CapRoundsTab from './CapRoundsTab'
 import InvestorIntrosTab from '@/components/shared/InvestorIntrosTab'
-import NonConDeckSection from '@/components/shared/NonConDeckSection'
+import DecksSection from '@/components/shared/DecksSection'
 
 type Tab = 'overview' | 'rounds' | 'intros' | 'catalysts'
 
@@ -93,16 +93,7 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
           </div>
 
           <div className="flex-1 overflow-y-auto px-6 py-4">
-            {tab === 'overview' && (
-              <OverviewTab
-                company={company}
-                onDeckChange={(path, name) => {
-                  const updated = { ...company, non_con_deck_path: path, non_con_deck_name: name }
-                  setCompany(updated)
-                  onUpdated(updated)
-                }}
-              />
-            )}
+            {tab === 'overview' && <OverviewTab company={company} />}
             {tab === 'rounds' && <CapRoundsTab companyId={company.id} />}
             {tab === 'intros' && <InvestorIntrosTab table="portfolio_investor_intros" fkColumn="company_id" entityId={company.id} />}
             {tab === 'catalysts' && <CatalystsTab companyName={company.name} />}
@@ -141,7 +132,7 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
 }
 
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
-function OverviewTab({ company, onDeckChange }: { company: PortfolioCompany; onDeckChange: (path: string | null, name: string | null) => void }) {
+function OverviewTab({ company }: { company: PortfolioCompany }) {
   const fields = [
     { icon: Globe, label: 'Website', value: company.website, href: company.website ?? undefined },
     { icon: Mail, label: 'Contact Email', value: company.contact_email, href: company.contact_email ? `mailto:${company.contact_email}` : undefined },
@@ -156,16 +147,12 @@ function OverviewTab({ company, onDeckChange }: { company: PortfolioCompany; onD
 
   return (
     <div className="space-y-6">
-      <NonConDeckSection
-        table="portfolio_companies"
-        id={company.id}
+      <DecksSection
+        entityType="portfolio"
+        entityId={company.id}
         entityName={company.name}
-        path={company.non_con_deck_path}
-        name={company.non_con_deck_name}
-        token={company.non_con_deck_token}
-        sharedAt={company.non_con_deck_shared_at}
-        onChange={onDeckChange}
-        buildEmail={(deckUrl) => {
+        buildEmail={(deckUrl, label) => {
+          const named = label && label.toLowerCase() !== 'deck'
           const details = [
             company.sector ? `Sector: ${company.sector}` : null,
             company.series ? `Series: ${company.series}` : null,
@@ -177,16 +164,16 @@ function OverviewTab({ company, onDeckChange }: { company: PortfolioCompany; onD
           const body = [
             'Hi,',
             '',
-            `I wanted to share a non-confidential overview of ${company.name}.`,
+            `I wanted to share the ${named ? label + ' ' : ''}non-confidential deck for ${company.name}.`,
             '',
             ...details,
             '',
-            deckUrl ? `View the deck here: ${deckUrl}` : 'Deck: (attaching separately)',
-            deckUrl ? '(link active for 4 weeks)' : '',
+            `View the deck here: ${deckUrl}`,
+            '(link active for 4 weeks)',
             '',
             'Best,',
           ].filter((line, i, arr) => !(line === '' && arr[i - 1] === '')).join('\n')
-          return { subject: `${company.name} — non-confidential overview`, body }
+          return { subject: named ? `${company.name} — ${label} deck` : `${company.name} — non-confidential overview`, body }
         }}
       />
       {company.description && (

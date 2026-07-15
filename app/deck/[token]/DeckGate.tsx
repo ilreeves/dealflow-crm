@@ -6,12 +6,15 @@ import { Loader2, Download, FileText } from 'lucide-react'
 interface Props {
   token: string
   company: string | null
+  label: string | null
   expired: boolean
 }
 
 const LS_KEY = 'solas-deck-viewer'
 
-export default function DeckGate({ token, company, expired }: Props) {
+export default function DeckGate({ token, company, label, expired }: Props) {
+  // "Series B" -> "Series B", generic "Deck" -> "Non-Confidential"
+  const deckLabel = label && label.toLowerCase() !== 'deck' ? label : 'Non-Confidential'
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -83,7 +86,7 @@ export default function DeckGate({ token, company, expired }: Props) {
         <div className="flex items-center justify-between px-5 py-3 shrink-0" style={{ backgroundColor: '#023a51' }}>
           <div className="flex items-center gap-2 min-w-0">
             <FileText className="w-4 h-4 text-white shrink-0" style={{ color: '#5ba200' }} />
-            <p className="text-sm font-medium text-white truncate">{company} — Non-Confidential Deck</p>
+            <p className="text-sm font-medium text-white truncate">{company} — {deckLabel} Deck</p>
           </div>
           <a
             href={deckUrl}
@@ -106,7 +109,7 @@ export default function DeckGate({ token, company, expired }: Props) {
       <div className="text-center mb-5">
         <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#5ba200' }}>Solas BioVentures</p>
         <h1 className="text-lg font-semibold text-slate-900 mt-1">{company}</h1>
-        <p className="text-sm text-slate-500 mt-1">Enter your details to view the non-confidential deck.</p>
+        <p className="text-sm text-slate-500 mt-1">Enter your details to view the {deckLabel.toLowerCase()} deck.</p>
       </div>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>

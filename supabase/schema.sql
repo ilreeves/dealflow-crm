@@ -527,3 +527,39 @@ CREATE INDEX IF NOT EXISTS deck_views_token_idx ON deck_views (token);
 -- Deck share links now expire 4 weeks after they are (re)sent
 ALTER TABLE deals ADD COLUMN IF NOT EXISTS non_con_deck_shared_at TIMESTAMPTZ;
 ALTER TABLE portfolio_companies ADD COLUMN IF NOT EXISTS non_con_deck_shared_at TIMESTAMPTZ;
+
+
+-- ============================================================
+-- Multiple non-con decks per company (one per raise), each independently trackable
+-- Run in Supabase SQL Editor (safe to re-run)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS company_decks (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  entity_type TEXT NOT NULL,          -- 'deal' | 'portfolio'
+  entity_id UUID NOT NULL,
+  company_name TEXT,
+  label TEXT NOT NULL DEFAULT 'Deck', -- e.g. 'Series B', 'Series C'
+  storage_path TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  token TEXT,
+  shared_at TIMESTAMPTZ,
+  sort_order INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE company_decks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Auth users can manage company_decks" ON company_decks;
+CREATE POLICY "Auth users can manage company_decks" ON company_decks FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE UNIQUE INDEX IF NOT EXISTS company_decks_token_key ON company_decks (token) WHERE token IS NOT NULL;
+CREATE INDEX IF NOT EXISTS company_decks_entity_idx ON company_decks (entity_type, entity_id);
+
+-- Migrate existing single-slot decks into the new table (guarded so re-runs don't duplicate)
+INSERT INTO company_decks (entity_type, entity_id, company_name, label, storage_path, file_name, token, shared_at)
+SELECT 'deal', d.id, d.name, COALESCE(NULLIF(d.series, ''), 'Deck'), d.non_con_deck_path, d.non_con_deck_name, d.non_con_deck_token, d.non_con_deck_shared_at
+FROM deals d
+WHERE d.non_con_deck_path IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM company_decks cd WHERE cd.entity_type = 'deal' AND cd.entity_id = d.id);
+INSERT INTO company_decks (entity_type, entity_id, company_name, label, storage_path, file_name, token, shared_at)
+SELECT 'portfolio', p.id, p.name, COALESCE(NULLIF(p.series, ''), 'Deck'), p.non_con_deck_path, p.non_con_deck_name, p.non_con_deck_token, p.non_con_deck_shared_at
+FROM portfolio_companies p
+WHERE p.non_con_deck_path IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM company_decks cd WHERE cd.entity_type = 'portfolio' AND cd.entity_id = p.id);

@@ -266,6 +266,21 @@ export interface InvestorContact {
   updated_at: string
 }
 
+// One non-confidential deck (per raise) attached to a deal or portfolio company
+export interface CompanyDeck {
+  id: string
+  entity_type: string
+  entity_id: string
+  company_name: string | null
+  label: string
+  storage_path: string
+  file_name: string
+  token: string | null
+  shared_at: string | null
+  sort_order: number
+  created_at: string
+}
+
 // A logged open of a shared non-confidential deck link
 export interface DeckView {
   id: string

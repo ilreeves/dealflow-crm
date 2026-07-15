@@ -4,26 +4,6 @@ import { isExpired } from '@/lib/deck'
 
 export const runtime = 'nodejs'
 
-type DeckRow = { id: string; name: string; non_con_deck_path: string | null; non_con_deck_shared_at: string | null }
-
-async function resolveToken(admin: ReturnType<typeof createAdminClient>, token: string) {
-  const deal = await admin
-    .from('deals')
-    .select('id,name,non_con_deck_path,non_con_deck_shared_at')
-    .eq('non_con_deck_token', token)
-    .maybeSingle()
-  if (deal.data) return { entityType: 'deal', row: deal.data as DeckRow }
-
-  const pc = await admin
-    .from('portfolio_companies')
-    .select('id,name,non_con_deck_path,non_con_deck_shared_at')
-    .eq('non_con_deck_token', token)
-    .maybeSingle()
-  if (pc.data) return { entityType: 'portfolio', row: pc.data as DeckRow }
-
-  return null
-}
-
 // Records the viewer and returns a fresh short-lived signed URL to the deck.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
@@ -47,29 +27,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     return NextResponse.json({ error: 'Deck sharing is not configured on the server.' }, { status: 500 })
   }
 
-  const resolved = await resolveToken(admin, token)
-  if (!resolved || !resolved.row.non_con_deck_path) {
+  const { data: deck } = await admin
+    .from('company_decks')
+    .select('entity_type,entity_id,company_name,label,storage_path,shared_at')
+    .eq('token', token)
+    .maybeSingle()
+  if (!deck?.storage_path) {
     return NextResponse.json({ error: 'This deck link is no longer available.' }, { status: 404 })
   }
-  if (isExpired(resolved.row.non_con_deck_shared_at)) {
+  if (isExpired(deck.shared_at)) {
     return NextResponse.json({ error: 'This deck link has expired. Please request a new one.' }, { status: 410 })
   }
 
   await admin.from('deck_views').insert({
     token,
-    entity_type: resolved.entityType,
-    entity_id: resolved.row.id,
-    company_name: resolved.row.name,
+    entity_type: deck.entity_type,
+    entity_id: deck.entity_id,
+    company_name: deck.company_name,
     viewer_name: name,
     viewer_email: email,
   })
 
   const { data, error } = await admin.storage
     .from('deal-files')
-    .createSignedUrl(resolved.row.non_con_deck_path, 60 * 60)
+    .createSignedUrl(deck.storage_path, 60 * 60)
   if (error || !data?.signedUrl) {
     return NextResponse.json({ error: 'Could not load the deck. Please try again.' }, { status: 500 })
   }
 
-  return NextResponse.json({ url: data.signedUrl, company: resolved.row.name })
+  return NextResponse.json({ url: data.signedUrl, company: deck.company_name, label: deck.label })
 }
