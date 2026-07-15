@@ -5,24 +5,32 @@ import { Upload, FileText, Download, Trash2, Eye, Loader2, RefreshCw, Mail, User
 import { DealFile, DeckView } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
+import { isExpired, DECK_LINK_TTL_MS } from '@/lib/deck'
 import PdfViewer from '@/components/deals/PdfViewer'
 
 interface Props {
   table: 'deals' | 'portfolio_companies'
   id: string
+  entityName: string
   path: string | null
   name: string | null
   token: string | null
+  sharedAt: string | null
   onChange?: (path: string | null, name: string | null) => void
-  // Builds the draft; receives the permanent, trackable /deck/<token> share link (null if unavailable)
+  // Builds the draft; receives the trackable /deck/<token> share link (null if unavailable)
   buildEmail?: (deckUrl: string | null) => { subject: string; body: string }
 }
 
-export default function NonConDeckSection({ table, id, path, name, token, onChange, buildEmail }: Props) {
+function slugify(s: string): string {
+  return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'company'
+}
+
+export default function NonConDeckSection({ table, id, entityName, path, name, token, sharedAt, onChange, buildEmail }: Props) {
   const supabase = createClient()
   const [deckPath, setDeckPath] = useState(path)
   const [deckName, setDeckName] = useState(name)
   const [deckToken, setDeckToken] = useState(token)
+  const [deckSharedAt, setDeckSharedAt] = useState(sharedAt)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [isDragging, setIsDragging] = useState(false)
@@ -54,14 +62,12 @@ export default function NonConDeckSection({ table, id, path, name, token, onChan
       setUploading(false)
       return
     }
-    // Reuse the existing share token across replacements so links already sent keep working
-    const shareToken = deckToken ?? crypto.randomUUID()
+    // Keep any existing share token (links already sent keep pointing at the new file)
     const previous = deckPath
-    await supabase.from(table).update({ non_con_deck_path: storagePath, non_con_deck_name: file.name, non_con_deck_token: shareToken }).eq('id', id)
+    await supabase.from(table).update({ non_con_deck_path: storagePath, non_con_deck_name: file.name }).eq('id', id)
     if (previous) await supabase.storage.from('deal-files').remove([previous])
     setDeckPath(storagePath)
     setDeckName(file.name)
-    setDeckToken(shareToken)
     onChange?.(storagePath, file.name)
     setUploading(false)
   }
@@ -85,25 +91,41 @@ export default function NonConDeckSection({ table, id, path, name, token, onChan
 
   async function handleRemove() {
     const previous = deckPath
-    // Null the token too so any shared link stops resolving
-    await supabase.from(table).update({ non_con_deck_path: null, non_con_deck_name: null, non_con_deck_token: null }).eq('id', id)
+    await supabase.from(table).update({ non_con_deck_path: null, non_con_deck_name: null, non_con_deck_token: null, non_con_deck_shared_at: null }).eq('id', id)
     if (previous) await supabase.storage.from('deal-files').remove([previous])
     setDeckPath(null)
     setDeckName(null)
     setDeckToken(null)
+    setDeckSharedAt(null)
     onChange?.(null, null)
   }
 
-  // Opens a pre-drafted email with the permanent, trackable deck link (Outlook if it's the default client)
+  // Picks a readable, unique slug like "aurenar-non-confidential-deck"
+  async function makeToken(): Promise<string> {
+    const base = `${slugify(entityName)}-non-confidential-deck`
+    const [d, p] = await Promise.all([
+      supabase.from('deals').select('id,non_con_deck_token').ilike('non_con_deck_token', `${base}%`),
+      supabase.from('portfolio_companies').select('id,non_con_deck_token').ilike('non_con_deck_token', `${base}%`),
+    ])
+    const taken = new Set<string>()
+    for (const r of [...(d.data ?? []), ...(p.data ?? [])] as { id: string; non_con_deck_token: string | null }[]) {
+      if (r.non_con_deck_token && r.id !== id) taken.add(r.non_con_deck_token)
+    }
+    if (!taken.has(base)) return base
+    let n = 2
+    while (taken.has(`${base}-${n}`)) n++
+    return `${base}-${n}`
+  }
+
+  // Opens a pre-drafted email with the trackable deck link, (re)starting the 4-week window
   async function handleEmail() {
     if (!deckPath || !buildEmail) return
     setEmailing(true)
-    let t = deckToken
-    if (!t) {
-      t = crypto.randomUUID()
-      await supabase.from(table).update({ non_con_deck_token: t }).eq('id', id)
-      setDeckToken(t)
-    }
+    const t = deckToken ?? (await makeToken())
+    const now = new Date().toISOString()
+    await supabase.from(table).update({ non_con_deck_token: t, non_con_deck_shared_at: now }).eq('id', id)
+    setDeckToken(t)
+    setDeckSharedAt(now)
     const shareUrl = `${window.location.origin}/deck/${t}`
     const { subject, body } = buildEmail(shareUrl)
     window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
@@ -114,10 +136,13 @@ export default function NonConDeckSection({ table, id, path, name, token, onChan
     ? ({ id: 'noncon-deck', name: deckName, storage_path: deckPath, size: null, mime_type: null, deal_id: '', uploaded_by: null, created_at: '' } as unknown as DealFile)
     : null
 
+  const linkExpired = isExpired(deckSharedAt)
+  const expiryDate = deckSharedAt ? formatDate(new Date(new Date(deckSharedAt).getTime() + DECK_LINK_TTL_MS).toISOString()) : null
+
   return (
     <div>
       <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Non-Confidential Deck</p>
-      <p className="text-xs text-slate-400 mb-2">Shareable deck — safe to send to prospective investors. Recipients enter their name and email before viewing.</p>
+      <p className="text-xs text-slate-400 mb-2">Shareable deck — safe to send to prospective investors. Recipients enter their name and email before viewing; links expire 4 weeks after they&apos;re sent.</p>
 
       {deckPath && deckName ? (
         <>
@@ -154,6 +179,13 @@ export default function NonConDeckSection({ table, id, path, name, token, onChan
               </button>
             </div>
           </div>
+
+          {/* Share-link status */}
+          {deckSharedAt && (
+            <p className={`text-xs mt-1.5 ${linkExpired ? 'text-orange-600' : 'text-slate-400'}`}>
+              {linkExpired ? 'Share link expired — click the mail icon to send a fresh 4-week link.' : `Share link active until ${expiryDate}.`}
+            </p>
+          )}
 
           {/* Viewer tracker */}
           <button

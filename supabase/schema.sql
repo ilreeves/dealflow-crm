@@ -523,3 +523,7 @@ ALTER TABLE deck_views ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Auth users can read deck_views" ON deck_views;
 CREATE POLICY "Auth users can read deck_views" ON deck_views FOR SELECT TO authenticated USING (true);
 CREATE INDEX IF NOT EXISTS deck_views_token_idx ON deck_views (token);
+
+-- Deck share links now expire 4 weeks after they are (re)sent
+ALTER TABLE deals ADD COLUMN IF NOT EXISTS non_con_deck_shared_at TIMESTAMPTZ;
+ALTER TABLE portfolio_companies ADD COLUMN IF NOT EXISTS non_con_deck_shared_at TIMESTAMPTZ;

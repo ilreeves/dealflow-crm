@@ -6,11 +6,12 @@ import { Loader2, Download, FileText } from 'lucide-react'
 interface Props {
   token: string
   company: string | null
+  expired: boolean
 }
 
 const LS_KEY = 'solas-deck-viewer'
 
-export default function DeckGate({ token, company }: Props) {
+export default function DeckGate({ token, company, expired }: Props) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -50,13 +51,26 @@ export default function DeckGate({ token, company }: Props) {
     setSubmitting(false)
   }
 
-  // Unknown / expired token
+  // Unknown token
   if (!company) {
     return (
       <Shell>
         <div className="text-center">
           <h1 className="text-lg font-semibold text-slate-900">Deck unavailable</h1>
           <p className="text-sm text-slate-500 mt-2">This link is no longer active. Please reach out to your contact at Solas BioVentures for an up-to-date link.</p>
+        </div>
+      </Shell>
+    )
+  }
+
+  // Link past its 4-week window
+  if (expired) {
+    return (
+      <Shell>
+        <div className="text-center">
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#5ba200' }}>Solas BioVentures</p>
+          <h1 className="text-lg font-semibold text-slate-900 mt-1">Link expired</h1>
+          <p className="text-sm text-slate-500 mt-2">This link to the {company} deck has expired. Please reach out to your contact at Solas BioVentures for a fresh link.</p>
         </div>
       </Shell>
     )

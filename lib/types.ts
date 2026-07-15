@@ -65,6 +65,7 @@ export interface Deal {
   non_con_deck_path: string | null
   non_con_deck_name: string | null
   non_con_deck_token: string | null
+  non_con_deck_shared_at: string | null
   custom_fields: Record<string, unknown>
   stage_entered_at: string | null
   pass_reason: string | null
@@ -169,6 +170,7 @@ export interface PortfolioCompany {
   non_con_deck_path: string | null
   non_con_deck_name: string | null
   non_con_deck_token: string | null
+  non_con_deck_shared_at: string | null
   created_by: string | null
   created_at: string
   updated_at: string

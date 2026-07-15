@@ -1,21 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { isExpired } from '@/lib/deck'
 
 export const runtime = 'nodejs'
 
-type DeckRow = { id: string; name: string; non_con_deck_path: string | null }
+type DeckRow = { id: string; name: string; non_con_deck_path: string | null; non_con_deck_shared_at: string | null }
 
 async function resolveToken(admin: ReturnType<typeof createAdminClient>, token: string) {
   const deal = await admin
     .from('deals')
-    .select('id,name,non_con_deck_path')
+    .select('id,name,non_con_deck_path,non_con_deck_shared_at')
     .eq('non_con_deck_token', token)
     .maybeSingle()
   if (deal.data) return { entityType: 'deal', row: deal.data as DeckRow }
 
   const pc = await admin
     .from('portfolio_companies')
-    .select('id,name,non_con_deck_path')
+    .select('id,name,non_con_deck_path,non_con_deck_shared_at')
     .eq('non_con_deck_token', token)
     .maybeSingle()
   if (pc.data) return { entityType: 'portfolio', row: pc.data as DeckRow }
@@ -49,6 +50,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const resolved = await resolveToken(admin, token)
   if (!resolved || !resolved.row.non_con_deck_path) {
     return NextResponse.json({ error: 'This deck link is no longer available.' }, { status: 404 })
+  }
+  if (isExpired(resolved.row.non_con_deck_shared_at)) {
+    return NextResponse.json({ error: 'This deck link has expired. Please request a new one.' }, { status: 410 })
   }
 
   await admin.from('deck_views').insert({

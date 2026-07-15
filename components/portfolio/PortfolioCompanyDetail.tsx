@@ -159,9 +159,11 @@ function OverviewTab({ company, onDeckChange }: { company: PortfolioCompany; onD
       <NonConDeckSection
         table="portfolio_companies"
         id={company.id}
+        entityName={company.name}
         path={company.non_con_deck_path}
         name={company.non_con_deck_name}
         token={company.non_con_deck_token}
+        sharedAt={company.non_con_deck_shared_at}
         onChange={onDeckChange}
         buildEmail={(deckUrl) => {
           const details = [
@@ -180,6 +182,7 @@ function OverviewTab({ company, onDeckChange }: { company: PortfolioCompany; onD
             ...details,
             '',
             deckUrl ? `View the deck here: ${deckUrl}` : 'Deck: (attaching separately)',
+            deckUrl ? '(link active for 4 weeks)' : '',
             '',
             'Best,',
           ].filter((line, i, arr) => !(line === '' && arr[i - 1] === '')).join('\n')
