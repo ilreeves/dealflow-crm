@@ -494,3 +494,32 @@ FROM portfolio_investor_intros
 WHERE investor_name IS NOT NULL AND trim(investor_name) <> ''
 ORDER BY lower(investor_name), updated_at DESC NULLS LAST
 ON CONFLICT (name) DO NOTHING;
+
+
+-- ============================================================
+-- Trackable, permanent non-con deck share links + view log
+-- Run in Supabase SQL Editor (safe to re-run)
+-- ============================================================
+
+-- Stable per-entity share token (survives deck replacement; cleared when the deck is removed)
+ALTER TABLE deals ADD COLUMN IF NOT EXISTS non_con_deck_token TEXT;
+ALTER TABLE portfolio_companies ADD COLUMN IF NOT EXISTS non_con_deck_token TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS deals_deck_token_key ON deals (non_con_deck_token) WHERE non_con_deck_token IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS portfolio_deck_token_key ON portfolio_companies (non_con_deck_token) WHERE non_con_deck_token IS NOT NULL;
+
+-- Each open of a /deck/<token> link, gated behind a name + email prompt
+CREATE TABLE IF NOT EXISTS deck_views (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  token TEXT NOT NULL,
+  entity_type TEXT NOT NULL,           -- 'deal' | 'portfolio'
+  entity_id UUID,
+  company_name TEXT,
+  viewer_name TEXT,
+  viewer_email TEXT,
+  viewed_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE deck_views ENABLE ROW LEVEL SECURITY;
+-- App users read the tracker; inserts are done server-side with the service role (bypasses RLS), so no anon policy
+DROP POLICY IF EXISTS "Auth users can read deck_views" ON deck_views;
+CREATE POLICY "Auth users can read deck_views" ON deck_views FOR SELECT TO authenticated USING (true);
+CREATE INDEX IF NOT EXISTS deck_views_token_idx ON deck_views (token);

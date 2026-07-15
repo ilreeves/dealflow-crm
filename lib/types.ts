@@ -64,6 +64,7 @@ export interface Deal {
   sharepoint_link: string | null
   non_con_deck_path: string | null
   non_con_deck_name: string | null
+  non_con_deck_token: string | null
   custom_fields: Record<string, unknown>
   stage_entered_at: string | null
   pass_reason: string | null
@@ -167,6 +168,7 @@ export interface PortfolioCompany {
   sharepoint_link: string | null
   non_con_deck_path: string | null
   non_con_deck_name: string | null
+  non_con_deck_token: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -260,6 +262,18 @@ export interface InvestorContact {
   contact_email: string | null
   created_at: string
   updated_at: string
+}
+
+// A logged open of a shared non-confidential deck link
+export interface DeckView {
+  id: string
+  token: string
+  entity_type: string
+  entity_id: string | null
+  company_name: string | null
+  viewer_name: string | null
+  viewer_email: string | null
+  viewed_at: string
 }
 
 export interface Catalyst {

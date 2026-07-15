@@ -2,6 +2,12 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function proxy(request: NextRequest) {
+  // Public, unauthenticated deck share links (name/email gate handled in-page)
+  const { pathname } = request.nextUrl
+  if (pathname.startsWith("/deck") || pathname.startsWith("/api/deck")) {
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(

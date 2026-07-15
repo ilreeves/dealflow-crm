@@ -329,6 +329,7 @@ function OverviewTab({ deal, onDeckChange }: { deal: Deal; onDeckChange: (path: 
         id={deal.id}
         path={deal.non_con_deck_path}
         name={deal.non_con_deck_name}
+        token={deal.non_con_deck_token}
         onChange={onDeckChange}
         buildEmail={(deckUrl) => {
           const details = [
@@ -347,8 +348,7 @@ function OverviewTab({ deal, onDeckChange }: { deal: Deal; onDeckChange: (path: 
             '',
             ...details,
             '',
-            deckUrl ? `Deck: ${deckUrl}` : 'Deck: (attaching separately)',
-            deckUrl ? '(link valid for 7 days)' : '',
+            deckUrl ? `View the deck here: ${deckUrl}` : 'Deck: (attaching separately)',
             '',
             'Best,',
           ].filter((line, i, arr) => !(line === '' && arr[i - 1] === '')).join('\n')
