@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
+import { X, Upload } from 'lucide-react'
 import { Deal, DealStage, DEAL_STAGES, CustomFieldDefinition } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
@@ -98,6 +98,8 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
   const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDefinition[]>([])
   const [passReason, setPassReason] = useState('')
   const [lists, setLists] = useState<Record<ListKey, string[]> | null>(null)
+  const [deckFile, setDeckFile] = useState<File | null>(null)
+  const [deckLabel, setDeckLabel] = useState('')
 
   const [form, setForm] = useState({
     name: deal?.name ?? '',
@@ -198,6 +200,22 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
     const saved = result.data as Deal
     if (!deal) {
       await logActivity(saved.id, saved.name, 'Deal added', `Stage: ${saved.stage}`)
+      // Attach the optional non-con deck now that the deal (and its id) exists
+      if (deckFile) {
+        const storagePath = `${saved.id}/noncon-deck/${Date.now()}-${deckFile.name}`
+        const { error: upErr } = await supabase.storage.from('deal-files').upload(storagePath, deckFile)
+        if (!upErr) {
+          await supabase.from('company_decks').insert({
+            entity_type: 'deal',
+            entity_id: saved.id,
+            company_name: saved.name,
+            label: deckLabel.trim() || 'Deck',
+            storage_path: storagePath,
+            file_name: deckFile.name,
+            sort_order: 0,
+          })
+        }
+      }
     } else if (stageChanged) {
       const details = passReason.trim() ? `${deal.stage} \u2192 ${form.stage}: ${passReason.trim()}` : `${deal.stage} \u2192 ${form.stage}`
       await logActivity(saved.id, saved.name, 'Stage changed', details)
@@ -328,6 +346,26 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none"
             />
           </div>
+
+          {/* Non-confidential deck (new deals only — edits use the Decks section on the detail view) */}
+          {!deal && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Non-Confidential Deck <span className="text-slate-400 font-normal">(optional)</span>
+              </label>
+              <input
+                placeholder="Label (e.g. Series B)"
+                value={deckLabel}
+                onChange={(e) => setDeckLabel(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 mb-2"
+              />
+              <label className="flex items-center gap-2 px-3 py-2 text-sm border border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-slate-400 hover:bg-slate-50 transition text-slate-500">
+                <Upload className="w-4 h-4 shrink-0" />
+                <span className="truncate">{deckFile ? deckFile.name : 'Choose a file to upload'}</span>
+                <input type="file" className="hidden" onChange={(e) => setDeckFile(e.target.files?.[0] ?? null)} />
+              </label>
+            </div>
+          )}
 
           {/* Custom fields */}
           {customFieldDefs.length > 0 && (
