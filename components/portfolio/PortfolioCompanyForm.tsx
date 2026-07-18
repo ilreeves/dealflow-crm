@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
+import { X, Upload } from 'lucide-react'
 import { PortfolioCompany } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { fetchListOptions, FALLBACK_LISTS, ListKey } from '@/lib/listOptions'
@@ -60,6 +60,8 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [lists, setLists] = useState<Record<ListKey, string[]>>(FALLBACK_LISTS)
+  const [deckFile, setDeckFile] = useState<File | null>(null)
+  const [deckLabel, setDeckLabel] = useState('')
 
   useEffect(() => { fetchListOptions().then(setLists) }, [])
 
@@ -134,7 +136,25 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
       return
     }
 
-    onSaved(result.data as PortfolioCompany)
+    const saved = result.data as PortfolioCompany
+    // Attach the optional non-con deck now that the company (and its id) exists
+    if (!company && deckFile) {
+      const storagePath = `portfolio/${saved.id}/noncon-deck/${Date.now()}-${deckFile.name}`
+      const { error: upErr } = await supabase.storage.from('deal-files').upload(storagePath, deckFile)
+      if (!upErr) {
+        await supabase.from('company_decks').insert({
+          entity_type: 'portfolio',
+          entity_id: saved.id,
+          company_name: saved.name,
+          label: deckLabel.trim() || 'Deck',
+          storage_path: storagePath,
+          file_name: deckFile.name,
+          sort_order: 0,
+        })
+      }
+    }
+
+    onSaved(saved)
   }
 
   const fields = [
@@ -267,6 +287,26 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none"
             />
           </div>
+
+          {/* Non-confidential deck (new companies only — edits use the Decks section on the detail view) */}
+          {!company && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Non-Confidential Deck <span className="text-slate-400 font-normal">(optional)</span>
+              </label>
+              <input
+                placeholder="Label (e.g. Series B)"
+                value={deckLabel}
+                onChange={(e) => setDeckLabel(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 mb-2"
+              />
+              <label className="flex items-center gap-2 px-3 py-2 text-sm border border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-slate-400 hover:bg-slate-50 transition text-slate-500">
+                <Upload className="w-4 h-4 shrink-0" />
+                <span className="truncate">{deckFile ? deckFile.name : 'Choose a file to upload'}</span>
+                <input type="file" className="hidden" onChange={(e) => setDeckFile(e.target.files?.[0] ?? null)} />
+              </label>
+            </div>
+          )}
 
           {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
         </form>
