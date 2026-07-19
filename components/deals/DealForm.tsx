@@ -100,6 +100,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
   const [lists, setLists] = useState<Record<ListKey, string[]> | null>(null)
   const [deckFile, setDeckFile] = useState<File | null>(null)
   const [deckLabel, setDeckLabel] = useState('')
+  const [dateAdded, setDateAdded] = useState(new Date().toISOString().slice(0, 10))
 
   const [form, setForm] = useState({
     name: deal?.name ?? '',
@@ -160,6 +161,8 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
     setError('')
 
     const stageChanged = !deal || form.stage !== deal.stage
+    // New deals can be backdated to the actual contact date; edits keep their original created_at
+    const effectiveDate = deal ? new Date().toISOString() : new Date(dateAdded + 'T12:00:00').toISOString()
     const payload = {
       name: form.name.trim(),
       website: form.website || null,
@@ -181,7 +184,8 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
       current_valuation: (form as Record<string, unknown>)['current_valuation'] as string || null,
       description: form.description || null,
       custom_fields: form.custom_fields,
-      ...(stageChanged ? { stage_entered_at: new Date().toISOString() } : {}),
+      ...(stageChanged ? { stage_entered_at: effectiveDate } : {}),
+      ...(!deal ? { created_at: effectiveDate } : {}),
     }
 
     let result
@@ -278,6 +282,20 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
               </div>
             )}
           </div>
+
+          {/* Date added (new deals only — can be backdated to the actual contact date) */}
+          {!deal && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Date Added</label>
+              <input
+                type="date"
+                value={dateAdded}
+                onChange={(e) => setDateAdded(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+              />
+              <p className="text-xs text-slate-400 mt-1">Defaults to today — set an earlier date if you made contact before adding it here.</p>
+            </div>
+          )}
 
           {/* Category */}
           <div>
