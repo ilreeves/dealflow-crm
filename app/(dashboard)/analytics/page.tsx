@@ -175,6 +175,33 @@ export default async function AnalyticsPage() {
   const maxHistAvg = Math.max(...historicalAverages.map((s) => s.avgDays), 1)
   const totalTransitions = historicalAverages.reduce((a, s) => a + s.count, 0)
 
+  // Stage advancement funnel: of the deals that reached each stage, how many advanced to the next.
+  // "Reached" = the furthest forward stage a deal ever hit (current stage, plus any stage in its change log —
+  // so a deal that passed out of Finance still counts as having reached Finance).
+  const FUNNEL_STAGES = ['Sourced', 'Science Committee', 'Finance Committee', 'Investment Committee', 'Term Sheet', 'Invested']
+  const funnelIdx = (s: string) => FUNNEL_STAGES.indexOf(s)
+  const reachedIdx: Record<string, number> = {}
+  for (const d of deals) reachedIdx[d.id] = funnelIdx(d.stage) // Passed → -1
+  for (const e of events) {
+    if (!e.deal_id || !(e.deal_id in reachedIdx)) continue
+    const arrow = e.details.indexOf(' → ')
+    if (arrow === -1) continue
+    const fromStage = e.details.slice(0, arrow).trim()
+    let toStage = e.details.slice(arrow + 3).trim()
+    const colon = toStage.indexOf(':')
+    if (colon !== -1) toStage = toStage.slice(0, colon).trim()
+    const m = Math.max(funnelIdx(fromStage), funnelIdx(toStage))
+    if (m > reachedIdx[e.deal_id]) reachedIdx[e.deal_id] = m
+  }
+  const reachedCount = FUNNEL_STAGES.map((_, i) => Object.values(reachedIdx).filter((r) => r >= i).length)
+  const advancement = FUNNEL_STAGES.slice(0, -1).map((from, i) => ({
+    from,
+    to: FUNNEL_STAGES[i + 1],
+    reached: reachedCount[i],
+    advanced: reachedCount[i + 1],
+    rate: reachedCount[i] ? reachedCount[i + 1] / reachedCount[i] : null,
+  }))
+
   // Catalyst reliability: per company, how many catalysts slipped vs original timeline
   type CatalystRow = { company_name: string; catalyst_date: string; original_date: string | null; status: string | null; resolved_date: string | null }
   const catalysts = (catalystData as CatalystRow[]) ?? []
@@ -332,6 +359,32 @@ export default async function AnalyticsPage() {
               </table>
             </div>
           )}
+        </div>
+
+        {/* Stage advancement funnel */}
+        <div>
+          <p className="text-sm font-semibold text-slate-700 mb-1">Stage Advancement</p>
+          <p className="text-xs text-slate-400 mb-3">
+            Of the deals that reached each stage, the share that advanced to the next. Based on the furthest stage each deal reached; early history is partial (stage tracking began June 11, 2026).
+          </p>
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <tbody>
+                {advancement.map(({ from, to, reached, advanced, rate }) => (
+                  <tr key={from} className="border-b border-slate-50 last:border-0">
+                    <td className="px-4 py-2.5 font-medium text-slate-700">{from} <span className="text-slate-300">→</span> {to}</td>
+                    <td className="px-4 py-2.5 text-right text-slate-400 text-xs whitespace-nowrap">{advanced} / {reached}</td>
+                    <td className="px-4 py-2.5 text-right text-slate-600 whitespace-nowrap w-14">{rate === null ? '—' : `${Math.round(rate * 100)}%`}</td>
+                    <td className="px-4 py-2.5 w-32">
+                      <div className="w-full bg-slate-100 rounded-full h-1.5">
+                        <div className="h-1.5 rounded-full" style={{ width: `${rate ? rate * 100 : 0}%`, backgroundColor: '#5ba200' }} />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Series & Clinical Stage breakdowns */}
