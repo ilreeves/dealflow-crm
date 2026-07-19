@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Deal } from '@/lib/types'
 import BreakdownTable, { BreakdownRow } from '@/components/analytics/BreakdownTable'
+import CollapsibleSection from '@/components/analytics/CollapsibleSection'
 
 export default async function AnalyticsPage() {
   const supabase = await createClient()
@@ -397,8 +398,7 @@ export default async function AnalyticsPage() {
         <BreakdownTable title="All Deals by Sector" rows={dealSectorRows} max={maxDealSector} color="#5ba200" />
 
         {/* Source breakdown */}
-        <div>
-          <p className="text-sm font-semibold text-slate-700 mb-3">By Source</p>
+        <CollapsibleSection title="By Source" subtitle={`${sources.length} ${sources.length === 1 ? 'source' : 'sources'}`}>
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <table className="w-full text-sm">
               <thead>
@@ -427,7 +427,7 @@ export default async function AnalyticsPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </CollapsibleSection>
 
         </div>
 
