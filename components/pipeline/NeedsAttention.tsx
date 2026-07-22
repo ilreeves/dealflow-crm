@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { AlertTriangle, ChevronDown, ChevronRight, Clock } from 'lucide-react'
 import { Deal } from '@/lib/types'
 
-const STALE_DAYS = 21
+const STALE_DAYS = 30
 
 function daysSince(iso: string | null): number | null {
   if (!iso) return null
