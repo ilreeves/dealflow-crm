@@ -5,6 +5,7 @@ import { Plus, Search, Globe, DollarSign, Building2, Mail, ChevronDown, ChevronR
 import { PortfolioCompany } from '@/lib/types'
 import PortfolioCompanyForm from './PortfolioCompanyForm'
 import PortfolioCompanyDetail from './PortfolioCompanyDetail'
+import PortfolioDeckAlerts from './PortfolioDeckAlerts'
 
 interface Props {
   initialCompanies: PortfolioCompany[]
@@ -155,6 +156,8 @@ export default function PortfolioBoard({ initialCompanies, fundOrder }: Props) {
           </button>
         </div>
       </div>
+
+      <PortfolioDeckAlerts onOpen={(id) => { const co = companies.find((c) => c.id === id); if (co) setSelected(co) }} />
 
       {/* Content */}
       {filtered.length === 0 ? (
