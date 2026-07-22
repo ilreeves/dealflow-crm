@@ -43,11 +43,18 @@ export default function DecksSection({ entityType, entityId, entityName, buildEm
     const storagePath = `${prefix}/noncon-deck/${Date.now()}-${file.name}`
     const { error: upErr } = await supabase.storage.from('deal-files').upload(storagePath, file)
     if (upErr) { setError(`Upload failed: ${upErr.message}`); setUploadingNew(false); return }
-    const { data } = await supabase.from('company_decks').insert({
+    const { data, error: insErr } = await supabase.from('company_decks').insert({
       entity_type: entityType, entity_id: entityId, company_name: entityName,
       label, storage_path: storagePath, file_name: file.name, sort_order: decks.length,
     }).select().single()
-    if (data) { setDecks((prev) => [...prev, data as CompanyDeck]); setNewLabel(''); setAdding(false) }
+    if (insErr || !data) {
+      // Roll back the uploaded file so we don't leave an orphan in storage.
+      await supabase.storage.from('deal-files').remove([storagePath])
+      setError(`Could not save deck: ${insErr?.message ?? 'insert failed'}`)
+      setUploadingNew(false)
+      return
+    }
+    setDecks((prev) => [...prev, data as CompanyDeck]); setNewLabel(''); setAdding(false)
     setUploadingNew(false)
   }
 
@@ -129,6 +136,7 @@ function DeckItem({ deck, entityName, buildEmail, onUpdated, onDeleted }: {
   const [labelDraft, setLabelDraft] = useState(deck.label)
   const [views, setViews] = useState<DeckView[]>([])
   const [showViews, setShowViews] = useState(false)
+  const [rowError, setRowError] = useState('')
   const replaceRef = useRef<HTMLInputElement>(null)
 
   const isPdf = deck.file_name.toLowerCase().endsWith('.pdf')
@@ -148,37 +156,47 @@ function DeckItem({ deck, entityName, buildEmail, onUpdated, onDeleted }: {
 
   async function handleReplace(file: File) {
     setReplacing(true)
+    setRowError('')
     const prefix = deck.entity_type === 'deal' ? deck.entity_id : `portfolio/${deck.entity_id}`
     const storagePath = `${prefix}/noncon-deck/${Date.now()}-${file.name}`
     const { error: upErr } = await supabase.storage.from('deal-files').upload(storagePath, file)
-    if (!upErr) {
-      const previous = deck.storage_path
-      const { data } = await supabase.from('company_decks').update({ storage_path: storagePath, file_name: file.name }).eq('id', deck.id).select().single()
-      if (previous) await supabase.storage.from('deal-files').remove([previous])
-      if (data) onUpdated(data as CompanyDeck)
+    if (upErr) { setRowError(`Upload failed: ${upErr.message}`); setReplacing(false); return }
+    const previous = deck.storage_path
+    const { data, error: updErr } = await supabase.from('company_decks').update({ storage_path: storagePath, file_name: file.name }).eq('id', deck.id).select().single()
+    if (updErr || !data) {
+      // DB update failed — roll back the new upload and keep the old file intact.
+      await supabase.storage.from('deal-files').remove([storagePath])
+      setRowError(`Replace failed: ${updErr?.message ?? 'could not update deck'}`)
+      setReplacing(false)
+      return
     }
+    // Only remove the previous file once the row is confirmed to point at the new one.
+    if (previous && previous !== storagePath) await supabase.storage.from('deal-files').remove([previous])
+    onUpdated(data as CompanyDeck)
     setReplacing(false)
   }
 
-  async function makeToken(): Promise<string> {
-    const base = slugify(`${entityName} ${deck.label}`)
-    const { data } = await supabase.from('company_decks').select('id,token').ilike('token', `${base}%`)
-    const taken = new Set<string>()
-    for (const r of (data ?? []) as { id: string; token: string | null }[]) {
-      if (r.token && r.id !== deck.id) taken.add(r.token)
-    }
-    if (!taken.has(base)) return base
-    let n = 2
-    while (taken.has(`${base}-${n}`)) n++
-    return `${base}-${n}`
+  // Unguessable share token: a readable prefix (nice for recipients) plus a
+  // 128-bit crypto-random suffix so tokens can't be enumerated by guessing
+  // company/round names. Generated once per deck, then reused.
+  function makeToken(): string {
+    const suffix = crypto.randomUUID().replace(/-/g, '')
+    return `${slugify(`${entityName} ${deck.label}`)}-${suffix}`
   }
 
   async function handleEmail() {
     setEmailing(true)
-    const token = deck.token ?? (await makeToken())
+    setRowError('')
+    const token = deck.token ?? makeToken()
     const now = new Date().toISOString()
-    const { data } = await supabase.from('company_decks').update({ token, shared_at: now }).eq('id', deck.id).select().single()
-    if (data) onUpdated(data as CompanyDeck)
+    const { data, error: updErr } = await supabase.from('company_decks').update({ token, shared_at: now }).eq('id', deck.id).select().single()
+    if (updErr || !data) {
+      // Don't open a mail draft with a link that was never persisted.
+      setRowError(`Could not create share link: ${updErr?.message ?? 'update failed'}`)
+      setEmailing(false)
+      return
+    }
+    onUpdated(data as CompanyDeck)
     const shareUrl = `${window.location.origin}/deck/${token}`
     const { subject, body } = buildEmail(shareUrl, deck.label)
     window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
@@ -187,13 +205,18 @@ function DeckItem({ deck, entityName, buildEmail, onUpdated, onDeleted }: {
 
   async function saveLabel() {
     const label = labelDraft.trim() || 'Deck'
-    const { data } = await supabase.from('company_decks').update({ label }).eq('id', deck.id).select().single()
-    if (data) onUpdated(data as CompanyDeck)
+    const { data, error: updErr } = await supabase.from('company_decks').update({ label }).eq('id', deck.id).select().single()
+    if (updErr || !data) { setRowError(`Rename failed: ${updErr?.message ?? 'update failed'}`); return }
+    onUpdated(data as CompanyDeck)
     setEditingLabel(false)
   }
 
   async function handleRemove() {
-    await supabase.from('company_decks').delete().eq('id', deck.id)
+    setRowError('')
+    // Delete the row first; only remove the file once the row is gone, so a
+    // failed delete never leaves a live row pointing at a missing file.
+    const { error: delErr } = await supabase.from('company_decks').delete().eq('id', deck.id)
+    if (delErr) { setRowError(`Remove failed: ${delErr.message}`); return }
     await supabase.storage.from('deal-files').remove([deck.storage_path])
     onDeleted(deck.id)
   }
@@ -249,6 +272,8 @@ function DeckItem({ deck, entityName, buildEmail, onUpdated, onDeleted }: {
         </div>
         <input ref={replaceRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleReplace(f); if (replaceRef.current) replaceRef.current.value = '' }} />
       </div>
+
+      {rowError && <p className="text-xs text-red-600 mt-1.5">{rowError}</p>}
 
       {/* Share-link status */}
       {deck.shared_at && (

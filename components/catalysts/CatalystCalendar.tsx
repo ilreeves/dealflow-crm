@@ -75,6 +75,7 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
   const [saving, setSaving] = useState(false)
   const [view, setView] = useState<'list' | 'gantt'>('gantt')
   const [editingNote, setEditingNote] = useState<{ id: string; text: string } | null>(null)
+  const [error, setError] = useState('')
   const supabase = createClient()
 
   async function handleAdd() {
@@ -82,7 +83,8 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
     const year = parseInt(form.year, 10)
     if (!year || year < 2000 || year > 2100) return
     setSaving(true)
-    const { data } = await supabase.from('catalysts').insert({
+    setError('')
+    const { data, error: insErr } = await supabase.from('catalysts').insert({
       company_name: form.company_name.trim(),
       title: form.title.trim(),
       catalyst_date: periodEndDate(form.period, year),
@@ -92,12 +94,15 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
       status: form.status,
       notes: form.notes.trim() || null,
     }).select().single()
-    if (data) {
-      setCatalysts((prev) => [...prev, data as Catalyst].sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date)))
-      await logCatalystActivity(form.company_name.trim(), form.title.trim(), 'Catalyst added', `${form.period} ${year}`)
-      setForm({ company_name: '', title: '', period: '1Q', year: String(currentYear), status: 'Pending', notes: '' })
-      setShowForm(false)
+    if (insErr || !data) {
+      setError(`Couldn't add catalyst: ${insErr?.message ?? 'insert failed'}`)
+      setSaving(false)
+      return
     }
+    setCatalysts((prev) => [...prev, data as Catalyst].sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date)))
+    await logCatalystActivity(form.company_name.trim(), form.title.trim(), 'Catalyst added', `${form.period} ${year}`)
+    setForm({ company_name: '', title: '', period: '1Q', year: String(currentYear), status: 'Pending', notes: '' })
+    setShowForm(false)
     setSaving(false)
   }
 
@@ -318,6 +323,7 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none bg-white"
               />
             </div>
+            {error && <p className="text-xs text-red-600">{error}</p>}
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowForm(false)} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 transition">Cancel</button>
               <button

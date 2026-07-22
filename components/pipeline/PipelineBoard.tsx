@@ -28,6 +28,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
   const [pendingPass, setPendingPass] = useState<{ id: string; name: string; fromStage: DealStage } | null>(null)
   const [isMobile, setIsMobile] = useState(false)
   const [openDealId, setOpenDealId] = useState<string | null>(null)
+  const [moveError, setMoveError] = useState('')
   const supabase = createClient()
 
   useEffect(() => {
@@ -76,9 +77,16 @@ export default function PipelineBoard({ initialDeals }: Props) {
     if (!deal) return
 
     const now = new Date().toISOString()
+    setMoveError('')
     setDeals((prev) => prev.map((d) => d.id === dealId ? { ...d, stage: newStage, stage_entered_at: now, ...(newStage === 'Passed' ? { pass_reason: passReason ?? null, passed_at: now } : {}) } : d))
 
-    await supabase.from('deals').update({ stage: newStage, stage_entered_at: now, ...(newStage === 'Passed' ? { pass_reason: passReason ?? null, passed_at: now } : {}) }).eq('id', dealId)
+    const { error: updErr } = await supabase.from('deals').update({ stage: newStage, stage_entered_at: now, ...(newStage === 'Passed' ? { pass_reason: passReason ?? null, passed_at: now } : {}) }).eq('id', dealId)
+    if (updErr) {
+      // Roll back the optimistic move so the board matches the database.
+      setDeals((prev) => prev.map((d) => d.id === dealId ? deal : d))
+      setMoveError(`Couldn't move ${deal.name}: ${updErr.message}`)
+      return
+    }
     const details = passReason ? `${fromStage} \u2192 ${newStage}: ${passReason}` : `${fromStage} \u2192 ${newStage}`
     await logActivity(dealId, deal.name, 'Stage changed', details, actorName)
 
@@ -126,16 +134,22 @@ export default function PipelineBoard({ initialDeals }: Props) {
     setShowForm(false)
   }
 
-  function handleDealUpdated(updated: Deal) {
+  const handleDealUpdated = useCallback((updated: Deal) => {
     setDeals((prev) => prev.map((d) => d.id === updated.id ? updated : d))
-  }
+  }, [])
 
-  function handleDealDeleted(id: string) {
+  const handleDealDeleted = useCallback((id: string) => {
     setDeals((prev) => prev.filter((d) => d.id !== id))
-  }
+  }, [])
 
   return (
     <div className="flex flex-col h-full">
+      {moveError && (
+        <div className="mx-4 md:mx-6 mt-3 flex items-center justify-between gap-3 px-3 py-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg">
+          <span>{moveError}</span>
+          <button onClick={() => setMoveError('')} className="text-red-400 hover:text-red-700 transition shrink-0">✕</button>
+        </div>
+      )}
       {/* Header */}
       <div className="px-4 md:px-6 py-4 bg-white border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div>

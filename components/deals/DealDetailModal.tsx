@@ -35,6 +35,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
   const [actorName, setActorName] = useState<string | null>(null)
   const [showPassReason, setShowPassReason] = useState(false)
   const [showInvest, setShowInvest] = useState(false)
+  const [stageError, setStageError] = useState('')
   const colors = STAGE_COLORS[deal.stage]
 
   useEffect(() => {
@@ -57,30 +58,33 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
     }
     const prevStage = deal.stage
     const now = new Date().toISOString()
-    const { data } = await supabase
+    setStageError('')
+    const { data, error: updErr } = await supabase
       .from('deals')
       .update({ stage: newStage, stage_entered_at: now })
       .eq('id', deal.id)
       .select()
       .single()
-    if (data) {
-      setDeal(data as Deal)
-      onUpdated(data as Deal)
-      const details = passReason ? `${prevStage} → ${newStage}: ${passReason}` : `${prevStage} → ${newStage}`
-      await logActivity(deal.id, deal.name, 'Stage changed', details, actorName)
-      if (newStage === 'Invested') {
-        await addDealToPortfolio(supabase, data as Deal)
-        await logActivity(deal.id, deal.name, 'Added to portfolio', 'Auto-added on move to Invested', actorName)
-      }
-      if (passReason) {
-        const { data: { user } } = await supabase.auth.getUser()
-        await supabase.from('deal_notes').insert({
-          deal_id: deal.id,
-          content: `Passed: ${passReason}`,
-          author_id: user?.id ?? null,
-          author_name: actorName,
-        })
-      }
+    if (updErr || !data) {
+      setStageError(`Couldn't change stage: ${updErr?.message ?? 'update failed'}`)
+      return
+    }
+    setDeal(data as Deal)
+    onUpdated(data as Deal)
+    const details = passReason ? `${prevStage} → ${newStage}: ${passReason}` : `${prevStage} → ${newStage}`
+    await logActivity(deal.id, deal.name, 'Stage changed', details, actorName)
+    if (newStage === 'Invested') {
+      await addDealToPortfolio(supabase, data as Deal)
+      await logActivity(deal.id, deal.name, 'Added to portfolio', 'Auto-added on move to Invested', actorName)
+    }
+    if (passReason) {
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.from('deal_notes').insert({
+        deal_id: deal.id,
+        content: `Passed: ${passReason}`,
+        author_id: user?.id ?? null,
+        author_name: actorName,
+      })
     }
   }
 
@@ -109,6 +113,12 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+          {stageError && (
+            <div className="mx-6 mt-3 flex items-center justify-between gap-3 px-3 py-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg">
+              <span>{stageError}</span>
+              <button onClick={() => setStageError('')} className="text-red-400 hover:text-red-700 transition shrink-0">✕</button>
+            </div>
+          )}
           {/* Header */}
           <div className="px-6 py-4 border-b border-slate-100">
             <div className="flex items-start justify-between gap-4">

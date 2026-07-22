@@ -208,14 +208,19 @@ function MeetingFiles({ meetingId }: { meetingId: string }) {
       const path = `meetings/${meetingId}/${Date.now()}-${file.name}`
       const { error: uploadError } = await supabase.storage.from('deal-files').upload(path, file)
       if (uploadError) continue
-      const { data } = await supabase.from('meeting_files').insert({
+      const { data, error: insertError } = await supabase.from('meeting_files').insert({
         meeting_id: meetingId,
         name: file.name,
         storage_path: path,
         size: file.size,
         mime_type: file.type || null,
       }).select().single()
-      if (data) setFiles((prev) => [data as MeetingFile, ...prev])
+      if (insertError || !data) {
+        // Roll back the uploaded object so it isn't orphaned in storage.
+        await supabase.storage.from('deal-files').remove([path])
+        continue
+      }
+      setFiles((prev) => [data as MeetingFile, ...prev])
     }
     setUploading(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -232,8 +237,11 @@ function MeetingFiles({ meetingId }: { meetingId: string }) {
   }
 
   async function handleDelete(file: MeetingFile) {
+    // Delete the row first; only remove the file once the row is gone, so a
+    // failed delete never leaves a live record pointing at a missing file.
+    const { error: delError } = await supabase.from('meeting_files').delete().eq('id', file.id)
+    if (delError) return
     await supabase.storage.from('deal-files').remove([file.storage_path])
-    await supabase.from('meeting_files').delete().eq('id', file.id)
     setFiles((prev) => prev.filter((f) => f.id !== file.id))
   }
 

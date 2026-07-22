@@ -236,6 +236,7 @@ function CatalystsTab({ companyName }: { companyName: string }) {
   const currentYear = new Date().getFullYear()
   const [form, setForm] = useState({ title: '', period: '1Q', year: String(currentYear), notes: '' })
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
   const supabase = createClient()
 
   useEffect(() => {
@@ -249,8 +250,9 @@ function CatalystsTab({ companyName }: { companyName: string }) {
     const year = parseInt(form.year, 10)
     if (!year || year < 2000 || year > 2100) return
     setSaving(true)
+    setError('')
     const dateEnd = `${year}-${CATALYST_PERIOD_END[form.period]}`
-    const { data } = await supabase.from('catalysts').insert({
+    const { data, error: insErr } = await supabase.from('catalysts').insert({
       company_name: companyName,
       title: form.title.trim(),
       catalyst_date: dateEnd,
@@ -260,12 +262,15 @@ function CatalystsTab({ companyName }: { companyName: string }) {
       status: 'Pending',
       notes: form.notes.trim() || null,
     }).select().single()
-    if (data) {
-      setCatalysts((prev) => [...prev, data as Catalyst].sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date)))
-      await logCatalystActivity(companyName, form.title.trim(), 'Catalyst added', `${form.period} ${year}`)
-      setForm({ title: '', period: '1Q', year: String(currentYear), notes: '' })
-      setShowForm(false)
+    if (insErr || !data) {
+      setError(`Couldn't add catalyst: ${insErr?.message ?? 'insert failed'}`)
+      setSaving(false)
+      return
     }
+    setCatalysts((prev) => [...prev, data as Catalyst].sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date)))
+    await logCatalystActivity(companyName, form.title.trim(), 'Catalyst added', `${form.period} ${year}`)
+    setForm({ title: '', period: '1Q', year: String(currentYear), notes: '' })
+    setShowForm(false)
     setSaving(false)
   }
 
@@ -333,6 +338,7 @@ function CatalystsTab({ companyName }: { companyName: string }) {
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none bg-white"
             />
           </div>
+          {error && <p className="text-xs text-red-600">{error}</p>}
           <div className="flex justify-end gap-2">
             <button onClick={() => setShowForm(false)} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 transition">Cancel</button>
             <button

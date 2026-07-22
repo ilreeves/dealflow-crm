@@ -26,6 +26,7 @@ export default function InvestorIntrosTab({ table, fkColumn, entityId }: Props) 
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ investor_name: '', investor_firm: '', contact_email: '', intro_date: '', status: 'Introduced', notes: '' })
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
   const supabase = createClient()
 
   useEffect(() => {
@@ -71,9 +72,10 @@ export default function InvestorIntrosTab({ table, fkColumn, entityId }: Props) 
     const name = form.investor_name.trim()
     if (!name) return
     setSaving(true)
+    setError('')
     const firm = form.investor_firm.trim()
     const email = form.contact_email.trim()
-    const { data } = await supabase.from(table).insert({
+    const { data, error: insErr } = await supabase.from(table).insert({
       [fkColumn]: entityId,
       investor_name: name,
       investor_firm: firm || null,
@@ -82,18 +84,22 @@ export default function InvestorIntrosTab({ table, fkColumn, entityId }: Props) 
       status: form.status,
       notes: form.notes.trim() || null,
     }).select().single()
-    if (data) {
-      setIntros((prev) => [data as InvestorIntro, ...prev])
-      await syncContact(name, firm, email)
-      setForm({ investor_name: '', investor_firm: '', contact_email: '', intro_date: '', status: 'Introduced', notes: '' })
-      setShowForm(false)
+    if (insErr || !data) {
+      setError(`Couldn't log intro: ${insErr?.message ?? 'insert failed'}`)
+      setSaving(false)
+      return
     }
+    setIntros((prev) => [data as InvestorIntro, ...prev])
+    await syncContact(name, firm, email)
+    setForm({ investor_name: '', investor_firm: '', contact_email: '', intro_date: '', status: 'Introduced', notes: '' })
+    setShowForm(false)
     setSaving(false)
   }
 
   async function handleStatusChange(id: string, status: string) {
-    const { data } = await supabase.from(table).update({ status }).eq('id', id).select().single()
-    if (data) setIntros((prev) => prev.map((i) => (i.id === id ? (data as InvestorIntro) : i)))
+    const { data, error: updErr } = await supabase.from(table).update({ status }).eq('id', id).select().single()
+    if (updErr || !data) { setError(`Couldn't update status: ${updErr?.message ?? 'update failed'}`); return }
+    setIntros((prev) => prev.map((i) => (i.id === id ? (data as InvestorIntro) : i)))
   }
 
   async function handleDelete(id: string) {
@@ -179,6 +185,7 @@ export default function InvestorIntrosTab({ table, fkColumn, entityId }: Props) 
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none bg-white"
             />
           </div>
+          {error && <p className="text-xs text-red-600">{error}</p>}
           <div className="flex justify-end gap-2">
             <button onClick={() => setShowForm(false)} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 transition">Cancel</button>
             <button

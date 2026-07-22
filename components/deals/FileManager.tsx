@@ -66,7 +66,7 @@ export default function FileManager({ dealId }: Props) {
         continue
       }
 
-      const { data: fileRecord } = await supabase
+      const { data: fileRecord, error: insertError } = await supabase
         .from('deal_files')
         .insert({
           deal_id: dealId,
@@ -78,9 +78,14 @@ export default function FileManager({ dealId }: Props) {
         .select()
         .single()
 
-      if (fileRecord) {
-        setFiles((prev) => [fileRecord as DealFile, ...prev])
+      if (insertError || !fileRecord) {
+        // Roll back the uploaded object so it isn't orphaned in storage.
+        await supabase.storage.from('deal-files').remove([path])
+        setError(`Failed to save ${file.name}: ${insertError?.message ?? 'could not create record'}`)
+        continue
       }
+
+      setFiles((prev) => [fileRecord as DealFile, ...prev])
     }
 
     setUploading(false)
@@ -100,8 +105,12 @@ export default function FileManager({ dealId }: Props) {
   }
 
   async function handleDelete(file: DealFile) {
+    setError('')
+    // Delete the row first; only remove the file once the row is gone, so a
+    // failed delete never leaves a live record pointing at a missing file.
+    const { error: delError } = await supabase.from('deal_files').delete().eq('id', file.id)
+    if (delError) { setError(`Failed to delete ${file.name}: ${delError.message}`); return }
     await supabase.storage.from('deal-files').remove([file.storage_path])
-    await supabase.from('deal_files').delete().eq('id', file.id)
     setFiles((prev) => prev.filter((f) => f.id !== file.id))
   }
 

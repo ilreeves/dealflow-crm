@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { Deal, STAGE_COLORS } from '@/lib/types'
 import { Building2, User, DollarSign, FlaskConical } from 'lucide-react'
 import DealDetailModal from '@/components/deals/DealDetailModal'
@@ -22,7 +22,7 @@ function getAgingText(stageEnteredAt: string | null): string | null {
   return `${Math.floor(days / 30)}mo`
 }
 
-export default function DealCard({ deal, onUpdated, onDeleted, compact }: Props) {
+function DealCard({ deal, onUpdated, onDeleted, compact }: Props) {
   const [showDetail, setShowDetail] = useState(false)
   const aging = getAgingText(deal.stage_entered_at)
 
@@ -113,3 +113,7 @@ export default function DealCard({ deal, onUpdated, onDeleted, compact }: Props)
     </>
   )
 }
+
+// Memoized: the board re-renders on every search keystroke and during drag;
+// with stable callbacks this skips re-rendering unaffected cards.
+export default memo(DealCard)
