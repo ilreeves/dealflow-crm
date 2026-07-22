@@ -68,6 +68,11 @@ export default function InvestModal({ deal, actorName, onCancel, onDone }: Props
     if (!f.fund) { setError("Choose which fund is investing."); return }
     setSaving(true)
     setError("")
+    // Track what we create so we can roll it back if a later step fails —
+    // otherwise a mid-sequence error leaves an orphaned company/round/position.
+    let createdCompanyId: string | null = null
+    let createdRoundId: string | null = null
+    let createdPositionId: string | null = null
     try {
       // 1) create or fetch the portfolio company
       const { data: existing } = await supabase.from("portfolio_companies").select("id,funds").ilike("name", deal.name).limit(1)
@@ -87,6 +92,7 @@ export default function InvestModal({ deal, actorName, onCancel, onDone }: Props
         }).select("id").single()
         if (e1 || !co) throw new Error(e1?.message || "Could not create portfolio company")
         companyId = (co as { id: string }).id
+        createdCompanyId = companyId
       }
 
       // 2) build round terms + payload
@@ -119,10 +125,11 @@ export default function InvestModal({ deal, actorName, onCancel, onDone }: Props
         notes: `Created on investment from pipeline deal.`,
       }).select("id").single()
       if (e2 || !rnd) throw new Error(e2?.message || "Could not create round")
+      createdRoundId = (rnd as { id: string }).id
 
       // 3) Solas position (held at cost at entry)
       const invested = parseNum(f.invested_amount)
-      const { error: e3 } = await supabase.from("portfolio_positions").insert({
+      const { data: pos, error: e3 } = await supabase.from("portfolio_positions").insert({
         company_id: companyId,
         round_id: (rnd as { id: string }).id,
         fund: f.fund,
@@ -132,8 +139,9 @@ export default function InvestModal({ deal, actorName, onCancel, onDone }: Props
         fair_value: invested,
         fair_value_date: f.date || null,
         fair_value_source: "Investment entry (at cost)",
-      })
-      if (e3) throw new Error(e3.message)
+      }).select("id").single()
+      if (e3 || !pos) throw new Error(e3?.message || "Could not create position")
+      createdPositionId = (pos as { id: string }).id
 
       // 4) move the deal to Invested + log
       const now = new Date().toISOString()
@@ -146,6 +154,12 @@ export default function InvestModal({ deal, actorName, onCancel, onDone }: Props
       setSaving(false)
       onDone(updated as Deal)
     } catch (err) {
+      // Roll back anything we created (reverse order) so a failed investment
+      // doesn't leave orphaned portfolio records behind. Deleting the round
+      // cascades its positions; we only delete the company if we created it.
+      if (createdPositionId) await supabase.from("portfolio_positions").delete().eq("id", createdPositionId)
+      if (createdRoundId) await supabase.from("portfolio_fundraise_rounds").delete().eq("id", createdRoundId)
+      if (createdCompanyId) await supabase.from("portfolio_companies").delete().eq("id", createdCompanyId)
       setError(err instanceof Error ? err.message : "Something went wrong")
       setSaving(false)
     }

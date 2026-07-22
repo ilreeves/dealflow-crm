@@ -480,18 +480,27 @@ function RoundEditor({
     }
 
     let roundId = initial?.id
+    let createdNewRound = false
     if (isNew) {
       const { data, error: e } = await supabase.from("portfolio_fundraise_rounds").insert(payload).select().single()
       if (e) { setError(saveHint(e.message)); setSaving(false); return }
       roundId = (data as PortfolioFundraiseRound | null)?.id
+      createdNewRound = true
     } else {
       const { error: e } = await supabase.from("portfolio_fundraise_rounds").update(payload).eq("id", initial!.id)
       if (e) { setError(saveHint(e.message)); setSaving(false); return }
     }
 
     if (roundId) {
-      // sync positions: replace all for this round
-      await supabase.from("portfolio_positions").delete().eq("round_id", roundId)
+      // sync positions: replace all for this round. Snapshot the existing rows
+      // first so we can restore them if the re-insert fails — otherwise a failed
+      // insert after the delete would silently lose the round's positions.
+      const { data: prevPositions } = await supabase.from("portfolio_positions").select("*").eq("round_id", roundId)
+      const { error: delErr } = await supabase.from("portfolio_positions").delete().eq("round_id", roundId)
+      if (delErr) {
+        if (createdNewRound) await supabase.from("portfolio_fundraise_rounds").delete().eq("id", roundId)
+        setError(saveHint(delErr.message)); setSaving(false); return
+      }
       const rows = posList
         .filter((p) => p.fund || p.invested_amount || p.shares || p.ownership_pct || p.fair_value)
         .map((p) => ({
@@ -508,7 +517,12 @@ function RoundEditor({
         }))
       if (rows.length) {
         const { error: e } = await supabase.from("portfolio_positions").insert(rows)
-        if (e) { setError(saveHint(e.message)); setSaving(false); return }
+        if (e) {
+          // Restore the positions we just deleted (edit), or drop the empty new round.
+          if (prevPositions && prevPositions.length) await supabase.from("portfolio_positions").insert(prevPositions)
+          if (createdNewRound) await supabase.from("portfolio_fundraise_rounds").delete().eq("id", roundId)
+          setError(saveHint(e.message)); setSaving(false); return
+        }
       }
     }
 
