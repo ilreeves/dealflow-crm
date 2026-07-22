@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
 import { addDealToPortfolio } from '@/lib/portfolio'
 import DealCard from './DealCard'
+import NeedsAttention from './NeedsAttention'
 import DealForm from '@/components/deals/DealForm'
 import DealsTable from './DealsTable'
 import PassReasonModal from '@/components/deals/PassReasonModal'
@@ -150,6 +151,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
           <button onClick={() => setMoveError('')} className="text-red-400 hover:text-red-700 transition shrink-0">✕</button>
         </div>
       )}
+      <NeedsAttention deals={deals} />
       {/* Header */}
       <div className="px-4 md:px-6 py-4 bg-white border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div>

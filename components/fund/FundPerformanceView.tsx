@@ -69,9 +69,12 @@ export default function FundPerformanceView({
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard label="Total invested" value={fmtMoney(totals.invested)} />
               <StatCard label="Current value" value={fmtMoney(totals.value)} color="#3b6d11" />
-              <StatCard label="Portfolio MOIC" value={fmtMoic(totals.moic)} />
+              <StatCard label="Portfolio TVPI" value={fmtMoic(totals.moic)} />
               <StatCard label="Unrealized gain" value={`${totals.gain >= 0 ? "+" : ""}${fmtMoney(totals.gain)}`} color={totals.gain >= 0 ? "#3b6d11" : "#993c1d"} />
             </div>
+            <p className="text-xs text-slate-400 -mt-4">
+              TVPI = total value ÷ invested (gross). DPI and IRR will appear once distributions and committed capital are tracked.
+            </p>
 
             {/* By fund */}
             <div>

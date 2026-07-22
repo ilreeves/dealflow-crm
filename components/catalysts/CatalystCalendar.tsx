@@ -76,7 +76,16 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
   const [view, setView] = useState<'list' | 'gantt'>('gantt')
   const [editingNote, setEditingNote] = useState<{ id: string; text: string } | null>(null)
   const [error, setError] = useState('')
+  const [newCompany, setNewCompany] = useState(false)
   const supabase = createClient()
+
+  // Canonical company list for the Add form: portfolio/deal names plus any
+  // company already on the calendar, so new catalysts stay linked to the right
+  // company tab (exact-match) instead of drifting on a typo.
+  const companyOptions = Array.from(new Set([
+    ...companyNames,
+    ...catalysts.map((c) => c.company_name),
+  ].filter(Boolean))).sort((a, b) => a.localeCompare(b))
 
   async function handleAdd() {
     if (!form.company_name.trim() || !form.title.trim()) return
@@ -102,6 +111,7 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
     setCatalysts((prev) => [...prev, data as Catalyst].sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date)))
     await logCatalystActivity(form.company_name.trim(), form.title.trim(), 'Catalyst added', `${form.period} ${year}`)
     setForm({ company_name: '', title: '', period: '1Q', year: String(currentYear), status: 'Pending', notes: '' })
+    setNewCompany(false)
     setShowForm(false)
     setSaving(false)
   }
@@ -258,16 +268,32 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div>
                 <label className="block text-xs text-slate-500 mb-1">Company *</label>
-                <input
-                  list="company-names"
-                  placeholder="Start typing…"
-                  value={form.company_name}
-                  onChange={(e) => setForm((p) => ({ ...p, company_name: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
-                />
-                <datalist id="company-names">
-                  {companyNames.map((n) => <option key={n} value={n} />)}
-                </datalist>
+                {newCompany ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      autoFocus
+                      placeholder="New company name"
+                      value={form.company_name}
+                      onChange={(e) => setForm((p) => ({ ...p, company_name: e.target.value }))}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+                    />
+                    <button type="button" title="Choose from list" onClick={() => { setNewCompany(false); setForm((p) => ({ ...p, company_name: '' })) }} className="p-1.5 text-slate-400 hover:text-slate-700 transition"><X className="w-3.5 h-3.5" /></button>
+                  </div>
+                ) : (
+                  <select
+                    value={form.company_name}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      if (v === '__new__') { setNewCompany(true); setForm((p) => ({ ...p, company_name: '' })) }
+                      else setForm((p) => ({ ...p, company_name: v }))
+                    }}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+                  >
+                    <option value="">Select company…</option>
+                    {companyOptions.map((n) => <option key={n} value={n}>{n}</option>)}
+                    <option value="__new__">＋ New company…</option>
+                  </select>
+                )}
               </div>
               <div>
                 <label className="block text-xs text-slate-500 mb-1">Expected Timing *</label>
@@ -325,7 +351,7 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
             </div>
             {error && <p className="text-xs text-red-600">{error}</p>}
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShowForm(false)} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 transition">Cancel</button>
+              <button onClick={() => { setShowForm(false); setNewCompany(false) }} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 transition">Cancel</button>
               <button
                 onClick={handleAdd}
                 disabled={saving || !form.company_name.trim() || !form.title.trim() || !form.year}

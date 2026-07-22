@@ -15,6 +15,7 @@ import NotesList from './NotesList'
 import MeetingsList from './MeetingsList'
 import InvestorIntrosTab from '@/components/shared/InvestorIntrosTab'
 import DecksSection from '@/components/shared/DecksSection'
+import ClinicalContextSection from '@/components/shared/ClinicalContextSection'
 
 type Tab = 'overview' | 'files' | 'notes' | 'meetings' | 'intros'
 
@@ -355,6 +356,8 @@ function OverviewTab({ deal }: { deal: Deal }) {
           return { subject: named ? `${deal.name} — ${label} deck` : `${deal.name} — non-confidential overview`, body }
         }}
       />
+
+      <ClinicalContextSection entityType="deal" entityId={deal.id} name={deal.name} />
 
       {deal.description && (
         <div>
