@@ -55,9 +55,12 @@ async function fetchTrials(name: string): Promise<Trial[]> {
     .filter((t) => t.nctId)
 }
 
-// PubMed E-utilities — recent publications mentioning the company (phrase match).
+// PubMed E-utilities — recent publications by authors affiliated with the
+// company. Scoping to [Affiliation] (vs an all-fields match) is critical:
+// a bare company name matches incidental mentions and common words (e.g.
+// "Arrivo" also being an Italian word), returning irrelevant papers.
 async function fetchPubs(name: string): Promise<Pub[]> {
-  const term = encodeURIComponent(`"${name}"`)
+  const term = encodeURIComponent(`"${name}"[Affiliation]`)
   const r1 = await timedFetch(`${EUTILS}/esearch.fcgi?db=pubmed&term=${term}&retmax=6&sort=date&retmode=json&tool=solas-crm`)
   if (!r1 || !r1.ok) return []
   const j1 = await r1.json().catch(() => null)
