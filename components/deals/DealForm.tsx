@@ -86,7 +86,7 @@ const CORE_FIELDS = [
   { name: 'ct_sponsor_name', label: 'ClinicalTrials.gov Sponsor', type: 'text' },
   { name: 'lead_partner', label: 'Lead Partner', type: 'text' },
   { name: 'founders', label: 'CEO', type: 'text' },
-  { name: 'source', label: 'Source', type: 'text' },
+  { name: 'source', label: 'Source', type: 'combo' },
   { name: 'series', label: 'Series', type: 'select', options: SERIES_OPTIONS },
   { name: 'current_fundraise', label: 'Current Fundraise', type: 'text' },
   { name: 'current_valuation', label: 'Current Valuation', type: 'text' },
@@ -103,6 +103,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
   const [deckFile, setDeckFile] = useState<File | null>(null)
   const [deckLabel, setDeckLabel] = useState('')
   const [dateAdded, setDateAdded] = useState(new Date().toISOString().slice(0, 10))
+  const [sourceOptions, setSourceOptions] = useState<string[]>([])
 
   const [form, setForm] = useState({
     name: deal?.name ?? '',
@@ -139,6 +140,16 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
 
   useEffect(() => {
     fetchListOptions().then(setLists)
+  }, [])
+
+  // Existing source values power the Source combo box's dropdown (free text + suggestions).
+  useEffect(() => {
+    supabase.from('deals').select('source').not('source', 'is', null).then(({ data }) => {
+      const vals = Array.from(new Set(((data as { source: string | null }[]) ?? [])
+        .map((d) => d.source).filter((s): s is string => !!s && s.trim() !== '')))
+        .sort((a, b) => a.localeCompare(b))
+      setSourceOptions(vals)
+    })
   }, [])
 
   function setField(key: string, value: unknown) {
@@ -347,6 +358,20 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
                   </select>
+                ) : field.type === 'combo' ? (
+                  <>
+                    <input
+                      list={`${field.name}-options`}
+                      value={value}
+                      onChange={(e) => setField(field.name, e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    />
+                    <datalist id={`${field.name}-options`}>
+                      {(field.name === 'source' ? sourceOptions : fieldOptions).map((opt) => (
+                        <option key={opt} value={opt} />
+                      ))}
+                    </datalist>
+                  </>
                 ) : (
                   <input
                     type={field.type}
