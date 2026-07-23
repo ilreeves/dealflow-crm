@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { FlaskConical, BookOpen, Loader2, RefreshCw, ExternalLink, Sparkles, Target } from 'lucide-react'
+import { FlaskConical, BookOpen, Loader2, RefreshCw, ExternalLink, Sparkles } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
 
@@ -14,7 +14,6 @@ interface Props {
   name: string
   drugNames?: string | null
   ctSponsorName?: string | null
-  indication?: string | null
 }
 
 // Colour the trial status roughly by how active it is.
@@ -31,12 +30,10 @@ function prettyPhase(phases: string[]): string {
   return phases.map((p) => p.replace('PHASE', 'Phase ').replace('NA', 'N/A')).join('/')
 }
 
-export default function ClinicalContextSection({ entityType, entityId, name, drugNames, ctSponsorName, indication }: Props) {
+export default function ClinicalContextSection({ entityType, entityId, name, drugNames, ctSponsorName }: Props) {
   const supabase = createClient()
   const [trials, setTrials] = useState<Trial[]>([])
   const [pubs, setPubs] = useState<Pub[]>([])
-  const [competitors, setCompetitors] = useState<Trial[]>([])
-  const [indicationUsed, setIndicationUsed] = useState<string>('')
   const [fetchedAt, setFetchedAt] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [running, setRunning] = useState(false)
@@ -45,15 +42,13 @@ export default function ClinicalContextSection({ entityType, entityId, name, dru
   // Load any cached result on open (no external call).
   useEffect(() => {
     let active = true
-    supabase.from('company_enrichment').select('trials,publications,competitors,indication_used,fetched_at')
+    supabase.from('company_enrichment').select('trials,publications,fetched_at')
       .eq('entity_type', entityType).eq('entity_id', entityId).maybeSingle()
       .then(({ data }) => {
         if (!active) return
         if (data) {
           setTrials((data.trials as Trial[]) ?? [])
           setPubs((data.publications as Pub[]) ?? [])
-          setCompetitors((data.competitors as Trial[]) ?? [])
-          setIndicationUsed((data.indication_used as string) ?? '')
           setFetchedAt(data.fetched_at as string)
         }
         setLoaded(true)
@@ -68,14 +63,12 @@ export default function ClinicalContextSection({ entityType, entityId, name, dru
       const res = await fetch('/api/enrichment', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ entityType, entityId, name, drugNames, sponsorName: ctSponsorName, indication }),
+        body: JSON.stringify({ entityType, entityId, name, drugNames, sponsorName: ctSponsorName }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error || 'Lookup failed')
       setTrials((json.trials as Trial[]) ?? [])
       setPubs((json.publications as Pub[]) ?? [])
-      setCompetitors((json.competitors as Trial[]) ?? [])
-      setIndicationUsed((json.indication_used as string) ?? '')
       setFetchedAt(json.fetched_at as string)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Lookup failed')
@@ -168,41 +161,6 @@ export default function ClinicalContextSection({ entityType, entityId, name, dru
                     <p className="text-xs text-slate-400 mt-0.5">
                       {[p.firstAuthor && `${p.firstAuthor} et al.`, p.journal, p.year].filter(Boolean).join(' · ')}
                     </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Competitive landscape */}
-          <div>
-            <div className="flex items-center gap-1.5 mb-1.5 text-xs font-semibold text-slate-600">
-              <Target className="w-3.5 h-3.5" style={{ color: '#023a51' }} /> Competitive Landscape ({competitors.length})
-              {indicationUsed && <span className="font-normal text-slate-400">· {indicationUsed}</span>}
-            </div>
-            {!indicationUsed ? (
-              <p className="text-xs text-slate-400">
-                Add an indication (Edit) — or pull trials for this company first — to see other sponsors developing in the same area.
-              </p>
-            ) : competitors.length === 0 ? (
-              <p className="text-xs text-slate-400">No other industry-sponsored trials found for {indicationUsed}.</p>
-            ) : (
-              <div className="space-y-1.5">
-                {competitors.map((t) => (
-                  <div key={t.nctId} className="border border-slate-100 rounded-lg px-3 py-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <a href={`https://clinicaltrials.gov/study/${t.nctId}`} target="_blank" rel="noopener noreferrer"
-                         className="text-sm font-medium text-slate-700 hover:text-slate-900 hover:underline flex-1">
-                        {t.sponsor || 'Unknown sponsor'}
-                        <ExternalLink className="inline w-3 h-3 ml-1 text-slate-300" />
-                      </a>
-                      <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColor(t.status)}`}>
-                        {t.status.replace(/_/g, ' ').toLowerCase()}
-                      </span>
-                    </div>
-                    <div className="text-xs text-slate-400 mt-0.5">
-                      {prettyPhase(t.phases) && <span>{prettyPhase(t.phases)} · </span>}{t.title}
-                    </div>
                   </div>
                 ))}
               </div>

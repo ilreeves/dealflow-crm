@@ -21,12 +21,8 @@ async function timedFetch(url: string, ms = 10000): Promise<Response | null> {
   }
 }
 
-type Trial = { nctId: string; title: string; status: string; phases: string[]; conditions: string[]; sponsor: string; sponsorClass?: string }
+type Trial = { nctId: string; title: string; status: string; phases: string[]; conditions: string[]; sponsor: string }
 type Pub = { pmid: string; title: string; journal: string; year: string; firstAuthor: string; url: string }
-
-const ACTIVE_STATUSES = new Set(['RECRUITING', 'ACTIVE_NOT_RECRUITING', 'NOT_YET_RECRUITING', 'ENROLLING_BY_INVITATION'])
-const PHASE_RANK: Record<string, number> = { PHASE4: 5, PHASE3: 4, PHASE2: 3, PHASE1: 2, EARLY_PHASE1: 1, NA: 0 }
-const phaseScore = (phases: string[]): number => (phases.length ? Math.max(...phases.map((p) => PHASE_RANK[p] ?? 0)) : 0)
 
 const CT_FIELDS = [
   'protocolSection.identificationModule.nctId',
@@ -53,45 +49,9 @@ async function ctQuery(param: string, pageSize = 8): Promise<Trial[]> {
         phases: Array.isArray(p.designModule?.phases) ? p.designModule.phases : [],
         conditions: Array.isArray(p.conditionsModule?.conditions) ? p.conditionsModule.conditions.slice(0, 4) : [],
         sponsor: p.sponsorCollaboratorsModule?.leadSponsor?.name ?? '',
-        sponsorClass: p.sponsorCollaboratorsModule?.leadSponsor?.class ?? '',
       }
     })
     .filter((t) => t.nctId)
-}
-
-// Most common condition across the company's own trials — the auto-derived
-// indication when none is set manually.
-function deriveIndication(trials: Trial[]): string {
-  const counts = new Map<string, number>()
-  for (const t of trials) for (const c of t.conditions) counts.set(c, (counts.get(c) ?? 0) + 1)
-  let best = '', top = 0
-  for (const [c, n] of counts) if (n > top) { best = c; top = n }
-  return best
-}
-
-// Competitive landscape: OTHER industry sponsors running trials in the same
-// indication. Excludes the company's own sponsor names and its own trials, and
-// drops academic/registry sponsors so the list reads as actual competitors.
-async function fetchCompetitors(indication: string, ownSponsors: string[], ownNctIds: Set<string>): Promise<Trial[]> {
-  if (!indication) return []
-  const list = await ctQuery(`query.cond=${encodeURIComponent(indication)}`, 40)
-  const ownLc = ownSponsors.map((s) => s.toLowerCase()).filter(Boolean)
-  const seen = new Set<string>()
-  const filtered = list.filter((t) => {
-    if (t.sponsorClass !== 'INDUSTRY') return false
-    if (ownNctIds.has(t.nctId) || seen.has(t.nctId)) return false
-    const sp = t.sponsor.toLowerCase()
-    if (ownLc.some((o) => o && (sp.includes(o) || o.includes(sp)))) return false
-    seen.add(t.nctId)
-    return true
-  })
-  filtered.sort((a, b) => {
-    const av = ACTIVE_STATUSES.has(a.status) ? 1 : 0
-    const bv = ACTIVE_STATUSES.has(b.status) ? 1 : 0
-    if (av !== bv) return bv - av
-    return phaseScore(b.phases) - phaseScore(a.phases)
-  })
-  return filtered.slice(0, 10)
 }
 
 // ClinicalTrials.gov v2 — trials by sponsor AND by each drug/asset name
@@ -145,9 +105,18 @@ export async function POST(req: NextRequest) {
   if (!claims?.claims) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => null)
+  const name = typeof body?.name === 'string' ? body.name.trim() : ''
+
+  // Lookup mode: recent trials + publications for a named company, WITHOUT
+  // caching — used for on-demand "updates" on a curated competitor.
+  if (body?.lookup === true) {
+    if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400 })
+    const [trials, publications] = await Promise.all([fetchTrials(name, []), fetchPubs(name)])
+    return NextResponse.json({ trials, publications })
+  }
+
   const entityType = body?.entityType
   const entityId = body?.entityId
-  const name = typeof body?.name === 'string' ? body.name.trim() : ''
   if ((entityType !== 'deal' && entityType !== 'portfolio') || !entityId || !name) {
     return NextResponse.json({ error: 'entityType, entityId and name are required' }, { status: 400 })
   }
@@ -159,20 +128,13 @@ export async function POST(req: NextRequest) {
     .split(',').map((d: string) => d.trim()).filter(Boolean)
 
   const [trials, publications] = await Promise.all([fetchTrials(sponsor, drugs), fetchPubs(name)])
-
-  // Indication drives the competitive landscape: manual field if set, else the
-  // most common condition across the company's own trials.
-  const manualIndication = typeof body?.indication === 'string' ? body.indication.trim() : ''
-  const indication_used = manualIndication || deriveIndication(trials)
-  const competitors = await fetchCompetitors(indication_used, [name, sponsor], new Set(trials.map((t) => t.nctId)))
-
   const fetched_at = new Date().toISOString()
 
   const { error } = await supabase.from('company_enrichment').upsert(
-    { entity_type: entityType, entity_id: entityId, query_name: name, trials, publications, competitors, indication_used, fetched_at },
+    { entity_type: entityType, entity_id: entityId, query_name: name, trials, publications, fetched_at },
     { onConflict: 'entity_type,entity_id' }
   )
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ trials, publications, competitors, indication_used, fetched_at })
+  return NextResponse.json({ trials, publications, fetched_at })
 }

@@ -178,7 +178,7 @@ function OverviewTab({ company }: { company: PortfolioCompany }) {
           return { subject: named ? `${company.name} — ${label} deck` : `${company.name} — non-confidential overview`, body }
         }}
       />
-      <ClinicalContextSection entityType="portfolio" entityId={company.id} name={company.name} drugNames={company.drug_names} ctSponsorName={company.ct_sponsor_name} indication={company.indication} />
+      <ClinicalContextSection entityType="portfolio" entityId={company.id} name={company.name} drugNames={company.drug_names} ctSponsorName={company.ct_sponsor_name} />
       <KnownCompetitors entityType="portfolio" entityId={company.id} />
       {company.description && (
         <div>
