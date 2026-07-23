@@ -16,6 +16,7 @@ import MeetingsList from './MeetingsList'
 import InvestorIntrosTab from '@/components/shared/InvestorIntrosTab'
 import DecksSection from '@/components/shared/DecksSection'
 import ClinicalContextSection from '@/components/shared/ClinicalContextSection'
+import KnownCompetitors from '@/components/shared/KnownCompetitors'
 
 type Tab = 'overview' | 'files' | 'notes' | 'meetings' | 'intros'
 
@@ -358,6 +359,8 @@ function OverviewTab({ deal }: { deal: Deal }) {
       />
 
       <ClinicalContextSection entityType="deal" entityId={deal.id} name={deal.name} drugNames={deal.drug_names} ctSponsorName={deal.ct_sponsor_name} indication={deal.indication} />
+
+      <KnownCompetitors entityType="deal" entityId={deal.id} />
 
       {deal.description && (
         <div>

@@ -11,6 +11,7 @@ import CapRoundsTab from './CapRoundsTab'
 import InvestorIntrosTab from '@/components/shared/InvestorIntrosTab'
 import DecksSection from '@/components/shared/DecksSection'
 import ClinicalContextSection from '@/components/shared/ClinicalContextSection'
+import KnownCompetitors from '@/components/shared/KnownCompetitors'
 
 type Tab = 'overview' | 'rounds' | 'intros' | 'catalysts'
 
@@ -178,6 +179,7 @@ function OverviewTab({ company }: { company: PortfolioCompany }) {
         }}
       />
       <ClinicalContextSection entityType="portfolio" entityId={company.id} name={company.name} drugNames={company.drug_names} ctSponsorName={company.ct_sponsor_name} indication={company.indication} />
+      <KnownCompetitors entityType="portfolio" entityId={company.id} />
       {company.description && (
         <div>
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Description</p>

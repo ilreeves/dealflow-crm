@@ -273,6 +273,18 @@ export interface InvestorContact {
 }
 
 // One non-confidential deck (per raise) attached to a deal or portfolio company
+// A manually-added known competitor for a deal or portfolio company
+export interface CompanyCompetitor {
+  id: string
+  entity_type: 'deal' | 'portfolio'
+  entity_id: string
+  name: string
+  note: string | null
+  url: string | null
+  created_by: string | null
+  created_at: string
+}
+
 export interface CompanyDeck {
   id: string
   entity_type: string
