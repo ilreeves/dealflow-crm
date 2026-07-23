@@ -24,18 +24,17 @@ async function timedFetch(url: string, ms = 10000): Promise<Response | null> {
 type Trial = { nctId: string; title: string; status: string; phases: string[]; conditions: string[]; sponsor: string }
 type Pub = { pmid: string; title: string; journal: string; year: string; firstAuthor: string; url: string }
 
-// ClinicalTrials.gov v2 — trials where the company is the lead sponsor.
-async function fetchTrials(name: string): Promise<Trial[]> {
-  const fields = [
-    'protocolSection.identificationModule.nctId',
-    'protocolSection.identificationModule.briefTitle',
-    'protocolSection.statusModule.overallStatus',
-    'protocolSection.designModule.phases',
-    'protocolSection.conditionsModule.conditions',
-    'protocolSection.sponsorCollaboratorsModule.leadSponsor',
-  ].join(',')
-  const url = `${CT_BASE}?query.spons=${encodeURIComponent(name)}&pageSize=8&fields=${fields}`
-  const res = await timedFetch(url)
+const CT_FIELDS = [
+  'protocolSection.identificationModule.nctId',
+  'protocolSection.identificationModule.briefTitle',
+  'protocolSection.statusModule.overallStatus',
+  'protocolSection.designModule.phases',
+  'protocolSection.conditionsModule.conditions',
+  'protocolSection.sponsorCollaboratorsModule.leadSponsor',
+].join(',')
+
+async function ctQuery(param: string): Promise<Trial[]> {
+  const res = await timedFetch(`${CT_BASE}?${param}&pageSize=8&fields=${CT_FIELDS}`)
   if (!res || !res.ok) return []
   const json = await res.json().catch(() => null)
   const studies: unknown[] = Array.isArray(json?.studies) ? json.studies : []
@@ -53,6 +52,19 @@ async function fetchTrials(name: string): Promise<Trial[]> {
       }
     })
     .filter((t) => t.nctId)
+}
+
+// ClinicalTrials.gov v2 — trials by sponsor AND by each drug/asset name
+// (interventions), merged & de-duped. The intervention search is what finds a
+// company's trials when they're registered under a different sponsor name.
+async function fetchTrials(sponsor: string, drugs: string[]): Promise<Trial[]> {
+  const queries: string[] = []
+  if (sponsor) queries.push(`query.spons=${encodeURIComponent(sponsor)}`)
+  for (const d of drugs) queries.push(`query.intr=${encodeURIComponent(d)}`)
+  const results = await Promise.all(queries.map(ctQuery))
+  const byId = new Map<string, Trial>()
+  for (const list of results) for (const t of list) if (!byId.has(t.nctId)) byId.set(t.nctId, t)
+  return Array.from(byId.values()).slice(0, 12)
 }
 
 // PubMed E-utilities — recent publications by authors affiliated with the
@@ -100,7 +112,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'entityType, entityId and name are required' }, { status: 400 })
   }
 
-  const [trials, publications] = await Promise.all([fetchTrials(name), fetchPubs(name)])
+  // Curated overrides: exact CT.gov sponsor name (falls back to company name)
+  // and comma-separated drug/asset names searched as trial interventions.
+  const sponsor = (typeof body?.sponsorName === 'string' && body.sponsorName.trim()) || name
+  const drugs = (typeof body?.drugNames === 'string' ? body.drugNames : '')
+    .split(',').map((d: string) => d.trim()).filter(Boolean)
+
+  const [trials, publications] = await Promise.all([fetchTrials(sponsor, drugs), fetchPubs(name)])
   const fetched_at = new Date().toISOString()
 
   const { error } = await supabase.from('company_enrichment').upsert(

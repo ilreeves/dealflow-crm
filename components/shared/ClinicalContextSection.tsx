@@ -12,6 +12,8 @@ interface Props {
   entityType: 'deal' | 'portfolio'
   entityId: string
   name: string
+  drugNames?: string | null
+  ctSponsorName?: string | null
 }
 
 // Colour the trial status roughly by how active it is.
@@ -28,7 +30,7 @@ function prettyPhase(phases: string[]): string {
   return phases.map((p) => p.replace('PHASE', 'Phase ').replace('NA', 'N/A')).join('/')
 }
 
-export default function ClinicalContextSection({ entityType, entityId, name }: Props) {
+export default function ClinicalContextSection({ entityType, entityId, name, drugNames, ctSponsorName }: Props) {
   const supabase = createClient()
   const [trials, setTrials] = useState<Trial[]>([])
   const [pubs, setPubs] = useState<Pub[]>([])
@@ -61,7 +63,7 @@ export default function ClinicalContextSection({ entityType, entityId, name }: P
       const res = await fetch('/api/enrichment', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ entityType, entityId, name }),
+        body: JSON.stringify({ entityType, entityId, name, drugNames, sponsorName: ctSponsorName }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error || 'Lookup failed')
@@ -111,7 +113,10 @@ export default function ClinicalContextSection({ entityType, entityId, name }: P
               <FlaskConical className="w-3.5 h-3.5" style={{ color: '#5ba200' }} /> Clinical Trials ({trials.length})
             </div>
             {trials.length === 0 ? (
-              <p className="text-xs text-slate-400">No lead-sponsor trials found on ClinicalTrials.gov.</p>
+              <p className="text-xs text-slate-400">
+                No trials found on ClinicalTrials.gov.
+                {!drugNames && !ctSponsorName && ' If this company runs trials under a different sponsor name, add its drug/asset name or CT.gov sponsor name (Edit) to find them.'}
+              </p>
             ) : (
               <div className="space-y-1.5">
                 {trials.map((t) => (
