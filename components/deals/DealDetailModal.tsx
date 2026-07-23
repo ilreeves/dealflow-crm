@@ -357,7 +357,7 @@ function OverviewTab({ deal }: { deal: Deal }) {
         }}
       />
 
-      <ClinicalContextSection entityType="deal" entityId={deal.id} name={deal.name} drugNames={deal.drug_names} ctSponsorName={deal.ct_sponsor_name} />
+      <ClinicalContextSection entityType="deal" entityId={deal.id} name={deal.name} drugNames={deal.drug_names} ctSponsorName={deal.ct_sponsor_name} indication={deal.indication} />
 
       {deal.description && (
         <div>

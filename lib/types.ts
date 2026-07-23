@@ -64,6 +64,7 @@ export interface Deal {
   sharepoint_link: string | null
   drug_names: string | null
   ct_sponsor_name: string | null
+  indication: string | null
   non_con_deck_path: string | null
   non_con_deck_name: string | null
   non_con_deck_token: string | null
@@ -171,6 +172,7 @@ export interface PortfolioCompany {
   sharepoint_link: string | null
   drug_names: string | null
   ct_sponsor_name: string | null
+  indication: string | null
   non_con_deck_path: string | null
   non_con_deck_name: string | null
   non_con_deck_token: string | null
