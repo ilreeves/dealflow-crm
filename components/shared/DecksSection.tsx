@@ -26,6 +26,7 @@ export default function DecksSection({ entityType, entityId, entityName, buildEm
   const [adding, setAdding] = useState(false)
   const [newLabel, setNewLabel] = useState('')
   const [uploadingNew, setUploadingNew] = useState(false)
+  const [dragging, setDragging] = useState(false)
   const [error, setError] = useState('')
   const addInputRef = useRef<HTMLInputElement>(null)
 
@@ -91,7 +92,11 @@ export default function DecksSection({ entityType, entityId, entityName, buildEm
       )}
 
       {adding && (
-        <div className="border border-slate-200 rounded-xl p-4 mt-2 space-y-3 bg-slate-50">
+        <div
+          className="border border-slate-200 rounded-xl p-4 mt-2 space-y-3 bg-slate-50"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => e.preventDefault()}
+        >
           <div>
             <label className="block text-xs text-slate-500 mb-1">Label</label>
             <input
@@ -104,10 +109,13 @@ export default function DecksSection({ entityType, entityId, entityName, buildEm
           </div>
           <div
             onClick={() => addInputRef.current?.click()}
-            className="border-2 border-dashed border-slate-200 rounded-lg p-4 text-center cursor-pointer hover:border-slate-400 hover:bg-white transition group"
+            onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+            onDragLeave={(e) => { e.preventDefault(); setDragging(false) }}
+            onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files?.[0]; if (f) addDeck(f) }}
+            className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition group ${dragging ? 'border-slate-500 bg-white' : 'border-slate-200 hover:border-slate-400 hover:bg-white'}`}
           >
             <Upload className="w-5 h-5 text-slate-400 group-hover:text-slate-600 mx-auto mb-1.5 transition" />
-            <p className="text-sm text-slate-500"><span className="font-medium text-slate-700">Click to choose a file</span> to upload as this deck</p>
+            <p className="text-sm text-slate-500"><span className="font-medium text-slate-700">Click to choose</span> or drag a file here to upload as this deck</p>
             {uploadingNew && <div className="flex items-center justify-center gap-2 mt-2 text-xs text-slate-500"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…</div>}
           </div>
           <input ref={addInputRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) addDeck(f); if (addInputRef.current) addInputRef.current.value = '' }} />
