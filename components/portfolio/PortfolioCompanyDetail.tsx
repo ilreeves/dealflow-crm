@@ -8,12 +8,13 @@ import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
 import PortfolioCompanyForm from './PortfolioCompanyForm'
 import CapRoundsTab from './CapRoundsTab'
+import FundraisingTab from './FundraisingTab'
 import InvestorIntrosTab from '@/components/shared/InvestorIntrosTab'
 import DecksSection from '@/components/shared/DecksSection'
 import ClinicalContextSection from '@/components/shared/ClinicalContextSection'
 import KnownCompetitors from '@/components/shared/KnownCompetitors'
 
-type Tab = 'overview' | 'rounds' | 'intros' | 'catalysts'
+type Tab = 'overview' | 'fundraising' | 'rounds' | 'intros' | 'catalysts'
 
 interface Props {
   company: PortfolioCompany
@@ -45,6 +46,7 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'overview', label: 'Overview' },
+    { key: 'fundraising', label: 'Fundraising' },
     { key: 'rounds', label: 'Ownership' },
     { key: 'intros', label: 'Investor Intros' },
     { key: 'catalysts', label: 'Catalysts' },
@@ -96,6 +98,7 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
 
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {tab === 'overview' && <OverviewTab company={company} />}
+            {tab === 'fundraising' && <FundraisingTab companyId={company.id} />}
             {tab === 'rounds' && <CapRoundsTab companyId={company.id} />}
             {tab === 'intros' && <InvestorIntrosTab table="portfolio_investor_intros" fkColumn="company_id" entityId={company.id} />}
             {tab === 'catalysts' && <CatalystsTab companyName={company.name} />}

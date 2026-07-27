@@ -196,9 +196,30 @@ export interface PortfolioFundraiseRound {
   round_size: number | null
   pre_money: number | null
   post_money: number | null
+  option_pool: number | null
   price_per_share: number | null
   status: string | null
   terms: Record<string, unknown> | null
+  created_at: string
+}
+
+// Fundraising round on a PIPELINE deal — same shape as the portfolio round,
+// minus Solas positions (we don't hold a pipeline company yet).
+export interface DealFundraiseRound {
+  id: string
+  deal_id: string
+  round_name: string
+  security_type: string | null
+  date: string | null
+  lead_investor: string | null
+  round_size: number | null
+  pre_money: number | null
+  post_money: number | null
+  option_pool: number | null
+  price_per_share: number | null
+  status: string | null
+  terms: Record<string, unknown> | null
+  notes: string | null
   created_at: string
 }
 

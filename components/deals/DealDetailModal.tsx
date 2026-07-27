@@ -17,8 +17,9 @@ import InvestorIntrosTab from '@/components/shared/InvestorIntrosTab'
 import DecksSection from '@/components/shared/DecksSection'
 import ClinicalContextSection from '@/components/shared/ClinicalContextSection'
 import KnownCompetitors from '@/components/shared/KnownCompetitors'
+import DealFundraisingTab from './DealFundraisingTab'
 
-type Tab = 'overview' | 'files' | 'notes' | 'meetings' | 'intros'
+type Tab = 'overview' | 'fundraising' | 'files' | 'notes' | 'meetings' | 'intros'
 
 interface Props {
   deal: Deal
@@ -105,6 +106,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'overview', label: 'Overview' },
+    { key: 'fundraising', label: 'Fundraising' },
     { key: 'meetings', label: 'Meetings' },
     { key: 'intros', label: 'Investor Intros' },
     { key: 'files', label: 'Files' },
@@ -231,6 +233,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
           {/* Content */}
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {tab === 'overview' && <OverviewTab deal={deal} />}
+            {tab === 'fundraising' && <DealFundraisingTab dealId={deal.id} />}
             {tab === 'meetings' && <MeetingsList dealId={deal.id} />}
             {tab === 'intros' && <InvestorIntrosTab table="deal_investor_intros" fkColumn="deal_id" entityId={deal.id} />}
             {tab === 'files' && <FileManager dealId={deal.id} />}
