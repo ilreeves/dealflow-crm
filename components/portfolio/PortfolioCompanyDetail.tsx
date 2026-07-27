@@ -9,6 +9,7 @@ import { formatDate } from '@/lib/utils'
 import PortfolioCompanyForm from './PortfolioCompanyForm'
 import CapRoundsTab from './CapRoundsTab'
 import FundraisingTab from './FundraisingTab'
+import { useLatestRound } from '@/lib/useLatestRound'
 import InvestorIntrosTab from '@/components/shared/InvestorIntrosTab'
 import DecksSection from '@/components/shared/DecksSection'
 import ClinicalContextSection from '@/components/shared/ClinicalContextSection'
@@ -137,16 +138,22 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
 }
 
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
+type OverviewField = { icon: React.ElementType; label: string; value: string | null | undefined; href?: string; hint?: string }
+
 function OverviewTab({ company }: { company: PortfolioCompany }) {
-  const fields = [
+  // Prefer the latest structured round; fall back to the free-text fields when
+  // no round has been recorded.
+  const latest = useLatestRound('portfolio_fundraise_rounds', 'company_id', company.id)
+
+  const fields: OverviewField[] = [
     { icon: Globe, label: 'Website', value: company.website, href: company.website ?? undefined },
     { icon: Mail, label: 'Contact Email', value: company.contact_email, href: company.contact_email ? `mailto:${company.contact_email}` : undefined },
     { icon: Building2, label: 'Sector', value: company.sector },
     { icon: Tag, label: 'Series', value: company.series },
     { icon: Tag, label: 'Clinical Stage', value: company.clinical_stage },
     { icon: MapPin, label: 'Location', value: [company.city, company.state, company.country].filter(Boolean).join(', ') || null },
-    { icon: DollarSign, label: 'Current Valuation', value: company.current_valuation },
-    { icon: DollarSign, label: 'Current Fundraising Need', value: company.current_fundraise },
+    { icon: DollarSign, label: 'Current Valuation', value: latest?.valuation ?? company.current_valuation, hint: latest?.valuation ? latest.roundName : undefined },
+    { icon: DollarSign, label: 'Current Fundraising Need', value: latest?.fundraise ?? company.current_fundraise, hint: latest?.fundraise ? latest.roundName : undefined },
     { icon: Link, label: 'SharePoint', value: company.sharepoint_link, href: company.sharepoint_link ?? undefined },
   ]
 
@@ -192,11 +199,12 @@ function OverviewTab({ company }: { company: PortfolioCompany }) {
       <div>
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Details</p>
         <div className="space-y-2.5">
-          {fields.map(({ icon: Icon, label, value, href }) => (
+          {fields.map(({ icon: Icon, label, value, href, hint }) => (
             <div key={label} className="flex items-start gap-3">
               <Icon className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
                 <span className="text-xs text-slate-400">{label}</span>
+                {hint && <span className="text-xs text-slate-300 ml-1.5">· {hint}</span>}
                 <div className="text-sm text-slate-700 mt-0.5">
                   {value ? (
                     href ? (

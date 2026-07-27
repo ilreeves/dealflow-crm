@@ -18,6 +18,7 @@ import DecksSection from '@/components/shared/DecksSection'
 import ClinicalContextSection from '@/components/shared/ClinicalContextSection'
 import KnownCompetitors from '@/components/shared/KnownCompetitors'
 import DealFundraisingTab from './DealFundraisingTab'
+import { useLatestRound } from '@/lib/useLatestRound'
 
 type Tab = 'overview' | 'fundraising' | 'files' | 'notes' | 'meetings' | 'intros'
 
@@ -300,8 +301,14 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
   )
 }
 
+type OverviewField = { icon: React.ElementType; label: string; value: string | null | undefined; href?: string; hint?: string }
+
 function OverviewTab({ deal }: { deal: Deal }) {
-  const fields = [
+  // Prefer the latest structured round; fall back to the free-text fields when
+  // no round has been recorded (often all we have early in diligence).
+  const latest = useLatestRound('deal_fundraise_rounds', 'deal_id', deal.id)
+
+  const fields: OverviewField[] = [
     { icon: Globe, label: 'Website', value: deal.website, href: deal.website ?? undefined },
     { icon: Link, label: 'SharePoint', value: deal.sharepoint_link, href: deal.sharepoint_link ?? undefined },
     { icon: Mail, label: 'Contact Email', value: deal.contact_email, href: deal.contact_email ? `mailto:${deal.contact_email}` : undefined },
@@ -312,9 +319,9 @@ function OverviewTab({ deal }: { deal: Deal }) {
     { icon: User, label: 'CEO', value: deal.founders },
     { icon: Tag, label: 'Source', value: deal.source },
     { icon: Tag, label: 'Series', value: deal.series },
-    { icon: DollarSign, label: 'Current Fundraise', value: deal.current_fundraise },
+    { icon: DollarSign, label: 'Current Fundraise', value: latest?.fundraise ?? deal.current_fundraise, hint: latest?.fundraise ? latest.roundName : undefined },
     { icon: DollarSign, label: 'Fundraising to Date', value: deal.fundraising_to_date },
-    { icon: DollarSign, label: 'Current Valuation', value: deal.current_valuation },
+    { icon: DollarSign, label: 'Current Valuation', value: latest?.valuation ?? deal.current_valuation, hint: latest?.valuation ? latest.roundName : undefined },
   ]
 
   const customEntries = Object.entries(deal.custom_fields ?? {}).filter(([, v]) => v !== null && v !== '')
@@ -375,11 +382,12 @@ function OverviewTab({ deal }: { deal: Deal }) {
       <div>
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Details</p>
         <div className="space-y-2.5">
-          {fields.map(({ icon: Icon, label, value, href }) => (
+          {fields.map(({ icon: Icon, label, value, href, hint }) => (
             <div key={label} className="flex items-start gap-3">
               <Icon className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
                 <span className="text-xs text-slate-400">{label}</span>
+                {hint && <span className="text-xs text-slate-300 ml-1.5">· {hint}</span>}
                 <div className="text-sm text-slate-700 mt-0.5">
                   {value ? (
                     href ? (
