@@ -169,8 +169,9 @@ function OverviewTab({ company }: { company: PortfolioCompany }) {
             company.sector ? `Sector: ${company.sector}` : null,
             company.series ? `Series: ${company.series}` : null,
             company.clinical_stage ? `Clinical stage: ${company.clinical_stage}` : null,
-            company.current_fundraise ? `Current raise: ${company.current_fundraise}` : null,
-            company.current_valuation ? `Valuation: ${company.current_valuation}` : null,
+            // Prefer the latest fundraising round; fall back to the free-text fields.
+            (latest?.raiseSummary ?? company.current_fundraise) ? `Current raise: ${latest?.raiseSummary ?? company.current_fundraise}` : null,
+            (latest?.valuation ?? company.current_valuation) ? `Valuation: ${latest?.valuation ?? company.current_valuation}` : null,
             company.website ? `Website: ${company.website}` : null,
           ].filter(Boolean) as string[]
           const body = [

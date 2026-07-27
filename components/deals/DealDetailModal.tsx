@@ -347,8 +347,9 @@ function OverviewTab({ deal }: { deal: Deal }) {
             deal.sector ? `Sector: ${deal.sector}` : null,
             deal.series ? `Series: ${deal.series}` : null,
             deal.clinical_stage ? `Clinical stage: ${deal.clinical_stage}` : null,
-            deal.current_fundraise ? `Current raise: ${deal.current_fundraise}` : null,
-            deal.current_valuation ? `Valuation: ${deal.current_valuation}` : null,
+            // Prefer the latest fundraising round; fall back to the free-text fields.
+            (latest?.raiseSummary ?? deal.current_fundraise) ? `Current raise: ${latest?.raiseSummary ?? deal.current_fundraise}` : null,
+            (latest?.valuation ?? deal.current_valuation) ? `Valuation: ${latest?.valuation ?? deal.current_valuation}` : null,
             deal.fundraising_to_date ? `Raised to date: ${deal.fundraising_to_date}` : null,
             deal.website ? `Website: ${deal.website}` : null,
           ].filter(Boolean) as string[]

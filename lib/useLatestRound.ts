@@ -6,7 +6,10 @@ import { fmtMoney } from '@/lib/rounds'
 
 export type LatestRound = {
   roundName: string
+  securityType: string | null
   fundraise: string | null
+  /** Amount + what it is, e.g. "$16.5M Convertible Note" / "$16.5M Series B" */
+  raiseSummary: string | null
   valuation: string | null
 }
 
@@ -43,9 +46,18 @@ export function useLatestRound(
             : pre != null ? `${fmtMoney(pre)} pre-money`
               : cap != null ? `${fmtMoney(Number(cap))} cap`
                 : null
+        const roundName = String(r.round_name ?? '')
+        const securityType = (r.security_type as string | null) ?? null
+        const fundraise = size != null ? fmtMoney(size) : null
+        // Convertibles read better as "$16.5M Convertible Note"; priced rounds as
+        // "$16.5M Series B" (the security type would just say "Priced equity").
+        const isConvertible = securityType === 'SAFE' || securityType === 'Convertible note'
+        const suffix = isConvertible ? securityType : roundName
         setLatest({
-          roundName: String(r.round_name ?? ''),
-          fundraise: size != null ? fmtMoney(size) : null,
+          roundName,
+          securityType,
+          fundraise,
+          raiseSummary: fundraise ? [fundraise, suffix].filter(Boolean).join(' ') : null,
           valuation,
         })
       })
