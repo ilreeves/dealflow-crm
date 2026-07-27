@@ -311,7 +311,10 @@ export interface CompanyDeck {
   entity_type: string
   entity_id: string
   company_name: string | null
+  /** Snapshot / fallback label. When round_id is set the round's name wins. */
   label: string
+  /** Optional link to a fundraising round (portfolio or deal, per entity_type). */
+  round_id: string | null
   storage_path: string
   file_name: string
   token: string | null

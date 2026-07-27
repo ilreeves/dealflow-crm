@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Upload, FileText, Download, Trash2, Eye, Loader2, RefreshCw, Mail, Users, ChevronDown, ChevronRight, Plus, Pencil, Check, X } from 'lucide-react'
+import { Upload, FileText, Download, Trash2, Eye, Loader2, RefreshCw, Mail, Users, ChevronDown, ChevronRight, Plus, Pencil, Check, X, Link2 } from 'lucide-react'
 import { CompanyDeck, DeckView, DealFile } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
@@ -15,6 +15,8 @@ interface Props {
   buildEmail: (deckUrl: string, label: string) => { subject: string; body: string }
 }
 
+type RoundOption = { id: string; round_name: string }
+
 function slugify(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'deck'
 }
@@ -22,8 +24,10 @@ function slugify(s: string): string {
 export default function DecksSection({ entityType, entityId, entityName, buildEmail }: Props) {
   const supabase = createClient()
   const [decks, setDecks] = useState<CompanyDeck[]>([])
+  const [rounds, setRounds] = useState<RoundOption[]>([])
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
+  const [newRoundId, setNewRoundId] = useState('')
   const [newLabel, setNewLabel] = useState('')
   const [uploadingNew, setUploadingNew] = useState(false)
   const [dragging, setDragging] = useState(false)
@@ -36,17 +40,27 @@ export default function DecksSection({ entityType, entityId, entityName, buildEm
       .then(({ data }) => { setDecks((data as CompanyDeck[]) ?? []); setLoading(false) })
   }, [entityType, entityId])
 
+  // Fundraising rounds a deck can be tied to, so the label follows the round.
+  useEffect(() => {
+    const table = entityType === 'deal' ? 'deal_fundraise_rounds' : 'portfolio_fundraise_rounds'
+    const fk = entityType === 'deal' ? 'deal_id' : 'company_id'
+    supabase.from(table).select('id,round_name').eq(fk, entityId)
+      .order('date', { ascending: false, nullsFirst: false })
+      .then(({ data }) => setRounds((data as RoundOption[]) ?? []))
+  }, [entityType, entityId])
+
   async function addDeck(file: File) {
     setUploadingNew(true)
     setError('')
-    const label = newLabel.trim() || 'Deck'
+    const round = rounds.find((r) => r.id === newRoundId)
+    const label = round ? round.round_name : (newLabel.trim() || 'Deck')
     const prefix = entityType === 'deal' ? entityId : `portfolio/${entityId}`
     const storagePath = `${prefix}/noncon-deck/${Date.now()}-${file.name}`
     const { error: upErr } = await supabase.storage.from('deal-files').upload(storagePath, file)
     if (upErr) { setError(`Upload failed: ${upErr.message}`); setUploadingNew(false); return }
     const { data, error: insErr } = await supabase.from('company_decks').insert({
       entity_type: entityType, entity_id: entityId, company_name: entityName,
-      label, storage_path: storagePath, file_name: file.name, sort_order: decks.length,
+      label, round_id: round?.id ?? null, storage_path: storagePath, file_name: file.name, sort_order: decks.length,
     }).select().single()
     if (insErr || !data) {
       // Roll back the uploaded file so we don't leave an orphan in storage.
@@ -55,7 +69,7 @@ export default function DecksSection({ entityType, entityId, entityName, buildEm
       setUploadingNew(false)
       return
     }
-    setDecks((prev) => [...prev, data as CompanyDeck]); setNewLabel(''); setAdding(false)
+    setDecks((prev) => [...prev, data as CompanyDeck]); setNewLabel(''); setNewRoundId(''); setAdding(false)
     setUploadingNew(false)
   }
 
@@ -79,6 +93,7 @@ export default function DecksSection({ entityType, entityId, entityName, buildEm
             <DeckItem
               key={deck.id}
               deck={deck}
+              rounds={rounds}
               entityName={entityName}
               buildEmail={buildEmail}
               onUpdated={(d) => setDecks((prev) => prev.map((x) => (x.id === d.id ? d : x)))}
@@ -98,14 +113,29 @@ export default function DecksSection({ entityType, entityId, entityName, buildEm
           onDrop={(e) => e.preventDefault()}
         >
           <div>
-            <label className="block text-xs text-slate-500 mb-1">Label</label>
-            <input
+            <label className="block text-xs text-slate-500 mb-1">Round</label>
+            <select
               autoFocus
-              placeholder="e.g. Series C"
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
+              value={newRoundId}
+              onChange={(e) => setNewRoundId(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
-            />
+            >
+              <option value="">Custom label…</option>
+              {rounds.map((r) => <option key={r.id} value={r.id}>{r.round_name}</option>)}
+            </select>
+            {newRoundId === '' && (
+              <input
+                placeholder="e.g. Series C"
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                className="w-full mt-2 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+              />
+            )}
+            <p className="text-xs text-slate-400 mt-1">
+              {rounds.length === 0
+                ? 'No fundraising rounds yet — add one in the Fundraising tab to link this deck to it.'
+                : 'Linking to a round keeps the label in sync if the round is renamed.'}
+            </p>
           </div>
           <div
             onClick={() => addInputRef.current?.click()}
@@ -121,7 +151,7 @@ export default function DecksSection({ entityType, entityId, entityName, buildEm
           <input ref={addInputRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) addDeck(f); if (addInputRef.current) addInputRef.current.value = '' }} />
           {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
           <div className="flex justify-end">
-            <button onClick={() => { setAdding(false); setNewLabel(''); setError('') }} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 transition">Cancel</button>
+            <button onClick={() => { setAdding(false); setNewLabel(''); setNewRoundId(''); setError('') }} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 transition">Cancel</button>
           </div>
         </div>
       )}
@@ -129,8 +159,9 @@ export default function DecksSection({ entityType, entityId, entityName, buildEm
   )
 }
 
-function DeckItem({ deck, entityName, buildEmail, onUpdated, onDeleted }: {
+function DeckItem({ deck, rounds, entityName, buildEmail, onUpdated, onDeleted }: {
   deck: CompanyDeck
+  rounds: RoundOption[]
   entityName: string
   buildEmail: (deckUrl: string, label: string) => { subject: string; body: string }
   onUpdated: (d: CompanyDeck) => void
@@ -142,10 +173,17 @@ function DeckItem({ deck, entityName, buildEmail, onUpdated, onDeleted }: {
   const [replacing, setReplacing] = useState(false)
   const [editingLabel, setEditingLabel] = useState(false)
   const [labelDraft, setLabelDraft] = useState(deck.label)
+  const [roundDraft, setRoundDraft] = useState(deck.round_id ?? '')
   const [views, setViews] = useState<DeckView[]>([])
   const [showViews, setShowViews] = useState(false)
   const [rowError, setRowError] = useState('')
   const replaceRef = useRef<HTMLInputElement>(null)
+
+  // A linked round's name always wins over the stored label, so renaming the
+  // round updates the deck badge, share slug, and share email. The label is the
+  // fallback for unlinked decks (or if the round was deleted).
+  const linkedRound = rounds.find((r) => r.id === deck.round_id)
+  const displayLabel = linkedRound?.round_name ?? deck.label
 
   const isPdf = deck.file_name.toLowerCase().endsWith('.pdf')
   const linkExpired = isExpired(deck.shared_at)
@@ -189,7 +227,7 @@ function DeckItem({ deck, entityName, buildEmail, onUpdated, onDeleted }: {
   // company/round names. Generated once per deck, then reused.
   function makeToken(): string {
     const suffix = crypto.randomUUID().replace(/-/g, '')
-    return `${slugify(`${entityName} ${deck.label}`)}-${suffix}`
+    return `${slugify(`${entityName} ${displayLabel}`)}-${suffix}`
   }
 
   async function handleEmail() {
@@ -206,14 +244,18 @@ function DeckItem({ deck, entityName, buildEmail, onUpdated, onDeleted }: {
     }
     onUpdated(data as CompanyDeck)
     const shareUrl = `${window.location.origin}/deck/${token}`
-    const { subject, body } = buildEmail(shareUrl, deck.label)
+    const { subject, body } = buildEmail(shareUrl, displayLabel)
     window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
     setEmailing(false)
   }
 
   async function saveLabel() {
-    const label = labelDraft.trim() || 'Deck'
-    const { data, error: updErr } = await supabase.from('company_decks').update({ label }).eq('id', deck.id).select().single()
+    const round = rounds.find((r) => r.id === roundDraft)
+    // Store the round's name as the label too, so it still reads sensibly if the
+    // round is later deleted.
+    const label = round ? round.round_name : (labelDraft.trim() || 'Deck')
+    const { data, error: updErr } = await supabase.from('company_decks')
+      .update({ label, round_id: round?.id ?? null }).eq('id', deck.id).select().single()
     if (updErr || !data) { setRowError(`Rename failed: ${updErr?.message ?? 'update failed'}`); return }
     onUpdated(data as CompanyDeck)
     setEditingLabel(false)
@@ -237,20 +279,36 @@ function DeckItem({ deck, entityName, buildEmail, onUpdated, onDeleted }: {
       <div className="flex items-center gap-2 mb-1.5">
         {editingLabel ? (
           <>
-            <input
+            <select
               autoFocus
-              value={labelDraft}
-              onChange={(e) => setLabelDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') saveLabel(); if (e.key === 'Escape') { setLabelDraft(deck.label); setEditingLabel(false) } }}
-              className="flex-1 px-2 py-1 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-900"
-            />
+              value={roundDraft}
+              onChange={(e) => setRoundDraft(e.target.value)}
+              className="flex-1 min-w-0 px-2 py-1 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+            >
+              <option value="">Custom label…</option>
+              {rounds.map((r) => <option key={r.id} value={r.id}>{r.round_name}</option>)}
+            </select>
+            {roundDraft === '' && (
+              <input
+                value={labelDraft}
+                onChange={(e) => setLabelDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveLabel(); if (e.key === 'Escape') { setLabelDraft(deck.label); setRoundDraft(deck.round_id ?? ''); setEditingLabel(false) } }}
+                placeholder="Label"
+                className="flex-1 min-w-0 px-2 py-1 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-900"
+              />
+            )}
             <button onClick={saveLabel} className="p-1 text-green-600 hover:bg-green-50 rounded transition"><Check className="w-3.5 h-3.5" /></button>
-            <button onClick={() => { setLabelDraft(deck.label); setEditingLabel(false) }} className="p-1 text-slate-400 hover:bg-slate-100 rounded transition"><X className="w-3.5 h-3.5" /></button>
+            <button onClick={() => { setLabelDraft(deck.label); setRoundDraft(deck.round_id ?? ''); setEditingLabel(false) }} className="p-1 text-slate-400 hover:bg-slate-100 rounded transition"><X className="w-3.5 h-3.5" /></button>
           </>
         ) : (
           <>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#eaf3e0', color: '#3d6b00' }}>{deck.label}</span>
-            <button onClick={() => setEditingLabel(true)} className="p-1 text-slate-300 hover:text-slate-600 transition" title="Rename"><Pencil className="w-3 h-3" /></button>
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#eaf3e0', color: '#3d6b00' }}>{displayLabel}</span>
+            {linkedRound && (
+              <span title="Linked to fundraising round" className="flex items-center">
+                <Link2 className="w-3 h-3 text-slate-300" />
+              </span>
+            )}
+            <button onClick={() => setEditingLabel(true)} className="p-1 text-slate-300 hover:text-slate-600 transition" title="Change round / label"><Pencil className="w-3 h-3" /></button>
           </>
         )}
       </div>
