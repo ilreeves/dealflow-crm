@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Plus, Trash2, Loader2, ChevronDown, ChevronRight, Pencil, Building2, ArrowRightCircle } from "lucide-react"
 import { PortfolioFundraiseRound, PortfolioPosition, SECURITY_TYPES } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
-import { parseNum, numToStr, termStr, fmtMoney, fmtPct, saveHint, monthYear, SECURITY_COLOR, valueColor, inputCls } from "@/lib/rounds"
+import { parseNum, numError, numToStr, termStr, fmtMoney, fmtPct, saveHint, monthYear, SECURITY_COLOR, valueColor, inputCls } from "@/lib/rounds"
 import Field from "@/components/shared/Field"
 
 type Staged = {
@@ -299,6 +299,20 @@ function RoundEditor({
 
   async function save() {
     if (!f.round_name.trim()) return
+
+    // Reject unreadable numbers up front — otherwise they'd persist as null and
+    // the value would appear to vanish after a successful save.
+    const numIssue = [
+      numError(roundSizeLabel, f.round_size),
+      numError("Pre-money", f.pre_money),
+      numError("Post-money", f.post_money),
+      numError("Option pool", f.option_pool),
+      numError("Price / share", f.price_per_share),
+      numError("Valuation cap", f.valuation_cap),
+      numError("Discount", f.discount),
+    ].find(Boolean)
+    if (numIssue) { setError(numIssue); return }
+
     setSaving(true)
     setError("")
 
@@ -334,8 +348,9 @@ function RoundEditor({
       status: isNote || isSafe ? f.status : null,
       terms,
       notes: f.notes || null,
-      // keep legacy free-text amount in sync for older views
-      amount: f.round_size ? fmtMoney(parseNum(f.round_size)) : (initial?.amount ?? null),
+      // keep legacy free-text amount in sync for older views (never write the
+      // "—" placeholder that fmtMoney returns for an unparseable value)
+      amount: parseNum(f.round_size) != null ? fmtMoney(parseNum(f.round_size)) : null,
     }
 
     let roundId = initial?.id

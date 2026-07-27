@@ -5,13 +5,8 @@ import { X, Loader2, Plus, ArrowRightCircle, Building2 } from "lucide-react"
 import { Deal, PortfolioCompany, SECURITY_TYPES } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
 import { logActivity } from "@/lib/activity"
-
-function parseNum(v: string): number | null {
-  const c = String(v ?? "").replace(/[$,%\s]/g, "")
-  if (c === "") return null
-  const n = Number(c)
-  return isNaN(n) ? null : n
-}
+// Shared parser so "$25M"-style shorthand works here too.
+import { parseNum, numError } from "@/lib/rounds"
 
 const inputCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
 
@@ -66,6 +61,21 @@ export default function InvestModal({ deal, actorName, onCancel, onDone }: Props
 
   async function confirm() {
     if (!f.fund) { setError("Choose which fund is investing."); return }
+
+    // Reject unreadable numbers before writing anything.
+    const numIssue = [
+      numError("Invested amount", f.invested_amount),
+      numError("Round size", f.round_size),
+      numError("Pre-money", f.pre_money),
+      numError("Post-money", f.post_money),
+      numError("Price / share", f.price_per_share),
+      numError("Shares", f.shares),
+      numError("Ownership %", f.ownership_pct),
+      numError("Valuation cap", f.valuation_cap),
+      numError("Discount", f.discount),
+    ].find(Boolean)
+    if (numIssue) { setError(numIssue); return }
+
     setSaving(true)
     setError("")
     // Track what we create so we can roll it back if a later step fails —

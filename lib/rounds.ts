@@ -5,8 +5,25 @@ export function parseNum(v: string | null | undefined): number | null {
   if (v == null) return null
   const cleaned = String(v).replace(/[$,%\s]/g, "")
   if (cleaned === "") return null
+  // Accept magnitude shorthand — "25M", "4.5m", "800k", "1.2B", "25MM". Amounts
+  // are *displayed* as "$4.5M", so typing that form back in is the natural thing
+  // to do; without this it parsed to NaN and silently saved as null.
+  const m = /^(-?(?:\d+\.?\d*|\.\d+))(mm|k|m|b)$/i.exec(cleaned)
+  if (m) {
+    const mult: Record<string, number> = { k: 1e3, m: 1e6, mm: 1e6, b: 1e9 }
+    return Number(m[1]) * mult[m[2].toLowerCase()]
+  }
   const n = Number(cleaned)
   return isNaN(n) ? null : n
+}
+
+/**
+ * Returns an error message when a field has text that isn't a readable number,
+ * so a typo can't silently persist as null. Empty input is fine (means "unset").
+ */
+export function numError(label: string, raw: string): string | null {
+  if (raw.trim() === "") return null
+  return parseNum(raw) === null ? `${label}: couldn't read "${raw.trim()}" as a number.` : null
 }
 
 export function numToStr(n: number | null | undefined): string {

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Plus, Trash2, Loader2, ChevronDown, ChevronRight, Pencil, ArrowRightCircle } from "lucide-react"
 import { DealFundraiseRound, SECURITY_TYPES } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
-import { parseNum, numToStr, termStr, fmtMoney, fmtPct, saveHint, monthYear, SECURITY_COLOR, inputCls } from "@/lib/rounds"
+import { parseNum, numError, numToStr, termStr, fmtMoney, fmtPct, saveHint, monthYear, SECURITY_COLOR, inputCls } from "@/lib/rounds"
 import Field from "@/components/shared/Field"
 
 // Fundraising rounds for a pipeline deal — the round they're raising now plus
@@ -213,6 +213,20 @@ function RoundEditor({
 
   async function save() {
     if (!f.round_name.trim()) return
+
+    // Reject unreadable numbers up front — otherwise they'd persist as null and
+    // the value would appear to vanish after a successful save.
+    const numIssue = [
+      numError(roundSizeLabel, f.round_size),
+      numError("Pre-money", f.pre_money),
+      numError("Post-money", f.post_money),
+      numError("Option pool", f.option_pool),
+      numError("Price / share", f.price_per_share),
+      numError("Valuation cap", f.valuation_cap),
+      numError("Discount", f.discount),
+    ].find(Boolean)
+    if (numIssue) { setError(numIssue); return }
+
     setSaving(true)
     setError("")
 
