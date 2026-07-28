@@ -224,10 +224,22 @@ export default async function AnalyticsPage() {
       company,
       total: r.total,
       delayed: r.delayed,
-      rate: r.delayed / r.total,
+      // Reliability = share of catalysts that held their original guidance, so
+      // higher is better and the table reads best-to-worst.
+      rate: (r.total - r.delayed) / r.total,
       avgSlip: r.slipDays.length ? r.slipDays.reduce((a, b) => a + b, 0) / r.slipDays.length : null,
     }))
     .sort((a, b) => b.rate - a.rate || b.total - a.total)
+
+  // Green when they hit guidance, through amber, to red when nothing held.
+  function reliabilityColor(rate: number): string {
+    if (rate >= 0.9) return '#5ba200'
+    if (rate >= 0.75) return '#8aad1f'
+    if (rate >= 0.5) return '#d9a406'
+    if (rate >= 0.25) return '#e98925'
+    if (rate > 0) return '#d9531e'
+    return '#dc2626'
+  }
 
   function formatDays(days: number): string {
     if (days < 1) return '<1 day'
@@ -451,7 +463,7 @@ export default async function AnalyticsPage() {
           <div>
             <p className="text-sm font-semibold text-slate-700 mb-1">Catalyst Reliability by Company</p>
             <p className="text-xs text-slate-400 mb-3">
-              How often each company's catalysts slip versus their original guidance. Slip magnitude is tracked from when each catalyst was first entered (timeline snapshots began June 11, 2026).
+              How reliably each company holds its original catalyst guidance — 100% means nothing has slipped. Slip magnitude is tracked from when each catalyst was first entered (timeline snapshots began June 11, 2026).
             </p>
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <table className="w-full text-sm">
@@ -460,7 +472,7 @@ export default async function AnalyticsPage() {
                     <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Company</th>
                     <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Catalysts</th>
                     <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Delayed</th>
-                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Rate</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Reliability</th>
                     <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Avg Slip</th>
                     <th className="px-4 py-2.5 w-28"></th>
                   </tr>
@@ -470,12 +482,13 @@ export default async function AnalyticsPage() {
                     <tr key={company} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
                       <td className="px-4 py-2.5 font-medium text-slate-700">{company}</td>
                       <td className="px-4 py-2.5 text-right text-slate-600">{t}</td>
-                      <td className="px-4 py-2.5 text-right text-orange-600 font-medium">{delayed}</td>
-                      <td className="px-4 py-2.5 text-right text-slate-600">{Math.round(rate * 100)}%</td>
+                      <td className={`px-4 py-2.5 text-right font-medium ${delayed === 0 ? 'text-slate-300' : 'text-orange-600'}`}>{delayed}</td>
+                      <td className="px-4 py-2.5 text-right font-medium" style={{ color: reliabilityColor(rate) }}>{Math.round(rate * 100)}%</td>
                       <td className="px-4 py-2.5 text-right text-slate-500 whitespace-nowrap">{avgSlip !== null ? formatDays(avgSlip) : '\u2014'}</td>
                       <td className="px-4 py-2.5">
                         <div className="w-full bg-slate-100 rounded-full h-1.5">
-                          <div className="bg-orange-400 h-1.5 rounded-full" style={{ width: `${rate * 100}%` }} />
+                          {/* floor the width so a 0% bar still shows a red nub rather than looking like missing data */}
+                          <div className="h-1.5 rounded-full" style={{ width: `${Math.max(rate * 100, 3)}%`, backgroundColor: reliabilityColor(rate) }} />
                         </div>
                       </td>
                     </tr>
