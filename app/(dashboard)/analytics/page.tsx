@@ -9,7 +9,7 @@ export default async function AnalyticsPage() {
     supabase.from('deals').select('id,name,stage,category,source,sector,clinical_stage,series,stage_entered_at,created_at'),
     supabase.from('deal_activity').select('deal_id,details,created_at').eq('action', 'Stage changed').order('created_at', { ascending: true }),
     supabase.from('catalysts').select('company_name,catalyst_date,original_date,status,resolved_date'),
-    supabase.from('portfolio_companies').select('name,sector,category,series,clinical_stage'),
+    supabase.from('portfolio_companies').select('name,sector,category,series,clinical_stage,status'),
     supabase.from('legacy_companies').select('company_name'),
     supabase.from('list_options').select('list_key,value,sort_order').order('sort_order'),
   ])
@@ -40,8 +40,14 @@ export default async function AnalyticsPage() {
 
   // Sector breakdowns: deals and portfolio as separate expandable tables
   const legacyNames = new Set(((legacyData as { company_name: string }[]) ?? []).map((l) => l.company_name))
-  const portfolioCompaniesAll = (portfolioData as { name: string; sector: string | null; category: string | null; series: string | null; clinical_stage: string | null }[]) ?? []
-  const portfolioCompanies = portfolioCompaniesAll.filter((pc) => !legacyNames.has(pc.name))
+  const portfolioCompaniesAll = (portfolioData as { name: string; sector: string | null; category: string | null; series: string | null; clinical_stage: string | null; status: string | null }[]) ?? []
+  // Legacy comes from two places: the legacy_companies list and a Legacy/Exited
+  // status on the company itself. Exclude both everywhere on this page.
+  const excludedNames = new Set(legacyNames)
+  for (const pc of portfolioCompaniesAll) {
+    if (pc.status === 'Legacy' || pc.status === 'Exited') excludedNames.add(pc.name)
+  }
+  const portfolioCompanies = portfolioCompaniesAll.filter((pc) => !excludedNames.has(pc.name))
 
   function sectorRows(items: { name: string; sector: string | null; sub: string }[]): BreakdownRow[] {
     const map: Record<string, { name: string; stage: string }[]> = {}
@@ -208,6 +214,9 @@ export default async function AnalyticsPage() {
   const catalysts = (catalystData as CatalystRow[]) ?? []
   const reliabilityMap: Record<string, { total: number; delayed: number; slipDays: number[] }> = {}
   for (const cat of catalysts) {
+    // Legacy / exited companies are out entirely — their historical slips aren't
+    // useful signal on current holdings.
+    if (excludedNames.has(cat.company_name)) continue
     if (!reliabilityMap[cat.company_name]) reliabilityMap[cat.company_name] = { total: 0, delayed: 0, slipDays: [] }
     const r = reliabilityMap[cat.company_name]
     r.total++
