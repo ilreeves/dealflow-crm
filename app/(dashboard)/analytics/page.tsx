@@ -470,10 +470,7 @@ export default async function AnalyticsPage() {
         {/* Catalyst reliability */}
         {reliability.length > 0 && (
           <div>
-            <p className="text-sm font-semibold text-slate-700 mb-1">Catalyst Reliability by Company</p>
-            <p className="text-xs text-slate-400 mb-3">
-              How reliably each company holds its original catalyst guidance — 100% means nothing has slipped. Slip magnitude is tracked from when each catalyst was first entered (timeline snapshots began June 11, 2026).
-            </p>
+            <p className="text-sm font-semibold text-slate-700 mb-3">Catalyst Reliability by Company</p>
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
