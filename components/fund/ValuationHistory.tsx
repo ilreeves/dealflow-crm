@@ -6,8 +6,13 @@ export type FundSeries = { fund: string; points: SnapshotPoint[] }
 function label(d: string): string {
   const dt = new Date(d + "T00:00:00")
   const m = dt.getMonth() + 1
-  // Semi-annual marks land on Jun 30 / Dec 31 — H1/H2 reads cleaner than the date
-  return `${m <= 6 ? "H1" : "H2"} ${dt.getFullYear()}`
+  const y = dt.getFullYear()
+  // Semi-annual marks land on Jun 30 / Dec 31 — H1/H2 reads cleaner than a date.
+  // Any off-cycle (quarterly) mark falls back to a quarter label so two points
+  // in the same half can't collide.
+  if (m === 6) return `H1 ${y}`
+  if (m === 12) return `H2 ${y}`
+  return `Q${Math.ceil(m / 3)} ${y}`
 }
 
 const GREEN = "#5ba200", ORANGE = "#e98925", NAVY = "#023a51"
@@ -45,13 +50,13 @@ export default function ValuationHistory({ series, scaleMax }: { series: FundSer
               })()}
             </div>
 
-            <div className="flex items-end gap-6">
+            <div className="flex items-end gap-6 overflow-x-auto pb-1">
               {points.map((p) => {
                 const tvpi = p.invested > 0 ? p.value / p.invested : null
                 const hInv = Math.max((p.invested / scaleMax) * 120, 2)
                 const hVal = Math.max((p.value / scaleMax) * 120, 2)
                 return (
-                  <div key={p.date} className="flex flex-col items-center gap-1.5">
+                  <div key={p.date} className="flex flex-col items-center gap-1.5 shrink-0">
                     <div className="flex items-end gap-1" style={{ height: 120 }}>
                       <div className="w-7 rounded-t" style={{ height: hInv, backgroundColor: "#cbd5e1" }} title={`Invested ${fmtMoney(p.invested)}`} />
                       <div className="w-7 rounded-t" style={{ height: hVal, backgroundColor: p.value >= p.invested ? GREEN : ORANGE }} title={`Value ${fmtMoney(p.value)}`} />
