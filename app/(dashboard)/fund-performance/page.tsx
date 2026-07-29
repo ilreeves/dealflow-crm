@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { PortfolioFundraiseRound, PortfolioPosition, PortfolioValuationMark } from "@/lib/types"
 import FundPerformanceView, { FundRow, TopPosition, RiskFlag, CompanyInFund } from "@/components/fund/FundPerformanceView"
+import ValuationHistory, { FundSeries } from "@/components/fund/ValuationHistory"
 
 export const dynamic = "force-dynamic"
 
@@ -8,12 +9,13 @@ type CompRow = { id: string; name: string }
 
 export default async function FundPerformancePage() {
   const supabase = await createClient()
-  const [{ data: companies }, { data: rounds }, { data: positions }, { data: funds }, { data: valMarks }] = await Promise.all([
+  const [{ data: companies }, { data: rounds }, { data: positions }, { data: funds }, { data: valMarks }, { data: snapshots }] = await Promise.all([
     supabase.from("portfolio_companies").select("id,name"),
     supabase.from("portfolio_fundraise_rounds").select("id,company_id,round_name,date,post_money,security_type,status,terms"),
     supabase.from("portfolio_positions").select("*"),
     supabase.from("list_options").select("value,sort_order").eq("list_key", "fund").order("sort_order"),
     supabase.from("portfolio_valuation_marks").select("company_id,as_of_date,valuation"),
+    supabase.from("fund_snapshots").select("as_of_date,fund,invested,value").order("as_of_date"),
   ])
 
   const comps = (companies as CompRow[]) ?? []
@@ -126,5 +128,39 @@ export default async function FundPerformancePage() {
 
   const asOf = now.toLocaleDateString("en-US", { month: "short", year: "numeric" })
 
-  return <FundPerformanceView totals={totals} funds={funds_} top={top} flags={flags} asOf={asOf} />
+  // ── semi-annual valuation history (from the audited fund valuation files) ──
+  type Snap = { as_of_date: string; fund: string; invested: number | null; value: number | null }
+  const snapRows = (snapshots as Snap[]) ?? []
+  const snapMap = new Map<string, Map<string, { invested: number; value: number }>>()
+  for (const s of snapRows) {
+    if (!snapMap.has(s.fund)) snapMap.set(s.fund, new Map())
+    const byDate = snapMap.get(s.fund)!
+    const e = byDate.get(s.as_of_date) ?? { invested: 0, value: 0 }
+    e.invested += Number(s.invested) || 0
+    e.value += Number(s.value) || 0
+    byDate.set(s.as_of_date, e)
+  }
+  const history: FundSeries[] = Array.from(snapMap.entries())
+    .map(([fund, byDate]) => ({
+      fund,
+      points: Array.from(byDate.entries())
+        .map(([date, v]) => ({ date, invested: v.invested, value: v.value }))
+        .sort((a, b) => a.date.localeCompare(b.date)),
+    }))
+    .sort((a, b) => orderIdx(a.fund) - orderIdx(b.fund) || a.fund.localeCompare(b.fund))
+  const scaleMax = Math.max(
+    1,
+    ...history.flatMap((s) => s.points.flatMap((p) => [p.invested, p.value])),
+  )
+
+  return (
+    <>
+      <FundPerformanceView totals={totals} funds={funds_} top={top} flags={flags} asOf={asOf} />
+      {history.length > 0 && (
+        <div className="px-4 md:px-6 pb-8 max-w-4xl">
+          <ValuationHistory series={history} scaleMax={scaleMax} />
+        </div>
+      )}
+    </>
+  )
 }
