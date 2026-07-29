@@ -63,7 +63,6 @@ export default function NotesExposure({ notes }: { notes: NotePosition[] }) {
                 <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Principal</th>
                 <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Accrued</th>
                 <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Value</th>
-                <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Status</th>
               </tr>
             </thead>
             {Array.from(byFund.entries()).map(([fund, rows]) => {
@@ -73,7 +72,7 @@ export default function NotesExposure({ notes }: { notes: NotePosition[] }) {
               return (
                 <tbody key={fund}>
                   <tr className="bg-slate-50 border-b border-slate-100">
-                    <td colSpan={showMaturity ? 8 : 7} className="px-4 py-1.5 text-xs font-semibold text-slate-500">
+                    <td colSpan={showMaturity ? 7 : 6} className="px-4 py-1.5 text-xs font-semibold text-slate-500">
                       {fund}
                       <span className="font-normal text-slate-400"> · {rows.length} note{rows.length === 1 ? "" : "s"}</span>
                     </td>
@@ -87,14 +86,6 @@ export default function NotesExposure({ notes }: { notes: NotePosition[] }) {
                       <td className="px-4 py-2.5 text-right text-slate-600 tabular-nums">{fmtMoney(n.principal)}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: n.accrued > 0 ? "#3b6d11" : undefined }}>{n.accrued > 0 ? fmtMoney(n.accrued) : "—"}</td>
                       <td className="px-4 py-2.5 text-right font-medium tabular-nums" style={{ color: NAVY }}>{fmtMoney(n.value)}</td>
-                      <td className="px-4 py-2.5 text-right">
-                        <span className="text-[11px] px-2 py-0.5 rounded-md whitespace-nowrap"
-                              style={n.status === "Converted"
-                                ? { backgroundColor: "#eaf3de", color: "#3b6d11" }
-                                : { backgroundColor: "#faece7", color: "#993c1d" }}>
-                          {n.status || "Unconverted"}
-                        </span>
-                      </td>
                     </tr>
                   ))}
                   <tr className="border-b border-slate-100">
@@ -102,7 +93,6 @@ export default function NotesExposure({ notes }: { notes: NotePosition[] }) {
                     <td className="px-4 py-2 text-right text-xs font-semibold text-slate-600 tabular-nums">{fmtMoney(fp)}</td>
                     <td className="px-4 py-2 text-right text-xs font-semibold tabular-nums" style={{ color: "#3b6d11" }}>{fmtMoney(fa)}</td>
                     <td className="px-4 py-2 text-right text-xs font-semibold tabular-nums" style={{ color: NAVY }}>{fmtMoney(fv)}</td>
-                    <td />
                   </tr>
                 </tbody>
               )
