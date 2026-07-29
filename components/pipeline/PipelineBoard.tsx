@@ -79,9 +79,9 @@ export default function PipelineBoard({ initialDeals }: Props) {
 
     const now = new Date().toISOString()
     setMoveError('')
-    setDeals((prev) => prev.map((d) => d.id === dealId ? { ...d, stage: newStage, stage_entered_at: now, ...(newStage === 'Passed' ? { pass_reason: passReason ?? null, passed_at: now } : {}) } : d))
+    setDeals((prev) => prev.map((d) => d.id === dealId ? { ...d, stage: newStage, stage_entered_at: now, ...(newStage === 'Passed' ? { pass_reason: passReason ?? null, passed_at: now } : { pass_reason: null, passed_at: null }) } : d))
 
-    const { error: updErr } = await supabase.from('deals').update({ stage: newStage, stage_entered_at: now, ...(newStage === 'Passed' ? { pass_reason: passReason ?? null, passed_at: now } : {}) }).eq('id', dealId)
+    const { error: updErr } = await supabase.from('deals').update({ stage: newStage, stage_entered_at: now, ...(newStage === 'Passed' ? { pass_reason: passReason ?? null, passed_at: now } : { pass_reason: null, passed_at: null }) }).eq('id', dealId)
     if (updErr) {
       // Roll back the optimistic move so the board matches the database.
       setDeals((prev) => prev.map((d) => d.id === dealId ? deal : d))

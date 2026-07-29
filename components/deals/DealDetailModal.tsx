@@ -65,7 +65,17 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
     setStageError('')
     const { data, error: updErr } = await supabase
       .from('deals')
-      .update({ stage: newStage, stage_entered_at: now })
+      .update({
+        stage: newStage,
+        stage_entered_at: now,
+        // Stamp the pass date/reason here too — previously only the board's
+        // drag path did, so passing from this dropdown left passed_at null.
+        // Moving back out clears them so a stale "Passed" banner can't linger
+        // (the reason is also kept permanently as a deal note).
+        ...(newStage === 'Passed'
+          ? { pass_reason: passReason ?? deal.pass_reason ?? null, passed_at: now }
+          : { pass_reason: null, passed_at: null }),
+      })
       .eq('id', deal.id)
       .select()
       .single()
