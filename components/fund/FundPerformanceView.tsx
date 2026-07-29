@@ -38,6 +38,45 @@ function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("")
 }
 
+// One expandable fund row. Shared by the commingled funds and, nested, by each
+// sidecar inside the SPV group.
+function FundLine({ fund: f, color, isOpen, onToggle, nested }: {
+  fund: FundRow; color: string; isOpen: boolean; onToggle: () => void; nested?: boolean
+}) {
+  return (
+    <div>
+      <button onClick={onToggle} className={`w-full flex items-center gap-3 py-3 text-left hover:bg-slate-50 transition ${nested ? "pl-10 pr-4" : "px-4"}`}>
+        <span className="text-slate-300">{isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</span>
+        <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: color }} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className={`font-medium text-slate-800 ${nested ? "text-[13px]" : "text-sm"}`}>{f.fund}</span>
+            <span className="text-xs text-slate-400">{f.companies.length} {f.companies.length === 1 ? "company" : "companies"}</span>
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="text-sm">
+            <span className="text-slate-400">{fmtMoney(f.invested)} → </span>
+            <span className="font-medium" style={{ color: valueColor(f.value, f.invested) }}>{fmtMoney(f.value)}</span>
+          </div>
+          <MoicPill moic={f.moic} />
+        </div>
+      </button>
+      {isOpen && (
+        <div className={`pb-3 space-y-1.5 ${nested ? "pl-[4.5rem] pr-4" : "px-4 pl-12"}`}>
+          {f.companies.map((c) => (
+            <div key={c.name} className="flex items-center gap-2 text-[13px] text-slate-600">
+              <span className="flex-1 min-w-0 truncate">{c.name} <span className="text-slate-400">· {fmtPct(c.ownership)}</span></span>
+              <span className="text-slate-400">{fmtMoney(c.invested)} → </span>
+              <span style={{ color: valueColor(c.value, c.invested) }}>{fmtMoney(c.value)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function FundPerformanceView({
   totals, funds, top, flags, asOf,
 }: {
@@ -48,6 +87,20 @@ export default function FundPerformanceView({
   asOf: string
 }) {
   const [open, setOpen] = useState<string | null>(null)
+  const [openSidecar, setOpenSidecar] = useState<string | null>(null)
+
+  // The commingled funds are a fixed set; anything else is a sidecar/SPV and is
+  // rolled into one collapsible group so a dozen single-company vehicles don't
+  // swamp the list. Add a new commingled fund here if one is ever raised.
+  const CORE = new Set(["Fund I", "Fund II", "EHF", "Solas/Sower", "SPV"])
+  const coreFunds = funds.filter((f) => CORE.has(f.fund))
+  const sidecars = funds.filter((f) => !CORE.has(f.fund))
+  const spvTotals = sidecars.reduce(
+    (a, f) => ({ invested: a.invested + f.invested, value: a.value + f.value }),
+    { invested: 0, value: 0 },
+  )
+  const spvMoic = spvTotals.invested > 0 && spvTotals.value > 0 ? spvTotals.value / spvTotals.invested : null
+  const spvCompanies = new Set(sidecars.flatMap((f) => f.companies.map((c) => c.name))).size
   const empty = totals.invested === 0 && funds.length === 0
 
   return (
@@ -81,42 +134,58 @@ export default function FundPerformanceView({
               <h2 className="text-base font-bold text-slate-900">By fund</h2>
               <div className="h-0.5 w-12 mt-1 rounded-full mb-4" style={{ backgroundColor: "#5ba200" }} />
               <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
-                {funds.map((f, i) => {
-                  const color = FUND_COLORS[i % FUND_COLORS.length]
-                  const isOpen = open === f.fund
+                {coreFunds.map((f, i) => (
+                  <FundLine
+                    key={f.fund}
+                    fund={f}
+                    color={FUND_COLORS[i % FUND_COLORS.length]}
+                    isOpen={open === f.fund}
+                    onToggle={() => setOpen(open === f.fund ? null : f.fund)}
+                  />
+                ))}
+
+                {/* Sidecars/SPVs rolled into one group — each is a single-company
+                    vehicle, so listing them flat buried the commingled funds. */}
+                {sidecars.length > 0 && (() => {
+                  const isOpen = open === "__spvs__"
                   return (
-                    <div key={f.fund}>
-                      <button onClick={() => setOpen(isOpen ? null : f.fund)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition">
+                    <div>
+                      <button onClick={() => setOpen(isOpen ? null : "__spvs__")} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition">
                         <span className="text-slate-300">{isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</span>
-                        <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: color }} />
+                        <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: "#94a3b8" }} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-slate-800">{f.fund}</span>
-                            <span className="text-xs text-slate-400">{f.companies.length} {f.companies.length === 1 ? "company" : "companies"}</span>
+                            <span className="text-sm font-medium text-slate-800">SPVs &amp; Sidecars</span>
+                            <span className="text-xs text-slate-400">
+                              {sidecars.length} vehicles · {spvCompanies} {spvCompanies === 1 ? "company" : "companies"}
+                            </span>
                           </div>
                         </div>
                         <div className="text-right shrink-0">
                           <div className="text-sm">
-                            <span className="text-slate-400">{fmtMoney(f.invested)} → </span>
-                            <span className="font-medium" style={{ color: valueColor(f.value, f.invested) }}>{fmtMoney(f.value)}</span>
+                            <span className="text-slate-400">{fmtMoney(spvTotals.invested)} → </span>
+                            <span className="font-medium" style={{ color: valueColor(spvTotals.value, spvTotals.invested) }}>{fmtMoney(spvTotals.value)}</span>
                           </div>
-                          <MoicPill moic={f.moic} />
+                          <MoicPill moic={spvMoic} />
                         </div>
                       </button>
                       {isOpen && (
-                        <div className="px-4 pb-3 pl-12 space-y-1.5">
-                          {f.companies.map((c) => (
-                            <div key={c.name} className="flex items-center gap-2 text-[13px] text-slate-600">
-                              <span className="flex-1 min-w-0 truncate">{c.name} <span className="text-slate-400">· {fmtPct(c.ownership)}</span></span>
-                              <span className="text-slate-400">{fmtMoney(c.invested)} → </span>
-                              <span style={{ color: valueColor(c.value, c.invested) }}>{fmtMoney(c.value)}</span>
-                            </div>
+                        <div className="bg-slate-50/60 border-t border-slate-100 divide-y divide-slate-100">
+                          {sidecars.map((f, i) => (
+                            <FundLine
+                              key={f.fund}
+                              fund={f}
+                              color={FUND_COLORS[(i + coreFunds.length) % FUND_COLORS.length]}
+                              isOpen={openSidecar === f.fund}
+                              onToggle={() => setOpenSidecar(openSidecar === f.fund ? null : f.fund)}
+                              nested
+                            />
                           ))}
                         </div>
                       )}
                     </div>
                   )
-                })}
+                })()}
               </div>
             </div>
 
