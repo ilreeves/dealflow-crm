@@ -235,6 +235,12 @@ export interface PortfolioPosition {
   fair_value: number | null
   fair_value_date: string | null
   fair_value_source: string | null
+  /**
+   * Set when this row is a fund's LP interest in a sidecar we also track at
+   * vehicle level (names that sidecar). Such rows stay visible on their fund but
+   * are excluded from portfolio-wide totals so AUM isn't double counted.
+   */
+  lookthrough_of: string | null
   notes: string | null
   created_at: string
 }

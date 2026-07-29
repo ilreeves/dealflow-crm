@@ -81,8 +81,15 @@ export default async function FundPerformancePage() {
     .sort((a, b) => orderIdx(a.fund) - orderIdx(b.fund) || b.invested - a.invested)
 
   // ── per company (for totals + top positions) ──
+  // Look-through rows are a fund's LP interest in a sidecar we also track at
+  // vehicle level — the same economics twice. They stay on their fund's row, but
+  // are excluded here so portfolio-wide AUM isn't double counted.
+  const lookthrough = ps.filter((p) => p.lookthrough_of)
+  const ownPs = ps.filter((p) => !p.lookthrough_of)
+  const lookthroughCost = lookthrough.reduce((s, p) => s + (Number(p.invested_amount) || 0), 0)
+
   const compMap = new Map<string, { name: string; fund: string; fundInvested: Record<string, number>; invested: number; value: number; ownership: number }>()
-  for (const p of ps) {
+  for (const p of ownPs) {
     const cname = nameById[p.company_id] ?? "Unknown"
     const e = compMap.get(cname) ?? { name: cname, fund: "", fundInvested: {}, invested: 0, value: 0, ownership: 0 }
     const inv = Number(p.invested_amount) || 0
@@ -185,7 +192,7 @@ export default async function FundPerformancePage() {
 
   return (
     <>
-      <FundPerformanceView totals={totals} funds={funds_} top={top} flags={flags} asOf={asOf} spvFunds={spvFunds} />
+      <FundPerformanceView totals={totals} funds={funds_} top={top} flags={flags} asOf={asOf} spvFunds={spvFunds} lookthroughCost={lookthroughCost} />
       <div className="px-4 md:px-6 pb-8 max-w-4xl space-y-8">
         {notes.length > 0 && <NotesExposure notes={notes} />}
         {history.length > 0 && <ValuationHistory series={history} scaleMax={scaleMax} spvFunds={spvFunds} />}

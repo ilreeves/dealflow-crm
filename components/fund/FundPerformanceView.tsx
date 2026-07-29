@@ -78,7 +78,7 @@ function FundLine({ fund: f, color, isOpen, onToggle, nested }: {
 }
 
 export default function FundPerformanceView({
-  totals, funds, top, flags, asOf, spvFunds,
+  totals, funds, top, flags, asOf, spvFunds, lookthroughCost,
 }: {
   totals: Totals
   funds: FundRow[]
@@ -87,6 +87,8 @@ export default function FundPerformanceView({
   asOf: string
   /** Vehicles to roll up under "SPVs & Sidecars" — from Settings, not hardcoded. */
   spvFunds: string[]
+  /** Cost sitting in fund LP interests that's excluded from the headline totals. */
+  lookthroughCost: number
 }) {
   const [open, setOpen] = useState<string | null>(null)
   const [openSidecar, setOpenSidecar] = useState<string | null>(null)
@@ -189,6 +191,12 @@ export default function FundPerformanceView({
                   )
                 })()}
               </div>
+              {lookthroughCost > 0 && (
+                <p className="text-xs text-slate-400 mt-2">
+                  Fund rows include {fmtMoney(lookthroughCost)} invested via sidecars we also track directly, so they sum
+                  to more than the totals above — that capital is counted once, at the vehicle.
+                </p>
+              )}
             </div>
 
             {/* Top positions */}
