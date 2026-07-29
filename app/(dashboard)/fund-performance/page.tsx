@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { PortfolioFundraiseRound, PortfolioPosition, PortfolioValuationMark } from "@/lib/types"
 import FundPerformanceView, { FundRow, TopPosition, RiskFlag, CompanyInFund } from "@/components/fund/FundPerformanceView"
 import ValuationHistory, { FundSeries } from "@/components/fund/ValuationHistory"
+import NotesExposure, { NotePosition } from "@/components/fund/NotesExposure"
 
 export const dynamic = "force-dynamic"
 
@@ -153,14 +154,38 @@ export default async function FundPerformancePage() {
     ...history.flatMap((s) => s.points.flatMap((p) => [p.invested, p.value])),
   )
 
+  // ── convertible-note exposure across the funds ────────────────────────────
+  const roundById = new Map(rs.map((r) => [r.id, r]))
+  const notes: NotePosition[] = ps
+    .map((p) => ({ p, r: roundById.get(p.round_id ?? "") }))
+    .filter(({ r }) => r?.security_type === "Convertible note")
+    .map(({ p, r }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const terms = (r!.terms as any) ?? {}
+      const principal = Number(p.invested_amount) || 0
+      const accrued = Number(p.accrued_interest) || 0
+      return {
+        company: nameById[p.company_id] ?? "Unknown",
+        fund: p.fund || "Unassigned",
+        note: r!.round_name,
+        rate: terms.interest_rate != null ? Number(terms.interest_rate) : null,
+        maturity: terms.maturity_date ? String(terms.maturity_date) : null,
+        principal,
+        accrued,
+        // fall back to principal + accrued when no explicit mark is set
+        value: p.fair_value != null ? Number(p.fair_value) : principal + accrued,
+        status: r!.status ?? null,
+      }
+    })
+    .sort((a, b) => orderIdx(a.fund) - orderIdx(b.fund) || a.company.localeCompare(b.company) || a.note.localeCompare(b.note))
+
   return (
     <>
       <FundPerformanceView totals={totals} funds={funds_} top={top} flags={flags} asOf={asOf} />
-      {history.length > 0 && (
-        <div className="px-4 md:px-6 pb-8 max-w-4xl">
-          <ValuationHistory series={history} scaleMax={scaleMax} />
-        </div>
-      )}
+      <div className="px-4 md:px-6 pb-8 max-w-4xl space-y-8">
+        {notes.length > 0 && <NotesExposure notes={notes} />}
+        {history.length > 0 && <ValuationHistory series={history} scaleMax={scaleMax} />}
+      </div>
     </>
   )
 }
