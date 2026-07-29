@@ -138,22 +138,7 @@ export default function FundraisingTab({ companyId }: { companyId: string }) {
                   <div className="px-4 pb-4 pt-1 border-t border-slate-100 space-y-3">
                     <RoundDetails round={r} />
                     {rpos.length > 0 ? (
-                      <div className="space-y-1.5">
-                        <p className="text-[11px] text-slate-400">Solas positions</p>
-                        {rpos.map((p) => (
-                          <div key={p.id} className="flex items-center gap-2.5 text-sm px-3 py-2 border border-slate-100 rounded-lg bg-slate-50">
-                            <Building2 className="w-3.5 h-3.5 shrink-0" style={{ color: "#023a51" }} />
-                            <span className="flex-1 min-w-0 truncate">
-                              <span className="text-slate-800">{p.fund || "—"}</span>
-                              {" · "}{fmtMoney(p.invested_amount)}
-                              {p.shares != null && ` · ${Number(p.shares).toLocaleString()} sh`}
-                              {p.ownership_pct != null && <span style={{ color: "#3b6d11" }}> · {fmtPct(p.ownership_pct)}</span>}
-                              {p.accrued_interest != null && Number(p.accrued_interest) > 0 && <span className="text-slate-400"> · accrued {fmtMoney(p.accrued_interest)}</span>}
-                              {p.fair_value != null && <span style={{ color: valueColor(p.fair_value, p.invested_amount) }}> · FV {fmtMoney(p.fair_value)}{p.fair_value_source ? ` (${p.fair_value_source})` : ""}</span>}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
+                      <PositionList positions={rpos} isNote={isConvertible} />
                     ) : (
                       <p className="text-xs text-slate-400">No Solas positions in this round.</p>
                     )}
@@ -195,6 +180,56 @@ export default function FundraisingTab({ companyId }: { companyId: string }) {
             )
           })}
         </div>
+      )}
+    </div>
+  )
+}
+
+// Positions render differently by instrument: equity cares about shares and
+// per-share marks, notes about principal + accrued interest. Showing one generic
+// row left half the columns as "—" for whichever type it wasn't.
+function PositionList({ positions, isNote }: { positions: PortfolioPosition[]; isNote: boolean }) {
+  const cols = isNote
+    ? ["Fund", "Principal", "Accrued", "Value"]
+    : ["Fund", "Cost", "Shares", "Own %", "Value"]
+  return (
+    <div className="space-y-1">
+      <p className="text-[11px] text-slate-400">Solas positions</p>
+      <div className="border border-slate-100 rounded-lg overflow-hidden">
+        <div className={`grid ${isNote ? "grid-cols-4" : "grid-cols-5"} gap-2 px-3 py-1.5 bg-slate-50 text-[10px] font-semibold text-slate-400 uppercase tracking-wide`}>
+          {cols.map((c, i) => <span key={c} className={i === 0 ? "" : "text-right"}>{c}</span>)}
+        </div>
+        {positions.map((p) => (
+          <div key={p.id} className={`grid ${isNote ? "grid-cols-4" : "grid-cols-5"} gap-2 px-3 py-2 text-sm border-t border-slate-50 items-center`}>
+            <span className="flex items-center gap-1.5 min-w-0">
+              <Building2 className="w-3.5 h-3.5 shrink-0" style={{ color: "#023a51" }} />
+              <span className="truncate text-slate-800">{p.fund || "—"}</span>
+            </span>
+            <span className="text-right text-slate-600">{fmtMoney(p.invested_amount)}</span>
+            {isNote ? (
+              <span className="text-right text-slate-500">
+                {p.accrued_interest != null && Number(p.accrued_interest) > 0 ? fmtMoney(p.accrued_interest) : "—"}
+              </span>
+            ) : (
+              <>
+                <span className="text-right text-slate-500">{p.shares != null ? Number(p.shares).toLocaleString() : "—"}</span>
+                <span className="text-right" style={{ color: p.ownership_pct != null ? "#3b6d11" : undefined }}>
+                  {p.ownership_pct != null ? fmtPct(p.ownership_pct) : "—"}
+                </span>
+              </>
+            )}
+            <span className="text-right font-medium" style={{ color: valueColor(p.fair_value, p.invested_amount) }} title={p.fair_value_source ?? undefined}>
+              {fmtMoney(p.fair_value)}
+            </span>
+          </div>
+        ))}
+      </div>
+      {positions.some((p) => p.fair_value_date) && (
+        <p className="text-[10px] text-slate-300">
+          Marked {monthYear(positions.find((p) => p.fair_value_date)?.fair_value_date ?? null)}
+          {positions.find((p) => p.fair_value_source)?.fair_value_source
+            ? ` · ${positions.find((p) => p.fair_value_source)?.fair_value_source}` : ""}
+        </p>
       )}
     </div>
   )
