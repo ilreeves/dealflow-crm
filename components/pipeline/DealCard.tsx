@@ -2,6 +2,7 @@
 
 import { useState, memo } from 'react'
 import { Deal, STAGE_COLORS } from '@/lib/types'
+import { formatDate } from '@/lib/utils'
 import { Building2, User, DollarSign, FlaskConical } from 'lucide-react'
 import DealDetailModal from '@/components/deals/DealDetailModal'
 
@@ -25,6 +26,13 @@ function getAgingText(stageEnteredAt: string | null): string | null {
 function DealCard({ deal, onUpdated, onDeleted, compact }: Props) {
   const [showDetail, setShowDetail] = useState(false)
   const aging = getAgingText(deal.stage_entered_at)
+  // For passed deals, *when* we passed is more useful than how long ago — show a
+  // compact date. Falls back to aging for rows passed before passed_at existed.
+  const passedOn = deal.stage === 'Passed' && deal.passed_at
+    ? new Date(deal.passed_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })
+    : null
+  const metric = passedOn ?? aging
+  const metricTitle = passedOn ? `Passed ${formatDate(deal.passed_at!)}` : undefined
 
   return (
     <>
@@ -36,7 +44,7 @@ function DealCard({ deal, onUpdated, onDeleted, compact }: Props) {
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-medium text-slate-800 truncate">{deal.name}</span>
             <div className="flex items-center gap-1.5 shrink-0">
-              {aging && <span className="text-xs text-slate-300">{aging}</span>}
+              {metric && <span className="text-xs text-slate-300 whitespace-nowrap" title={metricTitle}>{metric}</span>}
               {deal.category && (
                 <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${
                   deal.category === 'Devices' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
@@ -58,7 +66,7 @@ function DealCard({ deal, onUpdated, onDeleted, compact }: Props) {
           <div className="flex items-start justify-between gap-2 mb-2">
             <h3 className="text-sm font-semibold text-slate-900 leading-tight flex-1">{deal.name}</h3>
             <div className="flex items-center gap-1.5 shrink-0">
-              {aging && <span className="text-xs text-slate-300">{aging}</span>}
+              {metric && <span className="text-xs text-slate-300 whitespace-nowrap" title={metricTitle}>{metric}</span>}
               {deal.category && (
                 <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${
                   deal.category === 'Devices' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
