@@ -262,7 +262,8 @@ export default function SettingsPage() {
 
       <ListManager listKey="series" title="Series Options" description="Funding stages available on the deal and portfolio forms" />
       <ListManager listKey="clinical_stage" title="Clinical Stage Options" description="Clinical / regulatory stages available on the forms" />
-      <ListManager listKey="fund" title="Fund / Vehicle Options" description="Funds and vehicles for grouping portfolio companies" />
+      <ListManager listKey="fund" title="Fund / Vehicle Options" description="Funds and vehicles for grouping portfolio companies. Add a new fund here and it appears top-level on Fund Performance." />
+      <ListManager listKey="spv_fund" title="SPV / Sidecar Vehicles" description="Which of the above are single-deal vehicles. These roll up under “SPVs & Sidecars” on Fund Performance; anything not listed here shows as its own fund." />
       <InvestorDirectory />
       <DataExport />
 

@@ -78,23 +78,25 @@ function FundLine({ fund: f, color, isOpen, onToggle, nested }: {
 }
 
 export default function FundPerformanceView({
-  totals, funds, top, flags, asOf,
+  totals, funds, top, flags, asOf, spvFunds,
 }: {
   totals: Totals
   funds: FundRow[]
   top: TopPosition[]
   flags: RiskFlag[]
   asOf: string
+  /** Vehicles to roll up under "SPVs & Sidecars" — from Settings, not hardcoded. */
+  spvFunds: string[]
 }) {
   const [open, setOpen] = useState<string | null>(null)
   const [openSidecar, setOpenSidecar] = useState<string | null>(null)
 
-  // The commingled funds are a fixed set; anything else is a sidecar/SPV and is
-  // rolled into one collapsible group so a dozen single-company vehicles don't
-  // swamp the list. Add a new commingled fund here if one is ever raised.
-  const CORE = new Set(["Fund I", "Fund II", "EHF", "Solas/Sower", "SPV"])
-  const coreFunds = funds.filter((f) => CORE.has(f.fund))
-  const sidecars = funds.filter((f) => !CORE.has(f.fund))
+  // Only the vehicles explicitly listed in Settings are grouped; everything else
+  // is treated as a commingled fund and shown top-level. That way raising a new
+  // fund needs no code change — it just appears alongside Fund II and EHF.
+  const isSpv = new Set(spvFunds)
+  const coreFunds = funds.filter((f) => !isSpv.has(f.fund))
+  const sidecars = funds.filter((f) => isSpv.has(f.fund))
   const spvTotals = sidecars.reduce(
     (a, f) => ({ invested: a.invested + f.invested, value: a.value + f.value }),
     { invested: 0, value: 0 },

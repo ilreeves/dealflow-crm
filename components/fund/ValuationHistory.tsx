@@ -23,16 +23,21 @@ const GREEN = "#5ba200", ORANGE = "#e98925", NAVY = "#023a51"
 
 // Cost vs value at each semi-annual mark, per fund. Bars are scaled against the
 // largest figure across every fund so the two charts stay visually comparable.
-export default function ValuationHistory({ series, scaleMax }: { series: FundSeries[]; scaleMax: number }) {
+export default function ValuationHistory({ series, scaleMax, spvFunds }: {
+  series: FundSeries[]
+  scaleMax: number
+  /** Vehicles to roll up — from Settings, so a new fund needs no code change. */
+  spvFunds: string[]
+}) {
   const [showSidecars, setShowSidecars] = useState(false)
   if (!series.length) return null
 
   // Sidecars are single-company vehicles with only one mark so far — charting each
   // separately is mostly noise, so they're combined into one series and the
   // individual vehicles sit behind a toggle.
-  const CORE = new Set(["Fund I", "Fund II", "EHF", "Solas/Sower", "SPV"])
-  const core = series.filter((s) => CORE.has(s.fund))
-  const sidecars = series.filter((s) => !CORE.has(s.fund))
+  const isSpv = new Set(spvFunds)
+  const core = series.filter((s) => !isSpv.has(s.fund))
+  const sidecars = series.filter((s) => isSpv.has(s.fund))
 
   const byDate = new Map<string, { invested: number; value: number }>()
   for (const s of sidecars) {

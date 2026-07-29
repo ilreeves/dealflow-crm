@@ -14,7 +14,7 @@ export default async function FundPerformancePage() {
     supabase.from("portfolio_companies").select("id,name"),
     supabase.from("portfolio_fundraise_rounds").select("id,company_id,round_name,date,post_money,security_type,status,terms"),
     supabase.from("portfolio_positions").select("*"),
-    supabase.from("list_options").select("value,sort_order").eq("list_key", "fund").order("sort_order"),
+    supabase.from("list_options").select("value,sort_order,list_key").in("list_key", ["fund", "spv_fund"]).order("sort_order"),
     supabase.from("portfolio_valuation_marks").select("company_id,as_of_date,valuation"),
     supabase.from("fund_snapshots").select("as_of_date,fund,invested,value").order("as_of_date"),
   ])
@@ -22,7 +22,11 @@ export default async function FundPerformancePage() {
   const comps = (companies as CompRow[]) ?? []
   const rs = (rounds as PortfolioFundraiseRound[]) ?? []
   const ps = (positions as PortfolioPosition[]) ?? []
-  const fundOrder = ((funds as { value: string }[]) ?? []).map((f) => f.value)
+  const fundRows = (funds as { value: string; list_key: string }[]) ?? []
+  const fundOrder = fundRows.filter((f) => f.list_key === "fund").map((f) => f.value)
+  // Vehicles to roll up under "SPVs & Sidecars". Managed in Settings → SPV /
+  // Sidecar Vehicles, so a new commingled fund needs no code change.
+  const spvFunds = fundRows.filter((f) => f.list_key === "spv_fund").map((f) => f.value)
 
   const nameById: Record<string, string> = {}
   for (const c of comps) nameById[c.id] = c.name
@@ -181,10 +185,10 @@ export default async function FundPerformancePage() {
 
   return (
     <>
-      <FundPerformanceView totals={totals} funds={funds_} top={top} flags={flags} asOf={asOf} />
+      <FundPerformanceView totals={totals} funds={funds_} top={top} flags={flags} asOf={asOf} spvFunds={spvFunds} />
       <div className="px-4 md:px-6 pb-8 max-w-4xl space-y-8">
         {notes.length > 0 && <NotesExposure notes={notes} />}
-        {history.length > 0 && <ValuationHistory series={history} scaleMax={scaleMax} />}
+        {history.length > 0 && <ValuationHistory series={history} scaleMax={scaleMax} spvFunds={spvFunds} />}
       </div>
     </>
   )
