@@ -99,7 +99,10 @@ export default function FundraisingTab({ companyId }: { companyId: string }) {
         <div className="space-y-2.5">
           {rounds.map((r) => {
             const rpos = positionsForRound(r.id)
-            const solasInvested = rpos.reduce((s, p) => s + (Number(p.invested_amount) || 0), 0)
+            // Look-through rows are excluded: a fund's interest in a vehicle whose
+            // own position sits in this same round, so adding both would count the
+            // capital twice. The row is still listed below, marked "via <vehicle>".
+            const solasInvested = rpos.reduce((s, p) => s + (p.lookthrough_of ? 0 : Number(p.invested_amount) || 0), 0)
             const isEditing = editingId === r.id
             const isOpen = expanded === r.id || isEditing
             const color = SECURITY_COLOR[r.security_type ?? ""] ?? "#94a3b8"
@@ -204,8 +207,16 @@ function PositionList({ positions, isNote }: { positions: PortfolioPosition[]; i
             <span className="flex items-center gap-1.5 min-w-0">
               <Building2 className="w-3.5 h-3.5 shrink-0" style={{ color: "#023a51" }} />
               <span className="truncate text-slate-800">{p.fund || "—"}</span>
+              {p.lookthrough_of && (
+                <span
+                  className="shrink-0 text-[9px] font-medium text-slate-400 border border-slate-200 rounded px-1 py-px"
+                  title={`Interest in ${p.lookthrough_of} — counted once at the vehicle, so it is not added to this round's total`}
+                >
+                  via {p.lookthrough_of}
+                </span>
+              )}
             </span>
-            <span className="text-right text-slate-600">{fmtMoney(p.invested_amount)}</span>
+            <span className={`text-right ${p.lookthrough_of ? "text-slate-300" : "text-slate-600"}`}>{fmtMoney(p.invested_amount)}</span>
             {isNote ? (
               <span className="text-right text-slate-500">
                 {p.accrued_interest != null && Number(p.accrued_interest) > 0 ? fmtMoney(p.accrued_interest) : "—"}
@@ -218,7 +229,11 @@ function PositionList({ positions, isNote }: { positions: PortfolioPosition[]; i
                 </span>
               </>
             )}
-            <span className="text-right font-medium" style={{ color: valueColor(p.fair_value, p.invested_amount) }} title={p.fair_value_source ?? undefined}>
+            <span
+              className="text-right font-medium"
+              style={{ color: p.lookthrough_of ? "#cbd5e1" : valueColor(p.fair_value, p.invested_amount) }}
+              title={p.fair_value_source ?? undefined}
+            >
               {fmtMoney(p.fair_value)}
             </span>
           </div>

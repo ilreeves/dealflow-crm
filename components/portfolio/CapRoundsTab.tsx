@@ -37,8 +37,17 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
     setLoading(false)
   }
 
-  const totalInvested = positions.reduce((s, p) => s + (Number(p.invested_amount) || 0), 0)
-  const ownership = positions.reduce((s, p) => s + (Number(p.ownership_pct) || 0), 0)
+  // A look-through row is a fund's interest in a vehicle whose position we also
+  // hold at vehicle level — the same economics twice. Excluded from the company
+  // totals below, exactly as fund-performance excludes them portfolio-wide, so a
+  // position isn't counted once at the fund and again at the vehicle. Basking is
+  // the example: EHF's $3.5M is capital *into* Basking Holdings, whose own
+  // $9.01M position is the real exposure.
+  const ownPositions = positions.filter((p) => !p.lookthrough_of)
+  const lookthroughPositions = positions.filter((p) => p.lookthrough_of)
+  const lookthroughInvested = lookthroughPositions.reduce((s, p) => s + (Number(p.invested_amount) || 0), 0)
+  const totalInvested = ownPositions.reduce((s, p) => s + (Number(p.invested_amount) || 0), 0)
+  const ownership = ownPositions.reduce((s, p) => s + (Number(p.ownership_pct) || 0), 0)
   // effective current valuation = most recent by date among round post-moneys and manual marks
   const valuation = (() => {
     const candidates: { value: number; date: string; source: string }[] = []
@@ -49,10 +58,10 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
   })()
   // per-position value = the most recent of (its own fair-value mark) and (ownership × latest company valuation)
   const currentValue = (() => {
-    if (!positions.length) return null
+    if (!ownPositions.length) return null
     let total = 0
     let any = false
-    for (const p of positions) {
+    for (const p of ownPositions) {
       const cands: { v: number; d: string }[] = []
       if (p.fair_value != null) cands.push({ v: Number(p.fair_value), d: p.fair_value_date || "" })
       if (valuation != null && p.ownership_pct != null) cands.push({ v: (Number(p.ownership_pct) / 100) * valuation.value, d: valuation.date || "" })
@@ -89,6 +98,13 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
           ? "Add a round post-money (Fundraising tab), a valuation mark, or a position fair value to compute current value."
           : "Value uses the most recent mark per position — a position fair value, or ownership × company valuation, whichever is newer. Unrealized."}
       </p>
+      {lookthroughInvested > 0 && (
+        <p className="text-xs text-slate-400 -mt-2.5 px-0.5">
+          Excludes {fmtMoney(lookthroughInvested)} invested via{" "}
+          {Array.from(new Set(lookthroughPositions.map((p) => p.lookthrough_of))).join(", ")} — that capital is
+          counted once, at the vehicle, so it isn&apos;t added on top of the vehicle&apos;s own position.
+        </p>
+      )}
 
       {/* Valuation marks */}
       <div className="border border-slate-200 rounded-xl bg-white">
