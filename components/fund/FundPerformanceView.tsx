@@ -121,7 +121,7 @@ export default function FundPerformanceView({
             <p className="text-xs text-slate-400 mt-1">Add rounds and Solas positions on a portfolio company&apos;s Ownership tab, and they&apos;ll roll up here.</p>
           </div>
         ) : (
-          <div className="max-w-4xl space-y-8">
+          <div className="max-w-6xl space-y-8">
             {/* Headline */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard label="Total invested" value={fmtMoney(totals.invested)} />

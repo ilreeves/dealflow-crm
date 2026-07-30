@@ -208,7 +208,10 @@ export default async function FundPerformancePage() {
   return (
     <>
       <FundPerformanceView totals={totals} funds={funds_} top={top} flags={flags} asOf={asOf} spvFunds={spvFunds} lookthroughCost={lookthroughCost} />
-      <div className="px-4 md:px-6 pb-8 max-w-4xl space-y-8">
+      {/* max-w-6xl, matching FundPerformanceView above: the notes table is 7
+          nowrap columns (~846px) and at max-w-4xl had only ~2px of headroom, so
+          it scrolled horizontally. Keep this in step with that component. */}
+      <div className="px-4 md:px-6 pb-8 max-w-6xl space-y-8">
         {notes.length > 0 && <NotesExposure notes={notes} />}
         {history.length > 0 && <ValuationHistory series={history} scaleMax={scaleMax} spvFunds={spvFunds} />}
       </div>
