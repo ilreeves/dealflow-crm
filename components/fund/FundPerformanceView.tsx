@@ -92,6 +92,9 @@ export default function FundPerformanceView({
 }) {
   const [open, setOpen] = useState<string | null>(null)
   const [openSidecar, setOpenSidecar] = useState<string | null>(null)
+  // Risk flags start collapsed. Rendering them expanded meant the section changed
+  // height as the page scrolled, which read as the flags "compressing".
+  const [flagsOpen, setFlagsOpen] = useState(false)
 
   // Only the vehicles explicitly listed in Settings are grouped; everything else
   // is treated as a commingled fund and shown top-level. That way raising a new
@@ -218,21 +221,39 @@ export default function FundPerformanceView({
               </div>
             )}
 
-            {/* Risk flags */}
-            {flags.length > 0 && (
-              <div>
-                <h2 className="text-base font-bold text-slate-900">Risk flags</h2>
-                <div className="h-0.5 w-12 mt-1 rounded-full mb-4" style={{ backgroundColor: "#e98925" }} />
-                <div className="space-y-2">
-                  {flags.map((fl, i) => (
-                    <div key={i} className="flex items-start gap-2.5 text-sm px-3.5 py-2.5 rounded-lg" style={{ backgroundColor: "#faece7", color: "#712b13" }}>
-                      {fl.kind === "overdue" ? <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" /> : <Clock className="w-4 h-4 mt-0.5 shrink-0" />}
-                      <span><span className="font-medium">{fl.company}</span> — {fl.text}</span>
+            {/* Risk flags — collapsed by default, same bar as the catalyst reminders. */}
+            {flags.length > 0 && (() => {
+              const overdue = flags.filter((fl) => fl.kind === "overdue").length
+              const maturing = flags.length - overdue
+              return (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
+                  <div className="w-full flex items-center gap-2 px-4 py-2.5">
+                    <button onClick={() => setFlagsOpen((o) => !o)} className="flex items-center gap-2 flex-1 text-left min-w-0">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span className="text-sm font-semibold text-amber-800 shrink-0">Risk flags</span>
+                      <span className="text-sm text-amber-700 truncate">
+                        {overdue > 0 && `${overdue} overdue`}
+                        {overdue > 0 && maturing > 0 && " · "}
+                        {maturing > 0 && `${maturing} maturing soon`}
+                      </span>
+                    </button>
+                    <button onClick={() => setFlagsOpen((o) => !o)} className="shrink-0" aria-label={flagsOpen ? "Collapse risk flags" : "Expand risk flags"}>
+                      <ChevronDown className={`w-4 h-4 text-amber-600 transition-transform ${flagsOpen ? "" : "-rotate-90"}`} />
+                    </button>
+                  </div>
+                  {flagsOpen && (
+                    <div className="px-4 pb-3 space-y-2">
+                      {flags.map((fl, i) => (
+                        <div key={i} className="flex items-start gap-2.5 text-sm px-3.5 py-2.5 rounded-lg" style={{ backgroundColor: "#faece7", color: "#712b13" }}>
+                          {fl.kind === "overdue" ? <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" /> : <Clock className="w-4 h-4 mt-0.5 shrink-0" />}
+                          <span><span className="font-medium">{fl.company}</span> — {fl.text}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              </div>
-            )}
+              )
+            })()}
           </div>
         )}
       </div>

@@ -12,7 +12,8 @@ function daysSince(iso: string | null): number | null {
 }
 
 export default function NeedsAttention({ deals }: { deals: Deal[] }) {
-  const [open, setOpen] = useState(true)
+  // Collapsed by default, matching the catalyst reminder bar and Fund Performance risk flags.
+  const [open, setOpen] = useState(false)
 
   // Aging deals — computed from data the board already has (no extra query).
   const stale = deals

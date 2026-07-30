@@ -52,7 +52,8 @@ function periodLabel(c: Catalyst): string {
 export default function CatalystCalendar({ initialCatalysts, companyNames, initialLegacy, initialDismissed }: Props) {
   const [catalysts, setCatalysts] = useState<Catalyst[]>(initialCatalysts)
   const [legacy, setLegacy] = useState<string[]>(initialLegacy)
-  const [remindersOpen, setRemindersOpen] = useState(true)
+  // Collapsed by default — the reminder bar is a summary you open when you want it.
+  const [remindersOpen, setRemindersOpen] = useState(false)
   const [editingCatalyst, setEditingCatalyst] = useState<Catalyst | null>(null)
   const [dismissed, setDismissed] = useState<Set<string>>(new Set(initialDismissed))
 
