@@ -72,16 +72,12 @@ export default async function FundPerformancePage() {
     return i === -1 ? 99 : i
   }
   // Commingled funds keep the deliberate Settings order (roughly fund vintage:
-  // Fund I → Fund II → EHF → …). Sidecars/SPVs are sorted alphabetically among
-  // themselves instead: there are many more of them, they carry no meaningful
-  // vintage, and ordering them by list_options meant every newly added vehicle
-  // piled up at the bottom of the group. Alphabetical is also stable — sorting
-  // them by value would reshuffle the group whenever a mark is refreshed.
+  // Fund I → Fund II → EHF → …). Inside the SPVs & Sidecars group we sort by
+  // current value, descending — the same way companies are ordered within each
+  // fund row just below, so the page reads consistently at both levels. Ordering
+  // the group by list_options instead meant every newly added vehicle piled up
+  // at the bottom. Name is the tie-break so equal-valued rows stay stable.
   const isSpvFund = new Set(spvFunds)
-  const byFundName = (a: string, b: string) =>
-    isSpvFund.has(a) && isSpvFund.has(b)
-      ? a.localeCompare(b)
-      : orderIdx(a) - orderIdx(b)
   const funds_: FundRow[] = Array.from(fundMap.entries())
     .map(([fund, cm]) => {
       const companiesArr = Array.from(cm.values()).sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
@@ -89,7 +85,15 @@ export default async function FundPerformancePage() {
       const value = companiesArr.reduce((s, c) => s + (c.value ?? 0), 0)
       return { fund, invested, value, moic: invested > 0 && value > 0 ? value / invested : null, companies: companiesArr }
     })
-    .sort((a, b) => byFundName(a.fund, b.fund) || b.invested - a.invested)
+    .sort((a, b) =>
+      isSpvFund.has(a.fund) && isSpvFund.has(b.fund)
+        ? (b.value ?? 0) - (a.value ?? 0) || a.fund.localeCompare(b.fund)
+        : orderIdx(a.fund) - orderIdx(b.fund) || b.invested - a.invested,
+    )
+  // The other fund-grouped sections reuse the row order above by construction,
+  // so the chart and the notes table can't drift out of step with the list.
+  const fundRankMap = new Map(funds_.map((f, i) => [f.fund, i]))
+  const fundRank = (f: string) => fundRankMap.get(f) ?? 99
 
   // ── per company (for totals + top positions) ──
   // Look-through rows are a fund's LP interest in a sidecar we also track at
@@ -170,7 +174,7 @@ export default async function FundPerformancePage() {
         .map(([date, v]) => ({ date, invested: v.invested, value: v.value }))
         .sort((a, b) => a.date.localeCompare(b.date)),
     }))
-    .sort((a, b) => byFundName(a.fund, b.fund) || a.fund.localeCompare(b.fund))
+    .sort((a, b) => fundRank(a.fund) - fundRank(b.fund) || a.fund.localeCompare(b.fund))
   const scaleMax = Math.max(
     1,
     ...history.flatMap((s) => s.points.flatMap((p) => [p.invested, p.value])),
@@ -199,7 +203,7 @@ export default async function FundPerformancePage() {
         status: r!.status ?? null,
       }
     })
-    .sort((a, b) => byFundName(a.fund, b.fund) || a.company.localeCompare(b.company) || a.note.localeCompare(b.note))
+    .sort((a, b) => fundRank(a.fund) - fundRank(b.fund) || a.company.localeCompare(b.company) || a.note.localeCompare(b.note))
 
   return (
     <>
