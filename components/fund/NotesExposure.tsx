@@ -1,4 +1,4 @@
-import { fmtMoney, monthYear } from "@/lib/rounds"
+import { fmtMoney, monthYear, exactDate } from "@/lib/rounds"
 
 export type NotePosition = {
   company: string
@@ -82,7 +82,7 @@ export default function NotesExposure({ notes }: { notes: NotePosition[] }) {
                       <td className="px-4 py-2.5 font-medium text-slate-700 whitespace-nowrap">{n.company}</td>
                       <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{n.note}</td>
                       <td className="px-4 py-2.5 text-right text-slate-500 tabular-nums">{n.rate != null ? `${n.rate}%` : "—"}</td>
-                      {showMaturity && <td className="px-4 py-2.5 text-right text-slate-500 whitespace-nowrap">{n.maturity ? monthYear(n.maturity) : "—"}</td>}
+                      {showMaturity && <td className="px-4 py-2.5 text-right text-slate-500 whitespace-nowrap">{n.maturity ? exactDate(n.maturity) : "—"}</td>}
                       <td className="px-4 py-2.5 text-right text-slate-600 tabular-nums">{fmtMoney(n.principal)}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: n.accrued > 0 ? "#3b6d11" : undefined }}>{n.accrued > 0 ? fmtMoney(n.accrued) : "—"}</td>
                       <td className="px-4 py-2.5 text-right font-medium tabular-nums" style={{ color: NAVY }}>{fmtMoney(n.value)}</td>

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Plus, Trash2, Loader2, ChevronDown, ChevronRight, Pencil, Building2, ArrowRightCircle } from "lucide-react"
 import { PortfolioFundraiseRound, PortfolioPosition, SECURITY_TYPES } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
-import { parseNum, numError, numToStr, termStr, fmtMoney, fmtPct, saveHint, monthYear, SECURITY_COLOR, valueColor, inputCls } from "@/lib/rounds"
+import { parseNum, numError, numToStr, termStr, fmtMoney, fmtPct, saveHint, monthYear, exactDate, SECURITY_COLOR, valueColor, inputCls } from "@/lib/rounds"
 import Field from "@/components/shared/Field"
 
 type Staged = {
@@ -241,7 +241,7 @@ function PositionList({ positions, isNote }: { positions: PortfolioPosition[]; i
       </div>
       {positions.some((p) => p.fair_value_date) && (
         <p className="text-[10px] text-slate-300">
-          Marked {monthYear(positions.find((p) => p.fair_value_date)?.fair_value_date ?? null)}
+          Marked {exactDate(positions.find((p) => p.fair_value_date)?.fair_value_date ?? null)}
           {positions.find((p) => p.fair_value_source)?.fair_value_source
             ? ` · ${positions.find((p) => p.fair_value_source)?.fair_value_source}` : ""}
         </p>
@@ -266,7 +266,7 @@ function RoundDetails({ round: r }: { round: PortfolioFundraiseRound }) {
     if (terms.discount) rows.push(["Discount", `${terms.discount}%`])
     if (r.security_type === "Convertible note") {
       if (terms.interest_rate) rows.push(["Interest", `${terms.interest_rate}% ${terms.interest_type || ""}`.trim()])
-      if (terms.maturity_date) rows.push(["Maturity", monthYear(String(terms.maturity_date))])
+      if (terms.maturity_date) rows.push(["Maturity", exactDate(String(terms.maturity_date))])
       if (terms.warrant_coverage) rows.push(["Warrants", `${terms.warrant_coverage}%`])
     }
     if (r.security_type === "SAFE") {

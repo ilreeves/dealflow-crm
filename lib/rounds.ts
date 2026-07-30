@@ -63,6 +63,16 @@ export function monthYear(date: string | null): string {
   return new Date(date + "T00:00:00").toLocaleDateString("en-US", { month: "short", year: "numeric" })
 }
 
+// For valuation dates specifically. A mark is struck on a particular day and the
+// books carry it at that date, so show the day rather than collapsing it to a
+// month ("Jun 2026") or a half-year bucket ("H1 2026") — those hide which date a
+// figure is actually as of, and our marks legitimately sit on mixed dates
+// (12/31/2025 audits, 4/6/2026 cap tables, 6/30/2026 audits).
+export function exactDate(date: string | null): string {
+  if (!date) return ""
+  return new Date(date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+}
+
 export const SECURITY_COLOR: Record<string, string> = {
   "Priced equity": "#5ba200",
   "Convertible note": "#e98925",

@@ -7,16 +7,12 @@ import { fmtMoney } from "@/lib/rounds"
 export type SnapshotPoint = { date: string; invested: number; value: number }
 export type FundSeries = { fund: string; points: SnapshotPoint[] }
 
+// Show each mark's actual as-of date rather than an H1/H2 or quarter bucket.
+// These are audited marks struck on specific days, and the books carry them at
+// that date — "H1 2026" hid which date a figure was actually as of, and made
+// marks on genuinely different dates look like the same period.
 function label(d: string): string {
-  const dt = new Date(d + "T00:00:00")
-  const m = dt.getMonth() + 1
-  const y = dt.getFullYear()
-  // Semi-annual marks land on Jun 30 / Dec 31 — H1/H2 reads cleaner than a date.
-  // Any off-cycle (quarterly) mark falls back to a quarter label so two points
-  // in the same half can't collide.
-  if (m === 6) return `H1 ${y}`
-  if (m === 12) return `H2 ${y}`
-  return `Q${Math.ceil(m / 3)} ${y}`
+  return new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
 }
 
 const GREEN = "#5ba200", ORANGE = "#e98925", NAVY = "#023a51"

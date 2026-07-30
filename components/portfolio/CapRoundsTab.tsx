@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Plus, Trash2, Loader2, Pencil, TrendingUp } from "lucide-react"
 import { PortfolioFundraiseRound, PortfolioPosition, PortfolioValuationMark, VALUATION_BASES } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
-import { parseNum, numToStr, fmtMoney, fmtPct, saveHint, monthYear, valueColor, inputCls } from "@/lib/rounds"
+import { parseNum, numToStr, fmtMoney, fmtPct, saveHint, exactDate, valueColor, inputCls } from "@/lib/rounds"
 import Field from "@/components/shared/Field"
 
 // Our valuation view: what Solas has in, what it's worth now, and the interim
@@ -132,7 +132,7 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
                 <div key={m.id}><MarkEditor companyId={companyId} initial={m} onCancel={() => setEditingMarkId(null)} onDone={() => { setEditingMarkId(null); load() }} /></div>
               ) : (
                 <div key={m.id} className="flex items-center gap-3 px-4 py-2.5 text-sm group">
-                  <span className="text-slate-400 text-xs w-20 shrink-0">{m.as_of_date ? monthYear(m.as_of_date) : "—"}</span>
+                  <span className="text-slate-400 text-xs w-28 shrink-0">{m.as_of_date ? exactDate(m.as_of_date) : "—"}</span>
                   <span className="font-medium text-slate-800 shrink-0">{fmtMoney(m.valuation)}</span>
                   <span className="text-xs px-2 py-0.5 rounded-md shrink-0" style={{ backgroundColor: "#e6eef1", color: "#023a51" }}>{m.basis || "mark"}</span>
                   <span className="flex-1 min-w-0 truncate text-xs text-slate-500">{m.notes}</span>

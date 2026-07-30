@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Plus, Trash2, Loader2, ChevronDown, ChevronRight, Pencil, ArrowRightCircle } from "lucide-react"
 import { DealFundraiseRound, SECURITY_TYPES } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
-import { parseNum, numError, numToStr, termStr, fmtMoney, fmtPct, saveHint, monthYear, SECURITY_COLOR, inputCls } from "@/lib/rounds"
+import { parseNum, numError, numToStr, termStr, fmtMoney, fmtPct, saveHint, monthYear, SECURITY_COLOR, inputCls, exactDate } from "@/lib/rounds"
 import Field from "@/components/shared/Field"
 
 // Fundraising rounds for a pipeline deal — the round they're raising now plus
@@ -144,7 +144,7 @@ function RoundDetails({ round: r }: { round: DealFundraiseRound }) {
     if (terms.discount) rows.push(["Discount", `${terms.discount}%`])
     if (r.security_type === "Convertible note") {
       if (terms.interest_rate) rows.push(["Interest", `${terms.interest_rate}% ${terms.interest_type || ""}`.trim()])
-      if (terms.maturity_date) rows.push(["Maturity", monthYear(String(terms.maturity_date))])
+      if (terms.maturity_date) rows.push(["Maturity", exactDate(String(terms.maturity_date))])
       if (terms.warrant_coverage) rows.push(["Warrants", `${terms.warrant_coverage}%`])
     }
     if (r.security_type === "SAFE") {
