@@ -78,7 +78,7 @@ function FundLine({ fund: f, color, isOpen, onToggle, nested }: {
 }
 
 export default function FundPerformanceView({
-  totals, funds, top, flags, asOf, spvFunds, lookthroughCost,
+  totals, funds, top, flags, asOf, spvFunds, lookthroughCost, children,
 }: {
   totals: Totals
   funds: FundRow[]
@@ -89,6 +89,13 @@ export default function FundPerformanceView({
   spvFunds: string[]
   /** Cost sitting in fund LP interests that's excluded from the headline totals. */
   lookthroughCost: number
+  /**
+   * Extra sections (notes exposure, valuation history) rendered INSIDE this
+   * component's scroll container. They used to be siblings on the page, below a
+   * h-full component — which left <main> and this component both scrolling, so
+   * scroll chained between them and content appeared to shift or vanish.
+   */
+  children?: React.ReactNode
 }) {
   const [open, setOpen] = useState<string | null>(null)
   const [openSidecar, setOpenSidecar] = useState<string | null>(null)
@@ -254,6 +261,11 @@ export default function FundPerformanceView({
                 </div>
               )
             })()}
+
+            {/* Notes exposure / valuation history. Rendered here so the page has a
+                SINGLE scroll container — they used to be siblings below this
+                component, which made <main> scroll as well. */}
+            {children}
           </div>
         )}
       </div>

@@ -219,8 +219,11 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
       </div>
 
       <div className={`flex-1 overflow-y-auto px-4 md:px-6 py-6 ${view === 'list' ? 'max-w-3xl' : ''}`}>
+        {/* Reminder bar is pinned (sticky) to the top of this scroll area. Collapsed
+            it is only a summary row, and letting it scroll away made it look as
+            though it had disappeared. */}
         {(overdue.length > 0 || dueSoon.length > 0) && (
-          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 overflow-hidden max-w-3xl">
+          <div className="sticky top-0 z-10 mb-6 rounded-xl border border-amber-200 bg-amber-50 overflow-hidden max-w-3xl shadow-sm">
             <div className="w-full flex items-center gap-2 px-4 py-2.5">
               <button onClick={() => setRemindersOpen((o) => !o)} className="flex items-center gap-2 flex-1 text-left">
                 <Bell className="w-4 h-4 text-amber-600 shrink-0" />

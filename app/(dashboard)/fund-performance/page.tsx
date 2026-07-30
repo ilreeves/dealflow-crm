@@ -205,16 +205,16 @@ export default async function FundPerformancePage() {
     })
     .sort((a, b) => fundRank(a.fund) - fundRank(b.fund) || a.company.localeCompare(b.company) || a.note.localeCompare(b.note))
 
+  // Notes exposure / valuation history are passed as CHILDREN so they render
+  // inside FundPerformanceView's scroll container. As siblings they sat below a
+  // h-full component, which left <main> scrolling as well — two nested scrollers
+  // chaining into each other, which is what made the risk flags appear to
+  // compress or vanish on scroll. Width and padding now come from that
+  // component's max-w-6xl block, so no wrapper is needed here.
   return (
-    <>
-      <FundPerformanceView totals={totals} funds={funds_} top={top} flags={flags} asOf={asOf} spvFunds={spvFunds} lookthroughCost={lookthroughCost} />
-      {/* max-w-6xl, matching FundPerformanceView above: the notes table is 7
-          nowrap columns (~846px) and at max-w-4xl had only ~2px of headroom, so
-          it scrolled horizontally. Keep this in step with that component. */}
-      <div className="px-4 md:px-6 pb-8 max-w-6xl space-y-8">
-        {notes.length > 0 && <NotesExposure notes={notes} />}
-        {history.length > 0 && <ValuationHistory series={history} scaleMax={scaleMax} spvFunds={spvFunds} />}
-      </div>
-    </>
+    <FundPerformanceView totals={totals} funds={funds_} top={top} flags={flags} asOf={asOf} spvFunds={spvFunds} lookthroughCost={lookthroughCost}>
+      {notes.length > 0 && <NotesExposure notes={notes} />}
+      {history.length > 0 && <ValuationHistory series={history} scaleMax={scaleMax} spvFunds={spvFunds} />}
+    </FundPerformanceView>
   )
 }
