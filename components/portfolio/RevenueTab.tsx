@@ -19,6 +19,7 @@ import {
   yoyGrowth,
   latestActual,
   currentYearProjection,
+  sortRows,
 } from "@/lib/revenue"
 import Field from "@/components/shared/Field"
 
@@ -43,7 +44,8 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
       .eq("company_id", companyId)
       .order("period_end", { ascending: false, nullsFirst: false })
     if (e) setError(saveHint(e.message))
-    setRows((data as PortfolioRevenue[]) ?? [])
+    // period_end alone leaves FY-vs-Q4 (and H1-vs-Q2) ties, so re-sort locally.
+    setRows(sortRows((data as PortfolioRevenue[]) ?? []))
     setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId])

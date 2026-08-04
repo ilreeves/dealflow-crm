@@ -16,6 +16,32 @@ export function periodEnd(periodType: string, fiscalYear: number): string {
 }
 
 /**
+ * Breadth of a period, used only to break ties on period_end. FY and Q4 both end
+ * 12-31, and H1/Q2 both end 06-30, so period_end alone leaves the "latest period"
+ * ambiguous and the headline figure could flip between a quarter and a full year
+ * depending on row order. Wider periods win: an annual figure is the more
+ * meaningful headline, and it's the one a plan is usually attached to.
+ */
+function periodRank(periodType: string): number {
+  if (periodType === "FY") return 3
+  if (periodType === "H1" || periodType === "H2") return 2
+  return 1
+}
+
+/**
+ * Canonical newest-first order. Every consumer must sort with this rather than
+ * relying on the DB's `period_end desc` alone — see periodRank for why.
+ */
+export function sortRows(rows: PortfolioRevenue[]): PortfolioRevenue[] {
+  return [...rows].sort(
+    (a, b) =>
+      (b.period_end ?? "").localeCompare(a.period_end ?? "") ||
+      periodRank(b.period_type) - periodRank(a.period_type) ||
+      a.period_type.localeCompare(b.period_type),
+  )
+}
+
+/**
  * Variance of actual against projection. Returns null unless BOTH sides exist —
  * a missing actual is "not reported yet", not a shortfall, and showing it as
  * -100% would read as a business collapse.
@@ -96,7 +122,8 @@ export function buildCompanyRevenue(
   return companies
     .filter((c) => c.track_revenue || byCompany.has(c.id))
     .map((c) => {
-      const rs = byCompany.get(c.id) ?? []
+      // Sorted here rather than trusting the query order — period_end ties.
+      const rs = sortRows(byCompany.get(c.id) ?? [])
       const last = latestActual(rs)
       const v = last ? variance(last) : null
       const fyProj = currentYearProjection(rs, fiscalYear)
