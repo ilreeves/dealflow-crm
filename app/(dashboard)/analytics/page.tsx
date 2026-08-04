@@ -330,7 +330,6 @@ export default async function AnalyticsPage() {
     <div className="flex flex-col h-full">
       <div className="px-6 py-4 bg-white border-b border-slate-200 shrink-0">
         <h1 className="text-lg font-semibold text-slate-900">Analytics</h1>
-        <p className="text-sm text-slate-500">Dealflow breakdown and sourcing stats</p>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-6">
@@ -397,8 +396,7 @@ export default async function AnalyticsPage() {
         {/* Average time in stage */}
         {stageAverages.length > 0 && (
           <div>
-            <p className="text-sm font-semibold text-slate-700 mb-1">Current Inventory Age</p>
-            <p className="text-xs text-slate-400 mb-3">How long the deals currently sitting in each stage have been there.</p>
+            <p className="text-sm font-semibold text-slate-700 mb-3" title="How long the deals currently sitting in each stage have been there.">Current Inventory Age</p>
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <table className="w-full text-sm">
                 <tbody>
@@ -422,9 +420,11 @@ export default async function AnalyticsPage() {
 
         {/* Historical time in stage */}
         <div>
-          <p className="text-sm font-semibold text-slate-700 mb-1">Historical Time in Stage</p>
-          <p className="text-xs text-slate-400 mb-3">
-            Average time deals spent in each stage before moving on, from the stage-change log ({totalTransitions} completed {totalTransitions === 1 ? 'transition' : 'transitions'}). Tracking began June 11, 2026, so this builds accuracy over time.
+          <p
+            className="text-sm font-semibold text-slate-700 mb-3"
+            title={`Average time deals spent in each stage before moving on, from the stage-change log (${totalTransitions} completed ${totalTransitions === 1 ? 'transition' : 'transitions'}). Tracking began June 11, 2026, so this builds accuracy over time.`}
+          >
+            Historical Time in Stage
           </p>
           {historicalAverages.length === 0 ? (
             <div className="bg-white rounded-xl border border-slate-200 px-5 py-6 text-center">
@@ -454,9 +454,11 @@ export default async function AnalyticsPage() {
 
         {/* Stage advancement funnel */}
         <div>
-          <p className="text-sm font-semibold text-slate-700 mb-1">Stage Advancement</p>
-          <p className="text-xs text-slate-400 mb-3">
-            Of the deals that reached each stage, the share that advanced to the next. Based on the furthest stage each deal reached; early history is partial (stage tracking began June 11, 2026).
+          <p
+            className="text-sm font-semibold text-slate-700 mb-3"
+            title="Of the deals that reached each stage, the share that advanced to the next. Based on the furthest stage each deal reached; early history is partial (stage tracking began June 11, 2026)."
+          >
+            Stage Advancement
           </p>
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <table className="w-full text-sm">
