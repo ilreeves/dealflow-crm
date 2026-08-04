@@ -82,6 +82,53 @@ export function yoyGrowth(rows: PortfolioRevenue[], row: PortfolioRevenue): numb
 }
 
 /**
+ * Actuals reported so far in a year, and which periods they cover. Picks ONE
+ * cadence so a company holding both an H1 row and Q1/Q2 rows isn't counted
+ * twice: an FY actual wins, else quarters, else halves. Unlike annualActual this
+ * does NOT require the year to be complete — it's a year-to-date figure.
+ */
+export function ytdActual(
+  rows: PortfolioRevenue[],
+  year: number,
+): { value: number; coverage: string } | null {
+  const inYear = rows.filter((r) => r.fiscal_year === year && r.actual != null)
+  if (!inYear.length) return null
+  const fy = inYear.find((r) => r.period_type === "FY")
+  if (fy) return { value: Number(fy.actual), coverage: "FY" }
+  for (const set of [["Q1", "Q2", "Q3", "Q4"], ["H1", "H2"]]) {
+    const hits = set.filter((p) => inYear.some((r) => r.period_type === p))
+    if (hits.length) {
+      return {
+        value: inYear.filter((r) => hits.includes(r.period_type)).reduce((s, r) => s + Number(r.actual), 0),
+        coverage: hits.length > 1 ? `${hits[0]}–${hits[hits.length - 1]}` : hits[0],
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * The year the "progress vs plan" column should report on: the most recent year
+ * that has BOTH an annual projection and at least one actual. So it stays on
+ * 2026 while 2026 actuals accumulate, and moves to 2027 only once a 2027 annual
+ * plan exists AND a 2027 period has been reported — not merely because a
+ * forward-year plan was entered early.
+ */
+export function planYearFor(rows: PortfolioRevenue[], fallback: number): number {
+  const years = Array.from(new Set(rows.map((r) => r.fiscal_year))).sort((a, b) => b - a)
+  for (const y of years) {
+    const hasPlan = rows.some((r) => r.fiscal_year === y && r.period_type === "FY" && r.projected != null)
+    if (hasPlan && ytdActual(rows, y)) return y
+  }
+  // No year qualifies yet — fall back to the most recent year with an annual
+  // plan, so a company that has a plan but no reported periods still shows it.
+  for (const y of years) {
+    if (rows.some((r) => r.fiscal_year === y && r.period_type === "FY" && r.projected != null)) return y
+  }
+  return fallback
+}
+
+/**
  * One company's revenue picture for the Revenue page. Computed once, on the
  * server, so the roll-up rules can't drift between surfaces.
  */
@@ -102,6 +149,12 @@ export type CompanyRevenue = {
   fyProjectedBasis: string | null
   priorYearActual: number | null
   yoyPct: number | null
+  /** Year the annual plan and progress figures report on — follows the data. */
+  planYear: number
+  /** YTD actual as a % of that year's annual plan. Null if either side is absent. */
+  pctOfPlan: number | null
+  /** Tooltip detail for the progress column, e.g. "Q1–Q2 2026: $2.2M of $5.5M". */
+  pctOfPlanBasis: string | null
 }
 
 /**
@@ -126,7 +179,12 @@ export function buildCompanyRevenue(
       const rs = sortRows(byCompany.get(c.id) ?? [])
       const last = latestActual(rs)
       const v = last ? variance(last) : null
-      const fyProj = currentYearProjection(rs, fiscalYear)
+      // The annual plan and the progress column both follow the company's own
+      // plan year, so the two can never disagree about which year they describe.
+      const planYear = planYearFor(rs, fiscalYear)
+      const fyProj = currentYearProjection(rs, planYear)
+      const ytd = ytdActual(rs, planYear)
+      const pctOfPlan = fyProj && fyProj.value !== 0 && ytd ? (ytd.value / fyProj.value) * 100 : null
       const prior = annualActual(rs, fiscalYear - 1)
       return {
         id: c.id,
@@ -143,6 +201,12 @@ export function buildCompanyRevenue(
         fyProjectedBasis: fyProj ? `Basis: ${fyProj.basis}` : null,
         priorYearActual: prior?.value ?? null,
         yoyPct: last ? yoyGrowth(rs, last) : null,
+        planYear,
+        pctOfPlan,
+        pctOfPlanBasis:
+          pctOfPlan != null && ytd && fyProj
+            ? `${ytd.coverage} ${planYear} actual of the FY ${planYear} plan (basis: ${fyProj.basis})`
+            : null,
       }
     })
     .sort(

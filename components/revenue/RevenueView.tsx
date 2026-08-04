@@ -64,6 +64,9 @@ export default function RevenueView({
         id: company.id, name: company.name, status: company.status, tracked: true, periodCount: 0,
         latestPeriod: null, latestActual: null, latestProjected: null, varianceAbs: null,
         variancePct: null, fyProjected: null, fyProjectedBasis: null, priorYearActual: null, yoyPct: null,
+        // A freshly added company has no periods yet; router.refresh() fills these
+        // in from the server once a plan or actual is entered.
+        planYear: fiscalYear, pctOfPlan: null, pctOfPlanBasis: null,
       },
     ])
     setPick("")
@@ -91,6 +94,11 @@ export default function RevenueView({
     router.refresh()
   }
 
+  // Header year for the annual-plan columns. Each row carries its own planYear
+  // (most recent year with both a plan and a reported period); the header shows
+  // the furthest-along one, and any row still on an earlier year is tagged.
+  const planYear = rows.reduce((y, r) => Math.max(y, r.planYear), fiscalYear)
+
   const tracked = rows.filter((r) => r.tracked)
   const fyPlanTotal = tracked.reduce((s, c) => s + (c.fyProjected ?? 0), 0)
   const fyPlanCount = tracked.filter((c) => c.fyProjected != null).length
@@ -117,7 +125,7 @@ export default function RevenueView({
           {/* Tiles */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Tile label="Companies tracked" value={String(tracked.length)} sub={`of ${comps.length} portfolio companies`} />
-            <Tile label={`FY ${fiscalYear} plan`} value={fmtMoney(fyPlanTotal)} sub={`${fyPlanCount} with a plan set`} />
+            <Tile label={`FY ${planYear} plan`} value={fmtMoney(fyPlanTotal)} sub={`${fyPlanCount} with a plan set`} />
             <Tile
               label={`FY ${fiscalYear - 1} actual`}
               value={priorCount ? fmtMoney(priorTotal) : "—"}
@@ -188,7 +196,7 @@ export default function RevenueView({
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[760px]">
+                <table className="w-full text-sm min-w-[840px]">
                   <thead>
                     <tr className="border-b border-slate-100">
                       <Th>Company</Th>
@@ -197,7 +205,8 @@ export default function RevenueView({
                       <Th right>Plan</Th>
                       <Th right>Variance</Th>
                       <Th right>YoY</Th>
-                      <Th right>FY {fiscalYear} plan</Th>
+                      <Th right>FY {planYear} plan</Th>
+                      <Th right>% of plan</Th>
                       <th className="w-8" />
                     </tr>
                   </thead>
@@ -236,6 +245,22 @@ export default function RevenueView({
                         <td className="px-4 py-2.5 text-right text-slate-600 tabular-nums">
                           {c.fyProjected != null ? (
                             <span title={c.fyProjectedBasis ?? undefined}>{fmtMoney(c.fyProjected)}</span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                        {/* How much of the annual plan is banked so far. Kept
+                            deliberately neutral in colour: 41% through H1 is not
+                            inherently good or bad, and every plan here is
+                            back-loaded, so a pace-based colour would mislead. */}
+                        <td className="px-4 py-2.5 text-right tabular-nums text-slate-500">
+                          {c.pctOfPlan != null ? (
+                            <span title={c.pctOfPlanBasis ?? undefined}>
+                              {c.pctOfPlan.toFixed(1)}%
+                              {c.planYear !== planYear && (
+                                <span className="text-slate-300 ml-1">’{String(c.planYear).slice(2)}</span>
+                              )}
+                            </span>
                           ) : (
                             <span className="text-slate-300">—</span>
                           )}
