@@ -1,27 +1,22 @@
 import { createClient } from "@/lib/supabase/server"
-import { PortfolioFundraiseRound, PortfolioPosition, PortfolioValuationMark, PortfolioRevenue } from "@/lib/types"
+import { PortfolioFundraiseRound, PortfolioPosition, PortfolioValuationMark } from "@/lib/types"
 import FundPerformanceView, { FundRow, TopPosition, RiskFlag, CompanyInFund } from "@/components/fund/FundPerformanceView"
 import ValuationHistory, { FundSeries } from "@/components/fund/ValuationHistory"
 import NotesExposure, { NotePosition } from "@/components/fund/NotesExposure"
-import RevenueOverview, { CompanyRevenue } from "@/components/fund/RevenueOverview"
-import { periodLabel, variance, yoyGrowth, latestActual, currentYearProjection, annualActual } from "@/lib/revenue"
 
 export const dynamic = "force-dynamic"
 
-type CompRow = { id: string; name: string; status: string | null }
+type CompRow = { id: string; name: string }
 
 export default async function FundPerformancePage() {
   const supabase = await createClient()
-  const [{ data: companies }, { data: rounds }, { data: positions }, { data: funds }, { data: valMarks }, { data: snapshots }, { data: revenue }] = await Promise.all([
-    supabase.from("portfolio_companies").select("id,name,status"),
+  const [{ data: companies }, { data: rounds }, { data: positions }, { data: funds }, { data: valMarks }, { data: snapshots }] = await Promise.all([
+    supabase.from("portfolio_companies").select("id,name"),
     supabase.from("portfolio_fundraise_rounds").select("id,company_id,round_name,date,post_money,security_type,status,terms"),
     supabase.from("portfolio_positions").select("*"),
     supabase.from("list_options").select("value,sort_order,list_key").in("list_key", ["fund", "spv_fund"]).order("sort_order"),
     supabase.from("portfolio_valuation_marks").select("company_id,as_of_date,valuation"),
     supabase.from("fund_snapshots").select("as_of_date,fund,invested,value").order("as_of_date"),
-    // Returns an error (and null data) until the revenue migration is run — the
-    // section then simply doesn't render, rather than breaking the page.
-    supabase.from("portfolio_revenue").select("*").order("period_end", { ascending: false }),
   ])
 
   const comps = (companies as CompRow[]) ?? []
@@ -210,42 +205,6 @@ export default async function FundPerformancePage() {
     })
     .sort((a, b) => fundRank(a.fund) - fundRank(b.fund) || a.company.localeCompare(b.company) || a.note.localeCompare(b.note))
 
-  // ── revenue: projected vs actual across the portfolio ─────────────────────
-  // Rows arrive newest-first (period_end desc), which lib/revenue's helpers rely
-  // on. The annual roll-up rules live there so the tab and this page can't drift.
-  const revRows = (revenue as PortfolioRevenue[]) ?? []
-  const fiscalYear = now.getFullYear()
-  const priorFiscalYear = fiscalYear - 1
-  const byCompanyRev = new Map<string, PortfolioRevenue[]>()
-  for (const r of revRows) {
-    if (!byCompanyRev.has(r.company_id)) byCompanyRev.set(r.company_id, [])
-    byCompanyRev.get(r.company_id)!.push(r)
-  }
-  const companyRevenue: CompanyRevenue[] = Array.from(byCompanyRev.entries())
-    .map(([companyId, rows]) => {
-      const company = comps.find((c) => c.id === companyId)
-      const last = latestActual(rows)
-      const v = last ? variance(last) : null
-      const fyProj = currentYearProjection(rows, fiscalYear)
-      const prior = annualActual(rows, priorFiscalYear)
-      return {
-        name: company?.name ?? "Unknown",
-        status: company?.status ?? null,
-        latestPeriod: last ? periodLabel(last) : null,
-        latestActual: last?.actual != null ? Number(last.actual) : null,
-        latestProjected: last?.projected != null ? Number(last.projected) : null,
-        varianceAbs: v?.abs ?? null,
-        variancePct: v?.pct ?? null,
-        fyProjected: fyProj?.value ?? null,
-        fyProjectedBasis: fyProj ? `Basis: ${fyProj.basis}` : null,
-        priorYearActual: prior?.value ?? null,
-        priorYear: prior ? priorFiscalYear : null,
-        yoyPct: last ? yoyGrowth(rows, last) : null,
-      }
-    })
-    // A company row with no figures at all carries no information.
-    .filter((c) => c.latestActual != null || c.fyProjected != null)
-
   // Notes exposure / valuation history are passed as CHILDREN so they render
   // inside FundPerformanceView's scroll container. As siblings they sat below a
   // h-full component, which left <main> scrolling as well — two nested scrollers
@@ -254,7 +213,6 @@ export default async function FundPerformancePage() {
   // component's max-w-6xl block, so no wrapper is needed here.
   return (
     <FundPerformanceView totals={totals} funds={funds_} top={top} flags={flags} asOf={asOf} spvFunds={spvFunds} lookthroughCost={lookthroughCost}>
-      {companyRevenue.length > 0 && <RevenueOverview companies={companyRevenue} fiscalYear={fiscalYear} />}
       {notes.length > 0 && <NotesExposure notes={notes} />}
       {history.length > 0 && <ValuationHistory series={history} scaleMax={scaleMax} spvFunds={spvFunds} />}
     </FundPerformanceView>

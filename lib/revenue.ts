@@ -55,6 +55,77 @@ export function yoyGrowth(rows: PortfolioRevenue[], row: PortfolioRevenue): numb
   return ((Number(row.actual) - Number(prior.actual!)) / Math.abs(Number(prior.actual!))) * 100
 }
 
+/**
+ * One company's revenue picture for the Revenue page. Computed once, on the
+ * server, so the roll-up rules can't drift between surfaces.
+ */
+export type CompanyRevenue = {
+  id: string
+  name: string
+  status: string | null
+  /** On the roster. False here means "has figures but was untracked". */
+  tracked: boolean
+  periodCount: number
+  latestPeriod: string | null
+  latestActual: number | null
+  /** Plan for that same period, so the variance compares like with like. */
+  latestProjected: number | null
+  varianceAbs: number | null
+  variancePct: number | null
+  fyProjected: number | null
+  fyProjectedBasis: string | null
+  priorYearActual: number | null
+  yoyPct: number | null
+}
+
+/**
+ * Builds the Revenue page rows: every company on the roster, plus any company
+ * that has figures recorded but was untracked — so removing a company from the
+ * roster can never make its data invisible.
+ */
+export function buildCompanyRevenue(
+  companies: { id: string; name: string; status: string | null; track_revenue: boolean | null }[],
+  rows: PortfolioRevenue[],
+  fiscalYear: number,
+): CompanyRevenue[] {
+  const byCompany = new Map<string, PortfolioRevenue[]>()
+  for (const r of rows) {
+    if (!byCompany.has(r.company_id)) byCompany.set(r.company_id, [])
+    byCompany.get(r.company_id)!.push(r)
+  }
+  return companies
+    .filter((c) => c.track_revenue || byCompany.has(c.id))
+    .map((c) => {
+      const rs = byCompany.get(c.id) ?? []
+      const last = latestActual(rs)
+      const v = last ? variance(last) : null
+      const fyProj = currentYearProjection(rs, fiscalYear)
+      const prior = annualActual(rs, fiscalYear - 1)
+      return {
+        id: c.id,
+        name: c.name,
+        status: c.status,
+        tracked: !!c.track_revenue,
+        periodCount: rs.length,
+        latestPeriod: last ? periodLabel(last) : null,
+        latestActual: last?.actual != null ? Number(last.actual) : null,
+        latestProjected: last?.projected != null ? Number(last.projected) : null,
+        varianceAbs: v?.abs ?? null,
+        variancePct: v?.pct ?? null,
+        fyProjected: fyProj?.value ?? null,
+        fyProjectedBasis: fyProj ? `Basis: ${fyProj.basis}` : null,
+        priorYearActual: prior?.value ?? null,
+        yoyPct: last ? yoyGrowth(rs, last) : null,
+      }
+    })
+    .sort(
+      (a, b) =>
+        (b.latestActual ?? -1) - (a.latestActual ?? -1) ||
+        (b.fyProjected ?? -1) - (a.fyProjected ?? -1) ||
+        a.name.localeCompare(b.name),
+    )
+}
+
 /** Most recent period with a reported actual. Rows must be sorted newest-first. */
 export function latestActual(rows: PortfolioRevenue[]): PortfolioRevenue | null {
   return rows.find((r) => r.actual != null) ?? null

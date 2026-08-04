@@ -177,6 +177,12 @@ export interface PortfolioCompany {
   non_con_deck_name: string | null
   non_con_deck_token: string | null
   non_con_deck_shared_at: string | null
+  /**
+   * Opt-in to revenue tracking. Most companies are pre-revenue, so the Revenue
+   * tab only appears once a company is added to the roster on the Revenue page.
+   * A display flag only — clearing it never deletes recorded figures.
+   */
+  track_revenue: boolean | null
   created_by: string | null
   created_at: string
   updated_at: string

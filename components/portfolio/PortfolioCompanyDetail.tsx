@@ -23,11 +23,13 @@ interface Props {
   onClose: () => void
   onUpdated: (c: PortfolioCompany) => void
   onDeleted: (id: string) => void
+  /** Open straight onto a tab — the Revenue page links in on 'revenue'. */
+  initialTab?: Tab
 }
 
-export default function PortfolioCompanyDetail({ company: initial, onClose, onUpdated, onDeleted }: Props) {
+export default function PortfolioCompanyDetail({ company: initial, onClose, onUpdated, onDeleted, initialTab }: Props) {
   const [company, setCompany] = useState(initial)
-  const [tab, setTab] = useState<Tab>('overview')
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'overview')
   const [showEdit, setShowEdit] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -46,11 +48,16 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
     setShowEdit(false)
   }
 
+  // Most portfolio companies are pre-revenue, so Revenue is opt-in: the tab
+  // appears only for companies added to the roster on the Revenue page. Kept
+  // visible if it's the tab we were asked to open, so a stale link can't land on
+  // a tab that isn't there.
+  const showRevenue = !!company.track_revenue || initialTab === 'revenue'
   const tabs: { key: Tab; label: string }[] = [
     { key: 'overview', label: 'Overview' },
     { key: 'fundraising', label: 'Fundraising' },
     { key: 'rounds', label: 'Ownership' },
-    { key: 'revenue', label: 'Revenue' },
+    ...(showRevenue ? [{ key: 'revenue' as Tab, label: 'Revenue' }] : []),
     { key: 'intros', label: 'Investor Intros' },
     { key: 'catalysts', label: 'Catalysts' },
   ]
