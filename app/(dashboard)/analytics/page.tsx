@@ -577,35 +577,24 @@ export default async function AnalyticsPage() {
         {/* Revenue projection reliability */}
         {revReliability.length > 0 && (
           <div>
-            {/* Headline metric sits inline with the title; the methodology and
-                exclusion accounting live in hover tooltips rather than a wall of
-                caption text. Nothing is hidden, just not shouted. */}
-            <div className="flex items-baseline justify-between gap-3 mb-1">
-              <p className="text-sm font-semibold text-slate-700">Revenue Projection Reliability by Company</p>
-              <p className="text-xs text-slate-400 shrink-0 tabular-nums">
-                {revTotalHits}/{revTotalPeriods} met
-                {revAvgAll !== null && (
-                  <> · <span style={{ color: deltaColor(revAvgAll) }}>{revAvgAll > 0 ? '+' : ''}{revAvgAll.toFixed(1)}%</span> avg</>
-                )}
-              </p>
-            </div>
             <p
-              className="text-xs text-slate-400 mb-3 cursor-help"
+              className="text-sm font-semibold text-slate-700 mb-3"
               title={
-                `Quarterly plan vs actual. Only quarters with BOTH a plan and a reported actual count \u2014 ` +
-                `a quarter with no plan set isn't a miss, and one not yet reported isn't a shortfall.\n\n` +
+                `Quarterly plan vs actual. Only quarters with BOTH a plan and a reported actual count.\n` +
+                `${revTotalHits} of ${revTotalPeriods} met plan` +
+                (revAvgAll !== null ? `, average delta ${revAvgAll > 0 ? '+' : ''}${revAvgAll.toFixed(1)}%` : '') + `.\n` +
                 `Of ${revTotalPeriods + annualDeltas.length + revNoPlan + revInProgress} recorded periods, ` +
-                `${revTotalPeriods} qualify: ${annualDeltas.length} are annual (tallied separately below), ` +
-                `${revNoPlan} have no plan on record, ${revInProgress} are still in progress.` +
+                `${revTotalPeriods} qualify: ${annualDeltas.length} annual, ${revNoPlan} with no plan on record, ` +
+                `${revInProgress} still in progress.` +
+                (annualDeltas.length > 0
+                  ? `\nAnnual plans: ${annualHits} of ${annualDeltas.length} met, average ${(annualAvg as number) > 0 ? '+' : ''}${(annualAvg as number).toFixed(1)}%.`
+                  : '') +
                 (reforecastQuarters > 0
-                  ? `\n\n${reforecastQuarters} compare against a mid-year reforecast rather than an original budget, ` +
-                    `because no original quarterly budget exists for those periods. A reforecast is an easier target, ` +
-                    `so those hit rates read slightly better than a like-for-like comparison would.`
+                  ? `\n${reforecastQuarters} compare against a mid-year reforecast, not an original budget \u2014 an easier target.`
                   : '')
               }
             >
-              Quarterly plan vs actual, where both are on record
-              {reforecastQuarters > 0 && <> · {reforecastQuarters} vs a reforecast</>} · hover for detail
+              Revenue Projection Reliability by Company
             </p>
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <table className="w-full text-sm">
@@ -640,21 +629,6 @@ export default async function AnalyticsPage() {
                 </tbody>
               </table>
             </div>
-            {annualDeltas.length > 0 && (
-              <p
-                className="text-xs text-slate-400 mt-2 cursor-help"
-                title={
-                  'Annual budgets are set a year out and embed assumptions \u2014 regulatory clearances, launch timing \u2014 ' +
-                  'that a quarterly budget already knows the answer to. Tallied separately so they do not flatter the quarterly figure.'
-                }
-              >
-                Annual plans: {annualHits} of {annualDeltas.length} met ·{' '}
-                <span style={{ color: deltaColor(annualAvg as number) }}>
-                  {(annualAvg as number) > 0 ? '+' : ''}{(annualAvg as number).toFixed(1)}%
-                </span>{' '}
-                avg
-              </p>
-            )}
           </div>
         )}
         </div>
