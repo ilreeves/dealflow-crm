@@ -5,13 +5,16 @@ import CollapsibleSection from '@/components/analytics/CollapsibleSection'
 
 export default async function AnalyticsPage() {
   const supabase = await createClient()
-  const [{ data }, { data: activityData }, { data: catalystData }, { data: portfolioData }, { data: legacyData }, { data: listData }] = await Promise.all([
+  const [{ data }, { data: activityData }, { data: catalystData }, { data: portfolioData }, { data: legacyData }, { data: listData }, { data: revenueData }] = await Promise.all([
     supabase.from('deals').select('id,name,stage,category,source,sector,clinical_stage,series,stage_entered_at,created_at'),
     supabase.from('deal_activity').select('deal_id,details,created_at').eq('action', 'Stage changed').order('created_at', { ascending: true }),
     supabase.from('catalysts').select('company_name,catalyst_date,original_date,status,resolved_date'),
-    supabase.from('portfolio_companies').select('name,sector,category,series,clinical_stage,status'),
+    supabase.from('portfolio_companies').select('id,name,sector,category,series,clinical_stage,status'),
     supabase.from('legacy_companies').select('company_name'),
     supabase.from('list_options').select('list_key,value,sort_order').order('sort_order'),
+    // Returns null data if the revenue migration hasn't been run — the section
+    // then simply doesn't render rather than breaking the page.
+    supabase.from('portfolio_revenue').select('company_id,period_type,fiscal_year,projected,actual'),
   ])
 
   const deals = (data as Deal[]) ?? []
@@ -40,7 +43,7 @@ export default async function AnalyticsPage() {
 
   // Sector breakdowns: deals and portfolio as separate expandable tables
   const legacyNames = new Set(((legacyData as { company_name: string }[]) ?? []).map((l) => l.company_name))
-  const portfolioCompaniesAll = (portfolioData as { name: string; sector: string | null; category: string | null; series: string | null; clinical_stage: string | null; status: string | null }[]) ?? []
+  const portfolioCompaniesAll = (portfolioData as { id: string; name: string; sector: string | null; category: string | null; series: string | null; clinical_stage: string | null; status: string | null }[]) ?? []
   // Legacy comes from two places: the legacy_companies list and a Legacy/Exited
   // status on the company itself. Exclude both everywhere on this page.
   const excludedNames = new Set(legacyNames)
@@ -239,6 +242,62 @@ export default async function AnalyticsPage() {
       avgSlip: r.slipDays.length ? r.slipDays.reduce((a, b) => a + b, 0) / r.slipDays.length : null,
     }))
     .sort((a, b) => b.rate - a.rate || b.total - a.total)
+
+  // Revenue-projection reliability: per company, how often a QUARTERLY plan was
+  // met, and the average signed delta. Only periods carrying BOTH a plan and an
+  // actual count — a quarter with no plan is not a miss, and one not yet reported
+  // is not a shortfall.
+  type RevRow = { company_id: string; period_type: string; fiscal_year: number; projected: number | null; actual: number | null }
+  const revRows = (revenueData as RevRow[]) ?? []
+  const nameById: Record<string, string> = {}
+  for (const pc of portfolioCompaniesAll) nameById[pc.id] = pc.name
+  const QUARTERS = new Set(['Q1', 'Q2', 'Q3', 'Q4'])
+
+  const revMap: Record<string, { deltas: number[]; hits: number }> = {}
+  const annualDeltas: number[] = []
+  let annualHits = 0
+  for (const r of revRows) {
+    if (r.projected == null || r.actual == null || Number(r.projected) === 0) continue
+    const company = nameById[r.company_id]
+    if (!company || excludedNames.has(company)) continue
+    const delta = ((Number(r.actual) - Number(r.projected)) / Math.abs(Number(r.projected))) * 100
+    if (QUARTERS.has(r.period_type)) {
+      if (!revMap[company]) revMap[company] = { deltas: [], hits: 0 }
+      revMap[company].deltas.push(delta)
+      if (delta >= 0) revMap[company].hits++
+    } else if (r.period_type === 'FY') {
+      // Tracked separately: annual plans are set a year out and tend to embed
+      // assumptions (regulatory clearances, launch timing) that quarterly
+      // budgets already know the answer to. Mixing them flatters the quarterly
+      // figure and hides that the annual picture can be much worse.
+      annualDeltas.push(delta)
+      if (delta >= 0) annualHits++
+    }
+  }
+  const revReliability = Object.entries(revMap)
+    .map(([company, r]) => ({
+      company,
+      periods: r.deltas.length,
+      hits: r.hits,
+      rate: r.hits / r.deltas.length,
+      avgDelta: r.deltas.reduce((a, b) => a + b, 0) / r.deltas.length,
+    }))
+    .sort((a, b) => b.rate - a.rate || b.periods - a.periods || a.company.localeCompare(b.company))
+  const revTotalPeriods = revReliability.reduce((a, r) => a + r.periods, 0)
+  const revTotalHits = revReliability.reduce((a, r) => a + r.hits, 0)
+  // Mean across every quarterly observation, not a mean of per-company means —
+  // otherwise a company with one quarter would weigh as much as one with eight.
+  const allQuarterDeltas = Object.values(revMap).flatMap((r) => r.deltas)
+  const revAvgAll = allQuarterDeltas.length
+    ? allQuarterDeltas.reduce((a, b) => a + b, 0) / allQuarterDeltas.length
+    : null
+  const annualAvg = annualDeltas.length ? annualDeltas.reduce((a, b) => a + b, 0) / annualDeltas.length : null
+
+  function deltaColor(d: number): string {
+    if (d >= 0) return '#5ba200'
+    if (d >= -10) return '#e98925'
+    return '#dc2626'
+  }
 
   // Green when they hit guidance, through amber, to red when nothing held.
   function reliabilityColor(rate: number): string {
@@ -502,6 +561,62 @@ export default async function AnalyticsPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* Revenue projection reliability */}
+        {revReliability.length > 0 && (
+          <div>
+            <p className="text-sm font-semibold text-slate-700 mb-1">Revenue Projection Reliability by Company</p>
+            <p className="text-xs text-slate-400 mb-3">
+              How often each company hits its <span className="font-medium text-slate-500">quarterly</span> revenue plan, and the
+              average delta when it doesn&apos;t. Only quarters carrying both a plan and a reported actual count — a quarter with no
+              plan set isn&apos;t a miss, and one not yet reported isn&apos;t a shortfall.{' '}
+              {revTotalHits} of {revTotalPeriods} quarters met plan
+              {revAvgAll !== null && <> · average delta <span style={{ color: deltaColor(revAvgAll) }}>{revAvgAll > 0 ? '+' : ''}{revAvgAll.toFixed(1)}%</span></>}.
+            </p>
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Company</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Quarters</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Met</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Hit Rate</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Avg Delta</th>
+                    <th className="px-4 py-2.5 w-28"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {revReliability.map(({ company, periods, hits, rate, avgDelta }) => (
+                    <tr key={company} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                      <td className="px-4 py-2.5 font-medium text-slate-700">{company}</td>
+                      <td className="px-4 py-2.5 text-right text-slate-600">{periods}</td>
+                      <td className={`px-4 py-2.5 text-right font-medium ${hits === 0 ? 'text-slate-300' : 'text-green-700'}`}>{hits}</td>
+                      <td className="px-4 py-2.5 text-right font-medium" style={{ color: reliabilityColor(rate) }}>{Math.round(rate * 100)}%</td>
+                      <td className="px-4 py-2.5 text-right font-medium tabular-nums whitespace-nowrap" style={{ color: deltaColor(avgDelta) }}>
+                        {avgDelta > 0 ? '+' : ''}{avgDelta.toFixed(1)}%
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="w-full bg-slate-100 rounded-full h-1.5">
+                          {/* floored so a 0% bar shows a red nub rather than reading as missing data */}
+                          <div className="h-1.5 rounded-full" style={{ width: `${Math.max(rate * 100, 3)}%`, backgroundColor: reliabilityColor(rate) }} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {annualDeltas.length > 0 && (
+              <p className="text-xs text-slate-400 mt-2">
+                <span className="font-medium text-slate-500">Annual plans fare differently:</span> {annualHits} of {annualDeltas.length} full-year
+                plans met, average delta{' '}
+                <span style={{ color: deltaColor(annualAvg as number) }}>{(annualAvg as number) > 0 ? '+' : ''}{(annualAvg as number).toFixed(1)}%</span>.
+                Annual budgets are set a year out and embed assumptions — regulatory clearances, launch timing — that a quarterly budget
+                already knows the answer to, so quarterly hit rates read better than annual ones.
+              </p>
+            )}
           </div>
         )}
         </div>
