@@ -260,10 +260,15 @@ export default async function AnalyticsPage() {
   // original was ever located. Counted so the page discloses the mixed basis
   // instead of presenting every comparison as against a start-of-year budget.
   let reforecastQuarters = 0
+  // Every recorded period is accounted for, so the quarterly sample never looks
+  // arbitrarily smaller than the Revenue page without explanation.
+  let revNoPlan = 0
+  let revInProgress = 0
   for (const r of revRows) {
-    if (r.projected == null || r.actual == null || Number(r.projected) === 0) continue
     const company = nameById[r.company_id]
     if (!company || excludedNames.has(company)) continue
+    if (r.actual == null) { revInProgress++; continue }
+    if (r.projected == null || Number(r.projected) === 0) { revNoPlan++; continue }
     const delta = ((Number(r.actual) - Number(r.projected)) / Math.abs(Number(r.projected))) * 100
     if (QUARTERS.has(r.period_type)) {
       if (!revMap[company]) revMap[company] = { deltas: [], hits: 0 }
@@ -576,7 +581,10 @@ export default async function AnalyticsPage() {
             <p className="text-xs text-slate-400 mb-3">
               How often each company hits its <span className="font-medium text-slate-500">quarterly</span> revenue plan, and the
               average delta when it doesn&apos;t. Only quarters carrying both a plan and a reported actual count — a quarter with no
-              plan set isn&apos;t a miss, and one not yet reported isn&apos;t a shortfall.{' '}
+              plan set isn&apos;t a miss, and one not yet reported isn&apos;t a shortfall. Of{' '}
+              {revTotalPeriods + annualDeltas.length + revNoPlan + revInProgress} recorded periods,{' '}
+              {revTotalPeriods} qualify here — {annualDeltas.length} are annual and tallied below,{' '}
+              {revNoPlan} have no plan on record, and {revInProgress} are periods still in progress.{' '}
               {revTotalHits} of {revTotalPeriods} quarters met plan
               {revAvgAll !== null && <> · average delta <span style={{ color: deltaColor(revAvgAll) }}>{revAvgAll > 0 ? '+' : ''}{revAvgAll.toFixed(1)}%</span></>}.
               {reforecastQuarters > 0 && (
