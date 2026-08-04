@@ -577,21 +577,35 @@ export default async function AnalyticsPage() {
         {/* Revenue projection reliability */}
         {revReliability.length > 0 && (
           <div>
-            <p className="text-sm font-semibold text-slate-700 mb-1">Revenue Projection Reliability by Company</p>
-            <p className="text-xs text-slate-400 mb-3">
-              How often each company hits its <span className="font-medium text-slate-500">quarterly</span> revenue plan, and the
-              average delta when it doesn&apos;t. Only quarters carrying both a plan and a reported actual count — a quarter with no
-              plan set isn&apos;t a miss, and one not yet reported isn&apos;t a shortfall. Of{' '}
-              {revTotalPeriods + annualDeltas.length + revNoPlan + revInProgress} recorded periods,{' '}
-              {revTotalPeriods} qualify here — {annualDeltas.length} are annual and tallied below,{' '}
-              {revNoPlan} have no plan on record, and {revInProgress} are periods still in progress.{' '}
-              {revTotalHits} of {revTotalPeriods} quarters met plan
-              {revAvgAll !== null && <> · average delta <span style={{ color: deltaColor(revAvgAll) }}>{revAvgAll > 0 ? '+' : ''}{revAvgAll.toFixed(1)}%</span></>}.
-              {reforecastQuarters > 0 && (
-                <> {reforecastQuarters} of {revTotalPeriods} compare against a mid-year <span className="font-medium text-slate-500">reforecast</span> rather
-                than an original budget, because no original quarterly budget exists for those periods — a reforecast is an easier
-                target, so those hit rates read slightly better than a like-for-like comparison would.</>
-              )}
+            {/* Headline metric sits inline with the title; the methodology and
+                exclusion accounting live in hover tooltips rather than a wall of
+                caption text. Nothing is hidden, just not shouted. */}
+            <div className="flex items-baseline justify-between gap-3 mb-1">
+              <p className="text-sm font-semibold text-slate-700">Revenue Projection Reliability by Company</p>
+              <p className="text-xs text-slate-400 shrink-0 tabular-nums">
+                {revTotalHits}/{revTotalPeriods} met
+                {revAvgAll !== null && (
+                  <> · <span style={{ color: deltaColor(revAvgAll) }}>{revAvgAll > 0 ? '+' : ''}{revAvgAll.toFixed(1)}%</span> avg</>
+                )}
+              </p>
+            </div>
+            <p
+              className="text-xs text-slate-400 mb-3 cursor-help"
+              title={
+                `Quarterly plan vs actual. Only quarters with BOTH a plan and a reported actual count \u2014 ` +
+                `a quarter with no plan set isn't a miss, and one not yet reported isn't a shortfall.\n\n` +
+                `Of ${revTotalPeriods + annualDeltas.length + revNoPlan + revInProgress} recorded periods, ` +
+                `${revTotalPeriods} qualify: ${annualDeltas.length} are annual (tallied separately below), ` +
+                `${revNoPlan} have no plan on record, ${revInProgress} are still in progress.` +
+                (reforecastQuarters > 0
+                  ? `\n\n${reforecastQuarters} compare against a mid-year reforecast rather than an original budget, ` +
+                    `because no original quarterly budget exists for those periods. A reforecast is an easier target, ` +
+                    `so those hit rates read slightly better than a like-for-like comparison would.`
+                  : '')
+              }
+            >
+              Quarterly plan vs actual, where both are on record
+              {reforecastQuarters > 0 && <> · {reforecastQuarters} vs a reforecast</>} · hover for detail
             </p>
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <table className="w-full text-sm">
@@ -627,12 +641,18 @@ export default async function AnalyticsPage() {
               </table>
             </div>
             {annualDeltas.length > 0 && (
-              <p className="text-xs text-slate-400 mt-2">
-                <span className="font-medium text-slate-500">Annual plans fare differently:</span> {annualHits} of {annualDeltas.length} full-year
-                plans met, average delta{' '}
-                <span style={{ color: deltaColor(annualAvg as number) }}>{(annualAvg as number) > 0 ? '+' : ''}{(annualAvg as number).toFixed(1)}%</span>.
-                Annual budgets are set a year out and embed assumptions — regulatory clearances, launch timing — that a quarterly budget
-                already knows the answer to, so quarterly hit rates read better than annual ones.
+              <p
+                className="text-xs text-slate-400 mt-2 cursor-help"
+                title={
+                  'Annual budgets are set a year out and embed assumptions \u2014 regulatory clearances, launch timing \u2014 ' +
+                  'that a quarterly budget already knows the answer to. Tallied separately so they do not flatter the quarterly figure.'
+                }
+              >
+                Annual plans: {annualHits} of {annualDeltas.length} met ·{' '}
+                <span style={{ color: deltaColor(annualAvg as number) }}>
+                  {(annualAvg as number) > 0 ? '+' : ''}{(annualAvg as number).toFixed(1)}%
+                </span>{' '}
+                avg
               </p>
             )}
           </div>
