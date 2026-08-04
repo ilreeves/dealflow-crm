@@ -149,6 +149,10 @@ export type CompanyRevenue = {
   fyProjectedBasis: string | null
   priorYearActual: number | null
   yoyPct: number | null
+  /** Growth vs the immediately preceding period of the same cadence. */
+  seqPct: number | null
+  /** Tooltip detail for the sequential column, e.g. "Q2 2026 vs Q1 2026". */
+  seqBasis: string | null
   /** Year the annual plan and progress figures report on — follows the data. */
   planYear: number
   /** YTD actual as a % of that year's annual plan. Null if either side is absent. */
@@ -201,6 +205,13 @@ export function buildCompanyRevenue(
         fyProjectedBasis: fyProj ? `Basis: ${fyProj.basis}` : null,
         priorYearActual: prior?.value ?? null,
         yoyPct: last ? yoyGrowth(rs, last) : null,
+        seqPct: last ? sequentialGrowth(rs, last) : null,
+        seqBasis: (() => {
+          if (!last) return null
+          const prev = PRIOR_PERIOD[last.period_type]
+          if (!prev || sequentialGrowth(rs, last) == null) return null
+          return `${periodLabel(last)} vs ${prev.type} ${last.fiscal_year + prev.yearOffset}`
+        })(),
         planYear,
         pctOfPlan,
         pctOfPlanBasis:
@@ -209,12 +220,41 @@ export function buildCompanyRevenue(
             : null,
       }
     })
-    .sort(
-      (a, b) =>
-        (b.latestActual ?? -1) - (a.latestActual ?? -1) ||
-        (b.fyProjected ?? -1) - (a.fyProjected ?? -1) ||
-        a.name.localeCompare(b.name),
-    )
+    // Alphabetical. A revenue-size ordering re-ranks the table every time a
+    // figure is entered, so a company you were looking at moves; alphabetical
+    // keeps each row where you last saw it.
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** The period immediately before this one, at the same cadence. */
+const PRIOR_PERIOD: Record<string, { type: string; yearOffset: number }> = {
+  Q1: { type: "Q4", yearOffset: -1 },
+  Q2: { type: "Q1", yearOffset: 0 },
+  Q3: { type: "Q2", yearOffset: 0 },
+  Q4: { type: "Q3", yearOffset: 0 },
+  H1: { type: "H2", yearOffset: -1 },
+  H2: { type: "H1", yearOffset: 0 },
+}
+
+/**
+ * Growth against the immediately preceding period of the SAME cadence — Q2 vs
+ * Q1, Q1 vs the prior Q4, H2 vs H1. Complements yoyGrowth rather than replacing
+ * it: sequential growth shows momentum but carries seasonality, YoY strips
+ * seasonality but needs a full year of history. Early-commercial companies
+ * usually have only the former.
+ *
+ * FY rows return null — year-on-year for an annual period IS yoyGrowth, so
+ * reporting it here too would just duplicate that column.
+ */
+export function sequentialGrowth(rows: PortfolioRevenue[], row: PortfolioRevenue): number | null {
+  if (row.actual == null) return null
+  const prev = PRIOR_PERIOD[row.period_type]
+  if (!prev) return null
+  const prior = rows.find(
+    (r) => r.period_type === prev.type && r.fiscal_year === row.fiscal_year + prev.yearOffset && r.actual != null,
+  )
+  if (!prior || Number(prior.actual) === 0) return null
+  return ((Number(row.actual) - Number(prior.actual)) / Math.abs(Number(prior.actual))) * 100
 }
 
 /** Most recent period with a reported actual. Rows must be sorted newest-first. */

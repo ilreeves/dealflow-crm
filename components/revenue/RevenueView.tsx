@@ -66,6 +66,7 @@ export default function RevenueView({
         variancePct: null, fyProjected: null, fyProjectedBasis: null, priorYearActual: null, yoyPct: null,
         // A freshly added company has no periods yet; router.refresh() fills these
         // in from the server once a plan or actual is entered.
+        seqPct: null, seqBasis: null,
         planYear: fiscalYear, pctOfPlan: null, pctOfPlanBasis: null,
       },
     ])
@@ -196,7 +197,7 @@ export default function RevenueView({
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[840px]">
+                <table className="w-full text-sm min-w-[920px]">
                   <thead>
                     <tr className="border-b border-slate-100">
                       <Th>Company</Th>
@@ -205,6 +206,7 @@ export default function RevenueView({
                       <Th right>Plan</Th>
                       <Th right>Variance</Th>
                       <Th right>YoY</Th>
+                      <Th right>vs prior</Th>
                       <Th right>FY {planYear} plan</Th>
                       <Th right>% of plan</Th>
                       <th className="w-8" />
@@ -241,6 +243,17 @@ export default function RevenueView({
                         </td>
                         <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: c.yoyPct != null ? (c.yoyPct >= 0 ? GREEN : ORANGE) : undefined }}>
                           {c.yoyPct != null ? fmtSignedPct(c.yoyPct) : <span className="text-slate-300">—</span>}
+                        </td>
+                        {/* Growth on the preceding period. Carried alongside YoY
+                            rather than instead of it: YoY strips seasonality but
+                            needs a year of history, which the early-commercial
+                            companies don't have yet. */}
+                        <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: c.seqPct != null ? (c.seqPct >= 0 ? GREEN : ORANGE) : undefined }}>
+                          {c.seqPct != null ? (
+                            <span title={c.seqBasis ?? undefined}>{fmtSignedPct(c.seqPct)}</span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
                         </td>
                         <td className="px-4 py-2.5 text-right text-slate-600 tabular-nums">
                           {c.fyProjected != null ? (
