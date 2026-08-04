@@ -52,6 +52,9 @@ export function fmtPct(n: number | null | undefined): string {
 }
 
 export function saveHint(msg: string): string {
+  if (/portfolio_revenue/i.test(msg)) {
+    return "Save failed — the revenue table doesn't exist yet. Run supabase/migration_revenue.sql in Supabase, then try again. (" + msg + ")"
+  }
   if (/portfolio_positions|deal_fundraise_rounds|option_pool|column .* does not exist|schema cache|could not find/i.test(msg)) {
     return "Save failed — a database migration hasn't been run yet. Run the fundraising migration in Supabase, then try again. (" + msg + ")"
   }

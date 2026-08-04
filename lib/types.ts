@@ -260,6 +260,43 @@ export interface PortfolioValuationMark {
 
 export const VALUATION_BASES = ['409A', 'Secondary transaction', 'Lead investor mark', 'Internal mark', 'Public comps', 'Impairment / write-down'] as const
 
+// ─── Revenue (projected vs actual) ────────────────────────────────────────────
+
+// Fiscal periods we track revenue against. Quarters and halves coexist with FY
+// on purpose — companies report on whatever cadence they have, and a half-year
+// update shouldn't have to be split into two invented quarters.
+export const REVENUE_PERIODS = ['Q1', 'Q2', 'Q3', 'Q4', 'H1', 'H2', 'FY'] as const
+export type RevenuePeriod = typeof REVENUE_PERIODS[number]
+
+// Last day of each period, used to derive a sortable period_end from
+// period_type + fiscal_year. Mirrors CATALYST_PERIOD_END.
+export const REVENUE_PERIOD_END: Record<RevenuePeriod, string> = {
+  'Q1': '03-31', 'Q2': '06-30', 'Q3': '09-30', 'Q4': '12-31',
+  'H1': '06-30', 'H2': '12-31', 'FY': '12-31',
+}
+
+export const REVENUE_PROJECTED_SOURCES = ['Company plan', 'Board deck', 'Management update', 'Investor update', 'Solas estimate'] as const
+export const REVENUE_ACTUAL_SOURCES = ['Audited', 'Management reported', 'Board deck', 'Investor update', 'Public filing', 'Unaudited estimate'] as const
+
+export interface PortfolioRevenue {
+  id: string
+  company_id: string
+  period_type: string
+  fiscal_year: number
+  /** Derived from period_type + fiscal_year on save; stored so the DB can sort. */
+  period_end: string | null
+  projected: number | null
+  actual: number | null
+  projected_source: string | null
+  /** When the projection was made — a forecast has a vintage, not just a target. */
+  projected_as_of: string | null
+  actual_source: string | null
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 export const INTRO_STATUSES = ['Introduced', 'Meeting Scheduled', 'In Diligence', 'Passed', 'Invested'] as const
 export type IntroStatus = typeof INTRO_STATUSES[number]
 

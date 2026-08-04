@@ -30,10 +30,20 @@ export default function DataExport() {
   const supabase = createClient()
   const [busy, setBusy] = useState<string | null>(null)
 
-  async function run(key: string, table: string, filename: string) {
+  async function run(key: string, table: string, filename: string, select = '*') {
     setBusy(key)
-    const { data } = await supabase.from(table).select('*')
-    const rows = (data as Record<string, unknown>[]) ?? []
+    const { data } = await supabase.from(table).select(select)
+    // Cast via unknown: a runtime-built select string leaves supabase-js unable
+    // to infer a row shape, so it widens to its error union.
+    let rows = (data as unknown as Record<string, unknown>[]) ?? []
+    // Flatten an embedded parent (revenue rows key on company_id, which is a UUID
+    // and useless in a spreadsheet) into a plain `company` column.
+    rows = rows.map((r) => {
+      const embedded = r.portfolio_companies as { name?: string } | null | undefined
+      if (embedded === undefined) return r
+      const { portfolio_companies: _ignored, ...rest } = r
+      return { company: embedded?.name ?? '', ...rest }
+    })
     download(filename, toCSV(rows))
     setBusy(null)
   }
@@ -42,6 +52,7 @@ export default function DataExport() {
     { key: 'deals', table: 'deals', label: 'Deals', file: 'deals.csv' },
     { key: 'portfolio', table: 'portfolio_companies', label: 'Portfolio Companies', file: 'portfolio_companies.csv' },
     { key: 'catalysts', table: 'catalysts', label: 'Catalysts', file: 'catalysts.csv' },
+    { key: 'revenue', table: 'portfolio_revenue', label: 'Revenue', file: 'portfolio_revenue.csv', select: '*, portfolio_companies(name)' },
   ]
 
   return (
@@ -52,7 +63,7 @@ export default function DataExport() {
       </div>
       <div className="px-5 py-4 flex flex-wrap gap-2">
         {exports.map((e) => (
-          <button key={e.key} onClick={() => run(e.key, e.table, e.file)} disabled={busy !== null}
+          <button key={e.key} onClick={() => run(e.key, e.table, e.file, e.select)} disabled={busy !== null}
             className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition">
             {busy === e.key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5 text-slate-400" />}
             {e.label}

@@ -9,13 +9,14 @@ import { formatDate } from '@/lib/utils'
 import PortfolioCompanyForm from './PortfolioCompanyForm'
 import CapRoundsTab from './CapRoundsTab'
 import FundraisingTab from './FundraisingTab'
+import RevenueTab from './RevenueTab'
 import { useLatestRound } from '@/lib/useLatestRound'
 import InvestorIntrosTab from '@/components/shared/InvestorIntrosTab'
 import DecksSection from '@/components/shared/DecksSection'
 import ClinicalContextSection from '@/components/shared/ClinicalContextSection'
 import KnownCompetitors from '@/components/shared/KnownCompetitors'
 
-type Tab = 'overview' | 'fundraising' | 'rounds' | 'intros' | 'catalysts'
+type Tab = 'overview' | 'fundraising' | 'rounds' | 'revenue' | 'intros' | 'catalysts'
 
 interface Props {
   company: PortfolioCompany
@@ -49,6 +50,7 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
     { key: 'overview', label: 'Overview' },
     { key: 'fundraising', label: 'Fundraising' },
     { key: 'rounds', label: 'Ownership' },
+    { key: 'revenue', label: 'Revenue' },
     { key: 'intros', label: 'Investor Intros' },
     { key: 'catalysts', label: 'Catalysts' },
   ]
@@ -101,6 +103,7 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
             {tab === 'overview' && <OverviewTab company={company} />}
             {tab === 'fundraising' && <FundraisingTab companyId={company.id} />}
             {tab === 'rounds' && <CapRoundsTab companyId={company.id} />}
+            {tab === 'revenue' && <RevenueTab companyId={company.id} />}
             {tab === 'intros' && <InvestorIntrosTab table="portfolio_investor_intros" fkColumn="company_id" entityId={company.id} />}
             {tab === 'catalysts' && <CatalystsTab companyName={company.name} />}
           </div>

@@ -1,0 +1,402 @@
+"use client"
+
+import { useState, useEffect, useCallback } from "react"
+import { Plus, Trash2, Loader2, Pencil, LineChart } from "lucide-react"
+import {
+  PortfolioRevenue,
+  REVENUE_PERIODS,
+  REVENUE_PROJECTED_SOURCES,
+  REVENUE_ACTUAL_SOURCES,
+} from "@/lib/types"
+import { createClient } from "@/lib/supabase/client"
+import { parseNum, numToStr, numError, fmtMoney, saveHint, exactDate, inputCls } from "@/lib/rounds"
+import {
+  periodLabel,
+  periodEnd,
+  variance,
+  varianceColor,
+  fmtSignedPct,
+  yoyGrowth,
+  latestActual,
+  currentYearProjection,
+} from "@/lib/revenue"
+import Field from "@/components/shared/Field"
+
+const NAVY = "#023a51", GREEN = "#5ba200", ORANGE = "#e98925"
+
+// Revenue, projected against actual, one row per fiscal period. Rows are held
+// newest-first throughout — the stat cards and the YoY lookup both rely on that
+// order, so re-sort after every mutation rather than appending.
+export default function RevenueTab({ companyId }: { companyId: string }) {
+  const supabase = createClient()
+  const [rows, setRows] = useState<PortfolioRevenue[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [adding, setAdding] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const { data, error: e } = await supabase
+      .from("portfolio_revenue")
+      .select("*")
+      .eq("company_id", companyId)
+      .order("period_end", { ascending: false, nullsFirst: false })
+    if (e) setError(saveHint(e.message))
+    setRows((data as PortfolioRevenue[]) ?? [])
+    setLoading(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  async function handleDelete(id: string) {
+    const { error: e } = await supabase.from("portfolio_revenue").delete().eq("id", id)
+    if (e) { setError("Couldn't delete that period: " + e.message); return }
+    setRows((prev) => prev.filter((r) => r.id !== id))
+    if (editingId === id) setEditingId(null)
+  }
+
+  // ── headline figures ──
+  const last = latestActual(rows)
+  const thisYear = new Date().getFullYear()
+  const proj = currentYearProjection(rows, thisYear)
+  const lastVar = last ? variance(last) : null
+  const lastYoy = last ? yoyGrowth(rows, last) : null
+
+  if (loading) {
+    return <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Stat cards */}
+      <div className="grid grid-cols-4 gap-2.5">
+        <Stat
+          label="Latest actual"
+          value={fmtMoney(last?.actual)}
+          sub={last ? periodLabel(last) : undefined}
+        />
+        <Stat
+          label={`FY ${thisYear} projected`}
+          value={fmtMoney(proj?.value)}
+          sub={proj && proj.basis !== `FY ${thisYear}` ? `sum of ${proj.basis}` : undefined}
+        />
+        <Stat
+          label="vs plan"
+          value={lastVar ? fmtSignedPct(lastVar.pct) : "—"}
+          sub={lastVar ? `${fmtMoney(Math.abs(lastVar.abs))} ${lastVar.abs >= 0 ? "above" : "below"}` : undefined}
+          accent={lastVar ? varianceColor(lastVar.abs) : undefined}
+        />
+        <Stat
+          label="YoY growth"
+          value={lastYoy != null ? fmtSignedPct(lastYoy) : "—"}
+          sub={last && lastYoy != null ? `${last.period_type} ${last.fiscal_year - 1} → ${last.fiscal_year}` : undefined}
+          accent={lastYoy != null ? (lastYoy >= 0 ? GREEN : ORANGE) : undefined}
+        />
+      </div>
+      <p className="text-xs text-slate-400 -mt-1.5 px-0.5">
+        {rows.length === 0
+          ? "Add a fiscal period to start tracking projected against actual revenue."
+          : "Variance compares an actual to the projection for the same period. Periods with no actual reported yet are left blank rather than counted as a shortfall."}
+      </p>
+
+      {/* Projected vs actual by period */}
+      <div className="border border-slate-200 rounded-xl bg-white">
+        <div className="flex items-center justify-between px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <LineChart className="w-4 h-4 text-slate-400" />
+            <span className="text-sm font-medium text-slate-600">Revenue by period</span>
+            <span className="text-xs text-slate-400">projected vs actual</span>
+          </div>
+          {!adding && !editingId && (
+            <button
+              onClick={() => setAdding(true)}
+              className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 hover:border-slate-300 transition"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add period
+            </button>
+          )}
+        </div>
+
+        {adding && (
+          <div className="border-t border-slate-100">
+            <RevenueEditor
+              companyId={companyId}
+              existing={rows}
+              onCancel={() => setAdding(false)}
+              onDone={() => { setAdding(false); load() }}
+            />
+          </div>
+        )}
+
+        {rows.length > 0 && (
+          <div className="border-t border-slate-100">
+            <RevenueBars rows={rows} />
+            <div className="divide-y divide-slate-50">
+              {rows.map((r) =>
+                editingId === r.id ? (
+                  <div key={r.id}>
+                    <RevenueEditor
+                      companyId={companyId}
+                      existing={rows}
+                      initial={r}
+                      onCancel={() => setEditingId(null)}
+                      onDone={() => { setEditingId(null); load() }}
+                    />
+                  </div>
+                ) : (
+                  <RevenueRow
+                    key={r.id}
+                    row={r}
+                    yoy={yoyGrowth(rows, r)}
+                    onEdit={() => { setEditingId(r.id); setAdding(false) }}
+                    onDelete={() => handleDelete(r.id)}
+                  />
+                ),
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+    </div>
+  )
+}
+
+function Stat({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
+  return (
+    <div className="bg-slate-50 rounded-lg px-3 py-2.5">
+      <p className="text-xs text-slate-400">{label}</p>
+      <p className="text-xl font-semibold mt-0.5 tabular-nums" style={{ color: accent ?? "#0f172a" }}>{value}</p>
+      {sub && <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>}
+    </div>
+  )
+}
+
+// ─── one period row ───────────────────────────────────────────────────────────
+function RevenueRow({
+  row, yoy, onEdit, onDelete,
+}: {
+  row: PortfolioRevenue
+  yoy: number | null
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  const v = variance(row)
+  return (
+    <div className="px-4 py-2.5 group">
+      <div className="flex items-center gap-3 text-sm">
+        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-lg bg-slate-100 text-xs font-bold text-slate-600 shrink-0 w-[4.5rem]">
+          {periodLabel(row)}
+        </span>
+        <div className="flex items-baseline gap-1.5 w-32 shrink-0">
+          <span className="text-xs text-slate-400">plan</span>
+          <span className="text-slate-600 tabular-nums">{fmtMoney(row.projected)}</span>
+        </div>
+        <div className="flex items-baseline gap-1.5 w-32 shrink-0">
+          <span className="text-xs text-slate-400">actual</span>
+          <span className="font-medium tabular-nums" style={{ color: row.actual != null ? NAVY : undefined }}>
+            {row.actual != null ? fmtMoney(row.actual) : <span className="text-slate-300">not reported</span>}
+          </span>
+        </div>
+        <span className="flex-1 text-xs tabular-nums" style={{ color: varianceColor(v?.abs) }}>
+          {v ? `${fmtSignedPct(v.pct)} vs plan` : ""}
+        </span>
+        {yoy != null && (
+          <span className="text-xs tabular-nums shrink-0" style={{ color: yoy >= 0 ? GREEN : ORANGE }}>
+            {fmtSignedPct(yoy)} YoY
+          </span>
+        )}
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
+          <button onClick={onEdit} className="p-1 text-slate-400 hover:text-slate-700"><Pencil className="w-3.5 h-3.5" /></button>
+          <button onClick={onDelete} className="p-1 text-slate-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+        </div>
+      </div>
+      {(row.projected_source || row.actual_source || row.projected_as_of || row.notes) && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 pl-[5.25rem] text-xs text-slate-400">
+          {row.projected_source && (
+            <span>
+              plan: {row.projected_source}
+              {row.projected_as_of ? ` (${exactDate(row.projected_as_of)})` : ""}
+            </span>
+          )}
+          {row.actual_source && <span>actual: {row.actual_source}</span>}
+          {row.notes && <span className="text-slate-500">{row.notes}</span>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── projected vs actual bars ─────────────────────────────────────────────────
+// Oldest → newest left to right, so the trend reads the way a chart should even
+// though the list below it is newest-first.
+function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
+  const chron = [...rows].reverse()
+  const max = Math.max(
+    1,
+    ...chron.flatMap((r) => [Number(r.projected) || 0, Number(r.actual) || 0]),
+  )
+  return (
+    <div className="px-4 pt-3 pb-4 border-b border-slate-100">
+      <div className="flex items-end gap-3 h-28 overflow-x-auto">
+        {chron.map((r) => {
+          const p = Number(r.projected) || 0
+          const a = r.actual != null ? Number(r.actual) : null
+          return (
+            <div key={r.id} className="flex flex-col items-center gap-1 shrink-0 min-w-[3.25rem]">
+              <div className="flex items-end gap-0.5 h-20">
+                <div
+                  className="w-4 rounded-t"
+                  style={{ height: `${Math.max(2, (p / max) * 100)}%`, backgroundColor: "#cbd5e1" }}
+                  title={`${periodLabel(r)} plan: ${fmtMoney(r.projected)}`}
+                />
+                <div
+                  className="w-4 rounded-t"
+                  style={{
+                    height: a != null ? `${Math.max(2, (a / max) * 100)}%` : "2px",
+                    backgroundColor: a != null ? NAVY : "#f1f5f9",
+                  }}
+                  title={a != null ? `${periodLabel(r)} actual: ${fmtMoney(r.actual)}` : `${periodLabel(r)} actual: not reported`}
+                />
+              </div>
+              <span className="text-[10px] text-slate-400 whitespace-nowrap">{periodLabel(r)}</span>
+            </div>
+          )
+        })}
+      </div>
+      <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: "#cbd5e1" }} /> Projected</span>
+        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: NAVY }} /> Actual</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── period editor ────────────────────────────────────────────────────────────
+function RevenueEditor({
+  companyId, existing, initial, onDone, onCancel,
+}: {
+  companyId: string
+  existing: PortfolioRevenue[]
+  initial?: PortfolioRevenue
+  onDone: () => void
+  onCancel: () => void
+}) {
+  const supabase = createClient()
+  const isNew = !initial
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+  const [f, setF] = useState({
+    period_type: initial?.period_type ?? "FY",
+    fiscal_year: String(initial?.fiscal_year ?? new Date().getFullYear()),
+    projected: numToStr(initial?.projected),
+    actual: numToStr(initial?.actual),
+    projected_source: initial?.projected_source ?? "",
+    projected_as_of: initial?.projected_as_of ?? "",
+    actual_source: initial?.actual_source ?? "",
+    notes: initial?.notes ?? "",
+  })
+  function set<K extends keyof typeof f>(k: K, v: (typeof f)[K]) { setF((p) => ({ ...p, [k]: v })) }
+
+  async function save() {
+    const year = parseInt(f.fiscal_year, 10)
+    if (!year || year < 2000 || year > 2100) { setError("Enter a fiscal year between 2000 and 2100."); return }
+    if (!f.projected.trim() && !f.actual.trim()) { setError("Enter a projected or an actual figure (or both)."); return }
+    // Surface typos rather than letting them persist as null.
+    const numErr = numError("Projected", f.projected) ?? numError("Actual", f.actual)
+    if (numErr) { setError(numErr); return }
+    // The table has a UNIQUE (company, period_type, fiscal_year); catch the clash
+    // here so the user gets a readable message instead of a Postgres 23505.
+    const clash = existing.find(
+      (r) => r.id !== initial?.id && r.period_type === f.period_type && r.fiscal_year === year,
+    )
+    if (clash) { setError(`${f.period_type} ${year} already exists — edit that row instead.`); return }
+
+    setSaving(true)
+    setError("")
+    const payload = {
+      company_id: companyId,
+      period_type: f.period_type,
+      fiscal_year: year,
+      period_end: periodEnd(f.period_type, year),
+      projected: parseNum(f.projected),
+      actual: parseNum(f.actual),
+      projected_source: f.projected_source || null,
+      projected_as_of: f.projected_as_of || null,
+      actual_source: f.actual_source || null,
+      notes: f.notes || null,
+      updated_at: new Date().toISOString(),
+    }
+    const { error: e } = isNew
+      ? await supabase.from("portfolio_revenue").insert(payload)
+      : await supabase.from("portfolio_revenue").update(payload).eq("id", initial!.id)
+    if (e) { setError(saveHint(e.message)); setSaving(false); return }
+    setSaving(false)
+    onDone()
+  }
+
+  return (
+    <div className="p-4 space-y-3 bg-slate-50">
+      <div className="grid grid-cols-4 gap-3">
+        <Field label="Period *">
+          <select value={f.period_type} onChange={(e) => set("period_type", e.target.value)} className={inputCls}>
+            {REVENUE_PERIODS.map((p) => <option key={p} value={p}>{p === "FY" ? "FY (full year)" : p}</option>)}
+          </select>
+        </Field>
+        <Field label="Fiscal year *">
+          <input type="number" min={2000} max={2100} value={f.fiscal_year} onChange={(e) => set("fiscal_year", e.target.value)} className={inputCls} />
+        </Field>
+        <Field label="Projected">
+          <input placeholder="$ e.g. 4.5M" value={f.projected} onChange={(e) => set("projected", e.target.value)} className={inputCls} />
+        </Field>
+        <Field label="Actual">
+          <input placeholder="$ blank if not reported" value={f.actual} onChange={(e) => set("actual", e.target.value)} className={inputCls} />
+        </Field>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="Projection source">
+          <select value={f.projected_source} onChange={(e) => set("projected_source", e.target.value)} className={inputCls}>
+            <option value="">—</option>
+            {REVENUE_PROJECTED_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Field>
+        <Field label="Projection as of">
+          <input type="date" value={f.projected_as_of} onChange={(e) => set("projected_as_of", e.target.value)} className={inputCls} />
+        </Field>
+        <Field label="Actual source">
+          <select value={f.actual_source} onChange={(e) => set("actual_source", e.target.value)} className={inputCls}>
+            <option value="">—</option>
+            {REVENUE_ACTUAL_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Field>
+      </div>
+      <div>
+        <label className="block text-xs text-slate-500 mb-1">Notes</label>
+        <textarea
+          rows={2}
+          value={f.notes}
+          onChange={(e) => set("notes", e.target.value)}
+          className={`${inputCls} resize-none`}
+          placeholder="What drove the variance, revenue mix, one-offs…"
+        />
+      </div>
+      {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancel} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 transition">Cancel</button>
+        <button
+          onClick={save}
+          disabled={saving}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg disabled:opacity-40 transition"
+          style={{ backgroundColor: NAVY }}
+        >
+          {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />} {isNew ? "Add period" : "Save period"}
+        </button>
+      </div>
+    </div>
+  )
+}
