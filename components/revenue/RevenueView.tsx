@@ -115,10 +115,7 @@ export default function RevenueView({
   return (
     <div className="flex flex-col h-full">
       <div className="px-6 py-4 bg-white border-b border-slate-200 shrink-0">
-        <h1 className="text-lg font-semibold text-slate-900">Revenue</h1>
-        <p className="text-sm text-slate-500">
-          Projected against actual revenue for the revenue-generating portfolio · FY {fiscalYear}
-        </p>
+        <h1 className="text-lg font-semibold text-slate-900" title={`Projected against actual revenue for the revenue-generating portfolio · FY ${fiscalYear}`}>Revenue</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-6">
@@ -143,12 +140,12 @@ export default function RevenueView({
           {/* Roster + figures */}
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-              <div>
-                <p className="text-sm font-medium text-slate-700">Tracked companies</p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Adding a company here gives it a Revenue tab on its own page, where the periods are entered.
-                </p>
-              </div>
+              <p
+                className="text-sm font-medium text-slate-700"
+                title="Adding a company here gives it a Revenue tab on its own page, where the periods are entered."
+              >
+                Tracked companies
+              </p>
               {!adding && (
                 <button
                   onClick={() => setAdding(true)}

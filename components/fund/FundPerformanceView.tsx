@@ -120,8 +120,7 @@ export default function FundPerformanceView({
   return (
     <div className="flex flex-col h-full">
       <div className="px-6 py-4 bg-white border-b border-slate-200 shrink-0">
-        <h1 className="text-lg font-semibold text-slate-900">Fund Performance</h1>
-        <p className="text-sm text-slate-500">Invested capital, current value, and ownership across funds{asOf ? ` · as of ${asOf}` : ""}</p>
+        <h1 className="text-lg font-semibold text-slate-900" title={`Invested capital, current value, and ownership across funds${asOf ? ` · as of ${asOf}` : ""}`}>Fund Performance</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-6">

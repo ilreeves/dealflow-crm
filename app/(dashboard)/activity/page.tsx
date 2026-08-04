@@ -47,8 +47,7 @@ export default async function ActivityPage() {
   return (
     <div className="flex flex-col h-full">
       <div className="px-6 py-4 bg-white border-b border-slate-200 shrink-0">
-        <h1 className="text-lg font-semibold text-slate-900">Activity</h1>
-        <p className="text-sm text-slate-500">Recent changes across deals and catalysts</p>
+        <h1 className="text-lg font-semibold text-slate-900" title="Recent changes across deals and catalysts">Activity</h1>
       </div>
 
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-6 px-6 py-6">

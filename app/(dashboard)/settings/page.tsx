@@ -99,8 +99,7 @@ export default function SettingsPage() {
   return (
     <div className="max-w-2xl mx-auto px-6 py-8">
       <div className="mb-8">
-        <h1 className="text-xl font-semibold text-slate-900">Settings</h1>
-        <p className="text-sm text-slate-500 mt-1">Profile, team, custom fields, dropdown lists, investor directory, and data export</p>
+        <h1 className="text-xl font-semibold text-slate-900" title="Profile, team, custom fields, dropdown lists, investor directory, and data export">Settings</h1>
       </div>
 
       <div className="space-y-6">
