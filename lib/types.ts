@@ -281,7 +281,11 @@ export const REVENUE_PERIOD_END: Record<RevenuePeriod, string> = {
   'H1': '06-30', 'H2': '12-31', 'FY': '12-31',
 }
 
-export const REVENUE_PROJECTED_SOURCES = ['Company plan', 'Board deck', 'Management update', 'Investor update', 'Solas estimate'] as const
+// 'Reforecast' marks a plan that is NOT the original start-of-year budget —
+// a mid-year revision, used only where no original was ever located. Kept as its
+// own source so a mixed-basis dataset stays auditable at a glance rather than the
+// distinction living only in a notes field.
+export const REVENUE_PROJECTED_SOURCES = ['Company plan', 'Board deck', 'Reforecast', 'Management update', 'Investor update', 'Solas estimate'] as const
 export const REVENUE_ACTUAL_SOURCES = ['Audited', 'Management reported', 'Board deck', 'Investor update', 'Public filing', 'Unaudited estimate'] as const
 
 export interface PortfolioRevenue {

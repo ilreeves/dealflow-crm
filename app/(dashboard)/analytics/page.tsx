@@ -14,7 +14,7 @@ export default async function AnalyticsPage() {
     supabase.from('list_options').select('list_key,value,sort_order').order('sort_order'),
     // Returns null data if the revenue migration hasn't been run — the section
     // then simply doesn't render rather than breaking the page.
-    supabase.from('portfolio_revenue').select('company_id,period_type,fiscal_year,projected,actual'),
+    supabase.from('portfolio_revenue').select('company_id,period_type,fiscal_year,projected,actual,projected_source'),
   ])
 
   const deals = (data as Deal[]) ?? []
@@ -247,7 +247,7 @@ export default async function AnalyticsPage() {
   // met, and the average signed delta. Only periods carrying BOTH a plan and an
   // actual count — a quarter with no plan is not a miss, and one not yet reported
   // is not a shortfall.
-  type RevRow = { company_id: string; period_type: string; fiscal_year: number; projected: number | null; actual: number | null }
+  type RevRow = { company_id: string; period_type: string; fiscal_year: number; projected: number | null; actual: number | null; projected_source: string | null }
   const revRows = (revenueData as RevRow[]) ?? []
   const nameById: Record<string, string> = {}
   for (const pc of portfolioCompaniesAll) nameById[pc.id] = pc.name
@@ -256,6 +256,10 @@ export default async function AnalyticsPage() {
   const revMap: Record<string, { deltas: number[]; hits: number }> = {}
   const annualDeltas: number[] = []
   let annualHits = 0
+  // Some plans are mid-year reforecasts rather than original budgets, where no
+  // original was ever located. Counted so the page discloses the mixed basis
+  // instead of presenting every comparison as against a start-of-year budget.
+  let reforecastQuarters = 0
   for (const r of revRows) {
     if (r.projected == null || r.actual == null || Number(r.projected) === 0) continue
     const company = nameById[r.company_id]
@@ -265,6 +269,7 @@ export default async function AnalyticsPage() {
       if (!revMap[company]) revMap[company] = { deltas: [], hits: 0 }
       revMap[company].deltas.push(delta)
       if (delta >= 0) revMap[company].hits++
+      if (r.projected_source === 'Reforecast') reforecastQuarters++
     } else if (r.period_type === 'FY') {
       // Tracked separately: annual plans are set a year out and tend to embed
       // assumptions (regulatory clearances, launch timing) that quarterly
@@ -574,6 +579,11 @@ export default async function AnalyticsPage() {
               plan set isn&apos;t a miss, and one not yet reported isn&apos;t a shortfall.{' '}
               {revTotalHits} of {revTotalPeriods} quarters met plan
               {revAvgAll !== null && <> · average delta <span style={{ color: deltaColor(revAvgAll) }}>{revAvgAll > 0 ? '+' : ''}{revAvgAll.toFixed(1)}%</span></>}.
+              {reforecastQuarters > 0 && (
+                <> {reforecastQuarters} of {revTotalPeriods} compare against a mid-year <span className="font-medium text-slate-500">reforecast</span> rather
+                than an original budget, because no original quarterly budget exists for those periods — a reforecast is an easier
+                target, so those hit rates read slightly better than a like-for-like comparison would.</>
+              )}
             </p>
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <table className="w-full text-sm">
