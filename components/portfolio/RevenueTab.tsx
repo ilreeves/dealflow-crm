@@ -14,7 +14,10 @@ import {
   periodLabel,
   periodEnd,
   variance,
-  varianceColor,
+  varianceBandColor,
+  QUARTER_TYPES,
+  annualProjection,
+  annualActual,
   fmtSignedPct,
   yoyGrowth,
   latestActual,
@@ -90,7 +93,7 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
           label="vs plan"
           value={lastVar ? fmtSignedPct(lastVar.pct) : "—"}
           sub={lastVar ? `${fmtMoney(Math.abs(lastVar.abs))} ${lastVar.abs >= 0 ? "above" : "below"}` : undefined}
-          accent={lastVar ? varianceColor(lastVar.abs) : undefined}
+          accent={lastVar ? varianceBandColor(lastVar.pct) : undefined}
         />
         <Stat
           label="YoY growth"
@@ -205,7 +208,7 @@ function RevenueRow({
             {row.actual != null ? fmtMoney(row.actual) : <span className="text-slate-300">not reported</span>}
           </span>
         </div>
-        <span className="flex-1 text-xs tabular-nums" style={{ color: varianceColor(v?.abs) }}>
+        <span className="flex-1 text-xs tabular-nums" style={{ color: varianceBandColor(v?.pct) }}>
           {v ? `${fmtSignedPct(v.pct)} vs plan` : ""}
         </span>
         {yoy != null && (
@@ -234,46 +237,171 @@ function RevenueRow({
   )
 }
 
-// ─── projected vs actual bars ─────────────────────────────────────────────────
+// ─── target bars: actual as the bar, plan as a tick ───────────────────────────
+// ONE CADENCE AT A TIME, chosen by the toggle. Mixing them is what made the old
+// chart misleading: an FY bar sat beside the four quarters that compose it, so
+// the tallest bar was a sum of its own neighbours. The toggle keeps the annual
+// view — which is where a 2023→2026 trajectory actually reads — without ever
+// putting two cadences on one axis. Half-year rows are drawn in neither view.
+//
 // Oldest → newest left to right, so the trend reads the way a chart should even
 // though the list below it is newest-first.
+type ChartPoint = {
+  key: string
+  label: string
+  /** Year caption under a quarter; blank when it repeats the one to its left. */
+  group: string
+  projected: number | null
+  actual: number | null
+  /** Tooltip detail when a figure was derived rather than entered as an FY row. */
+  basis: string | null
+}
+
+function quarterPoints(rows: PortfolioRevenue[]): ChartPoint[] {
+  const chron = rows.filter((r) => QUARTER_TYPES.has(r.period_type)).slice().reverse()
+  return chron.map((r, i) => ({
+    key: r.id,
+    label: r.period_type,
+    group: i === 0 || chron[i - 1].fiscal_year !== r.fiscal_year ? String(r.fiscal_year) : "",
+    projected: r.projected != null ? Number(r.projected) : null,
+    actual: r.actual != null ? Number(r.actual) : null,
+    basis: null,
+  }))
+}
+
+function annualPoints(rows: PortfolioRevenue[]): ChartPoint[] {
+  const years = Array.from(new Set(rows.map((r) => r.fiscal_year))).sort((a, b) => a - b)
+  return years
+    .map((y) => {
+      const p = annualProjection(rows, y)
+      const a = annualActual(rows, y)
+      const derived = [
+        p && p.basis !== "FY" ? `plan summed from ${p.basis}` : null,
+        a && a.basis !== "FY" ? `actual summed from ${a.basis}` : null,
+      ].filter(Boolean)
+      return {
+        key: `fy-${y}`,
+        label: String(y),
+        group: "",
+        projected: p?.value ?? null,
+        actual: a?.value ?? null,
+        basis: derived.length ? derived.join("\n") : null,
+      }
+    })
+    .filter((pt) => pt.projected != null || pt.actual != null)
+}
+
 function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
-  const chron = [...rows].reverse()
-  const max = Math.max(
-    1,
-    ...chron.flatMap((r) => [Number(r.projected) || 0, Number(r.actual) || 0]),
+  const [mode, setMode] = useState<"quarterly" | "annual">("quarterly")
+  const quarterly = quarterPoints(rows)
+  const annual = annualPoints(rows)
+  const pts = mode === "quarterly" ? quarterly : annual
+
+  const toggle = (
+    <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-100 shrink-0">
+      {(["quarterly", "annual"] as const).map((m) => (
+        <button
+          key={m}
+          onClick={() => setMode(m)}
+          aria-pressed={mode === m}
+          className={`px-2 py-0.5 text-[11px] rounded-md capitalize transition ${
+            mode === m ? "bg-white text-slate-700 shadow-sm font-medium" : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          {m}
+        </button>
+      ))}
+    </div>
   )
+
+  if (!pts.length) {
+    return (
+      <div className="px-4 pt-3 pb-4 border-b border-slate-100 flex items-start justify-between gap-3">
+        <p className="text-xs text-slate-400">
+          {mode === "quarterly"
+            ? "No quarterly periods recorded yet."
+            : "No complete year yet — an annual bar needs an FY row, or all four quarters."}
+        </p>
+        {toggle}
+      </div>
+    )
+  }
+
+  // Headroom so the tallest plan tick never sits flush against the top edge.
+  const max = Math.max(1, ...pts.flatMap((p) => [p.projected ?? 0, p.actual ?? 0])) * 1.08
+
   return (
     <div className="px-4 pt-3 pb-4 border-b border-slate-100">
-      <div className="flex items-end gap-3 h-28 overflow-x-auto">
-        {chron.map((r) => {
-          const p = Number(r.projected) || 0
-          const a = r.actual != null ? Number(r.actual) : null
+      <div className="flex items-center justify-end mb-1">{toggle}</div>
+      <div className="flex items-end gap-3 h-32 overflow-x-auto">
+        {pts.map((pt) => {
+          // Null is NOT zero on either side. A plan that was never recorded draws
+          // no tick, and a period not yet reported draws a hollow stub — neither
+          // may render as a short bar, which reads as "≈0" instead of "absent".
+          const { projected: p, actual: a } = pt
+          const v = variance({ projected: p, actual: a })
+          const fill = varianceBandColor(v?.pct)
+          const tip = [
+            mode === "quarterly" ? `${pt.label} ${pt.group || ""}`.trim() : `FY ${pt.label}`,
+            `Plan: ${p != null ? fmtMoney(p) : "not recorded"}`,
+            `Actual: ${a != null ? fmtMoney(a) : "not reported yet"}`,
+            v?.pct != null ? `Variance: ${fmtSignedPct(v.pct)}` : null,
+            pt.basis,
+          ]
+            .filter(Boolean)
+            .join("\n")
+
           return (
-            <div key={r.id} className="flex flex-col items-center gap-1 shrink-0 min-w-[3.25rem]">
-              <div className="flex items-end gap-0.5 h-20">
-                <div
-                  className="w-4 rounded-t"
-                  style={{ height: `${Math.max(2, (p / max) * 100)}%`, backgroundColor: "#cbd5e1" }}
-                  title={`${periodLabel(r)} plan: ${fmtMoney(r.projected)}`}
-                />
-                <div
-                  className="w-4 rounded-t"
-                  style={{
-                    height: a != null ? `${Math.max(2, (a / max) * 100)}%` : "2px",
-                    backgroundColor: a != null ? NAVY : "#f1f5f9",
-                  }}
-                  title={a != null ? `${periodLabel(r)} actual: ${fmtMoney(r.actual)}` : `${periodLabel(r)} actual: not reported`}
-                />
+            <div key={pt.key} className="flex flex-col items-center gap-1 shrink-0 min-w-[3.5rem]">
+              {/* Signed variance, always shown alongside the fill. Green and orange
+                  are indistinguishable to protan viewers, so the colour is never
+                  the only thing saying whether a period beat or missed. */}
+              <span
+                className="text-[9px] leading-none tabular-nums h-2.5"
+                style={{ color: v?.pct != null ? fill : "transparent" }}
+              >
+                {v?.pct != null ? fmtSignedPct(v.pct) : "—"}
+              </span>
+
+              <div className="relative w-9 h-20" title={tip}>
+                {a != null ? (
+                  <div
+                    className="absolute inset-x-0 bottom-0 rounded-t"
+                    style={{ height: `${Math.max(2, (a / max) * 100)}%`, backgroundColor: fill }}
+                  />
+                ) : (
+                  <div className="absolute inset-x-0 bottom-0 h-4 rounded-t border border-dashed border-slate-300" />
+                )}
+                {p != null && (
+                  <div
+                    className="absolute -inset-x-1 h-[2.5px] rounded-full bg-slate-400"
+                    style={{ bottom: `calc(${(p / max) * 100}% - 1.25px)` }}
+                  />
+                )}
               </div>
-              <span className="text-[10px] text-slate-400 whitespace-nowrap">{periodLabel(r)}</span>
+
+              <span className="text-[10px] text-slate-500 leading-none">{pt.label}</span>
+              <span className="text-[9px] text-slate-400 leading-none h-2.5">{pt.group}</span>
             </div>
           )
         })}
       </div>
-      <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: "#cbd5e1" }} /> Projected</span>
-        <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: NAVY }} /> Actual</span>
+      <div className="flex items-center gap-x-4 gap-y-1.5 mt-2 text-xs text-slate-400 flex-wrap">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: GREEN }} /> &gt;10% ahead
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: NAVY }} /> Within 10%
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: ORANGE }} /> &gt;10% behind
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-[2.5px] rounded-full bg-slate-400" /> Plan
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded border border-dashed border-slate-300" /> Not reported
+        </span>
       </div>
     </div>
   )

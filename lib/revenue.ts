@@ -53,13 +53,40 @@ export function variance(r: Pick<PortfolioRevenue, "projected" | "actual">): { a
   return { abs: a - p, pct: p !== 0 ? ((a - p) / Math.abs(p)) * 100 : null }
 }
 
-/** Green above plan, orange below, navy on plan. Matches the valueColor convention. */
-export function varianceColor(abs: number | null | undefined): string {
-  if (abs == null) return "#64748b"
-  if (abs > 0) return "#5ba200"
-  if (abs < 0) return "#e98925"
-  return "#023a51"
+/** Solas brand. One definition so every revenue surface draws from the same set. */
+export const REVENUE_COLORS = { navy: "#023a51", green: "#5ba200", orange: "#e98925" } as const
+
+/** Variance beyond this many percent counts as a material beat or miss. */
+export const VARIANCE_BAND_PCT = 10
+
+/**
+ * THE variance colour rule — every surface uses this one, so the chart and the
+ * tables can never disagree about whether a quarter was a beat.
+ *
+ * Green a material beat, orange a material miss, navy anything inside the band.
+ * Threshold-based rather than sign-based: an earlier sign-based helper painted
+ * a +0.3% beat green, which reads as a result when it is noise. Removed in
+ * favour of this — do not reintroduce a second convention.
+ *
+ * Null means no comparison is possible (no plan recorded, or nothing reported
+ * yet) and returns navy — the neutral, never orange. A missing plan is not a
+ * miss, and the chart draws no plan tick in that case so the absence is visible.
+ *
+ * ⚠️ Green and orange are indistinguishable under protanopia (OKLab ΔE ~0.6),
+ * so this colour must never be the ONLY thing carrying the verdict. Every
+ * surface using it also shows the signed variance, and in the chart the bar's
+ * distance from the plan tick encodes the same fact positionally.
+ */
+export function varianceBandColor(pct: number | null | undefined): string {
+  if (pct == null || isNaN(Number(pct))) return REVENUE_COLORS.navy
+  const n = Number(pct)
+  if (n > VARIANCE_BAND_PCT) return REVENUE_COLORS.green
+  if (n < -VARIANCE_BAND_PCT) return REVENUE_COLORS.orange
+  return REVENUE_COLORS.navy
 }
+
+/** Quarterly period types, the only cadence the chart draws. */
+export const QUARTER_TYPES = new Set(["Q1", "Q2", "Q3", "Q4"])
 
 export function fmtSignedPct(pct: number | null | undefined): string {
   if (pct == null || isNaN(Number(pct))) return "—"
@@ -286,6 +313,33 @@ export function annualActual(
   return {
     value: inYear.filter((r) => complete.includes(r.period_type)).reduce((s, r) => s + Number(r.actual), 0),
     basis: complete.join(" + "),
+  }
+}
+
+/**
+ * A year's ANNUAL projection — the mirror of annualActual, and the plan side of
+ * the annual chart. The FY row if one exists, otherwise the sum of the quarters
+ * but ONLY when all four are planned.
+ *
+ * Deliberately stricter than currentYearProjection below, which sums whatever
+ * parts it finds so the stat card can still headline a number. Summing two
+ * planned quarters and drawing it as the annual plan would understate the year
+ * and make the bar read as a miss the company never had — so an incomplete
+ * plan returns null here and the bar simply carries no tick.
+ */
+export function annualProjection(
+  rows: PortfolioRevenue[],
+  year: number,
+): { value: number; basis: string } | null {
+  const fy = rows.find((r) => r.fiscal_year === year && r.period_type === "FY" && r.projected != null)
+  if (fy) return { value: Number(fy.projected), basis: "FY" }
+  const quarters = rows.filter(
+    (r) => r.fiscal_year === year && QUARTER_TYPES.has(r.period_type) && r.projected != null,
+  )
+  if (quarters.length !== 4) return null
+  return {
+    value: quarters.reduce((s, r) => s + Number(r.projected), 0),
+    basis: "Q1 + Q2 + Q3 + Q4",
   }
 }
 

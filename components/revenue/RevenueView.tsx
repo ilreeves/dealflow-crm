@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, X, Loader2, ChevronRight, RotateCcw } from "lucide-react"
 import { PortfolioCompany } from "@/lib/types"
-import { CompanyRevenue, fmtSignedPct, varianceColor } from "@/lib/revenue"
+import { CompanyRevenue, fmtSignedPct, varianceBandColor } from "@/lib/revenue"
 import { fmtMoney } from "@/lib/rounds"
 import { createClient } from "@/lib/supabase/client"
 import PortfolioCompanyDetail from "@/components/portfolio/PortfolioCompanyDetail"
@@ -235,7 +235,7 @@ export default function RevenueView({
                           {c.latestActual != null ? fmtMoney(c.latestActual) : <span className="text-slate-300">—</span>}
                         </td>
                         <td className="px-4 py-2.5 text-right text-slate-500 tabular-nums">{fmtMoney(c.latestProjected)}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: varianceColor(c.varianceAbs) }}>
+                        <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: varianceBandColor(c.variancePct) }}>
                           {c.varianceAbs != null ? fmtSignedPct(c.variancePct) : <span className="text-slate-300">—</span>}
                         </td>
                         <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: c.yoyPct != null ? (c.yoyPct >= 0 ? GREEN : ORANGE) : undefined }}>
