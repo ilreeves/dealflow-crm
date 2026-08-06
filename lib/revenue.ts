@@ -166,10 +166,6 @@ export type CompanyRevenue = {
   /** On the roster. False here means "has figures but was untracked". */
   tracked: boolean
   periodCount: number
-  /** Periods carrying a plan. Below periodCount means variance can't be computed everywhere. */
-  plannedCount: number
-  /** Reported periods with NO plan — the ones silently missing from variance. */
-  plannedGapPeriods: string[]
   latestPeriod: string | null
   latestActual: number | null
   /** Plan for that same period, so the variance compares like with like. */
@@ -234,10 +230,6 @@ export function buildCompanyRevenue(
         variancePct: v?.pct ?? null,
         fyProjected: fyProj?.value ?? null,
         fyProjectedBasis: fyProj ? `Basis: ${fyProj.basis} ${planYear}` : null,
-        plannedCount: rs.filter((r) => r.projected != null).length,
-        plannedGapPeriods: rs
-          .filter((r) => r.actual != null && r.projected == null)
-          .map((r) => periodLabel(r)),
         priorYearActual: prior?.value ?? null,
         yoyPct: last ? yoyGrowth(rs, last) : null,
         seqPct: last ? sequentialGrowth(rs, last) : null,

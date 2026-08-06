@@ -78,6 +78,11 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
       (["projected", "actual"] as const).map((f) => ({ year: y, field: f, m: annualMismatch(rows, y, f) })),
     )
     .filter((x) => x.m)
+  // Reported periods with no plan. These drop out of variance silently, so the
+  // company reads fine while the quarters go unmeasured — Vesalio's 2025 was
+  // three of four. Flagged here rather than as a column on the Revenue page:
+  // it's a note about one company, not something to scan a table for.
+  const unplanned = rows.filter((r) => r.actual != null && r.projected == null)
   const lastVar = last ? variance(last) : null
   const lastYoy = last ? yoyGrowth(rows, last) : null
 
@@ -155,7 +160,7 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
           </div>
         )}
 
-        {mismatches.length > 0 && (
+        {(mismatches.length > 0 || unplanned.length > 0) && (
           <div className="border-t border-slate-100 px-4 py-2 space-y-1 bg-amber-50/60">
             {mismatches.map(({ year, field, m }) => (
               <p key={`${year}-${field}`} className="text-xs text-amber-800">
@@ -164,6 +169,15 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
                 {fmtSignedPct(m!.pct)}. The FY row is used; worth confirming which is right.
               </p>
             ))}
+            {unplanned.length > 0 && (
+              <p className="text-xs text-amber-800">
+                <span className="font-medium">
+                  {unplanned.length} reported period{unplanned.length === 1 ? "" : "s"} with no plan
+                </span>{" "}
+                — {unplanned.map((r) => periodLabel(r)).join(", ")} — so {unplanned.length === 1 ? "it doesn't" : "they don't"}{" "}
+                appear in any variance figure.
+              </p>
+            )}
           </div>
         )}
 
