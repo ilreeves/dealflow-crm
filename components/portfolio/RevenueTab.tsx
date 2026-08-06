@@ -117,7 +117,7 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
           label="YoY growth"
           value={lastYoy != null ? fmtSignedPct(lastYoy) : "—"}
           sub={last && lastYoy != null ? `${last.period_type} ${last.fiscal_year - 1} → ${last.fiscal_year}` : undefined}
-          accent={lastYoy != null ? (lastYoy >= 0 ? GREEN : ORANGE) : undefined}
+          accent={lastYoy != null ? varianceBandColor(lastYoy) : undefined}
         />
       </div>
       <p className="text-xs text-slate-400 -mt-1.5 px-0.5">
@@ -242,7 +242,7 @@ function RevenueRow({
           {v ? `${fmtSignedPct(v.pct)} vs plan` : ""}
         </span>
         {yoy != null && (
-          <span className="text-xs tabular-nums shrink-0" style={{ color: yoy >= 0 ? GREEN : ORANGE }}>
+          <span className="text-xs tabular-nums shrink-0" style={{ color: varianceBandColor(yoy) }}>
             {fmtSignedPct(yoy)} YoY
           </span>
         )}

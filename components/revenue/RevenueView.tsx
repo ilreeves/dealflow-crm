@@ -9,7 +9,7 @@ import { fmtMoney } from "@/lib/rounds"
 import { createClient } from "@/lib/supabase/client"
 import PortfolioCompanyDetail from "@/components/portfolio/PortfolioCompanyDetail"
 
-const NAVY = "#023a51", GREEN = "#5ba200", ORANGE = "#e98925"
+const NAVY = "#023a51"  // growth + variance colours now come from varianceBandColor
 
 // Revenue across the portfolio. Tracking is opt-in — most of the book is
 // pre-revenue, so a company only appears here (and only gets a Revenue tab on
@@ -240,14 +240,14 @@ export default function RevenueView({
                         <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: varianceBandColor(c.variancePct) }}>
                           {c.varianceAbs != null ? fmtSignedPct(c.variancePct) : <span className="text-slate-300">—</span>}
                         </td>
-                        <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: c.yoyPct != null ? (c.yoyPct >= 0 ? GREEN : ORANGE) : undefined }}>
+                        <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: varianceBandColor(c.yoyPct) }}>
                           {c.yoyPct != null ? fmtSignedPct(c.yoyPct) : <span className="text-slate-300">—</span>}
                         </td>
                         {/* Growth on the preceding period. Carried alongside YoY
                             rather than instead of it: YoY strips seasonality but
                             needs a year of history, which the early-commercial
                             companies don't have yet. */}
-                        <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: c.seqPct != null ? (c.seqPct >= 0 ? GREEN : ORANGE) : undefined }}>
+                        <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: varianceBandColor(c.seqPct) }}>
                           {c.seqPct != null ? (
                             <span title={c.seqBasis ?? undefined}>{fmtSignedPct(c.seqPct)}</span>
                           ) : (
@@ -292,11 +292,14 @@ export default function RevenueView({
                                   ? `Reported with no plan: ${c.plannedGapPeriods.join(", ")}`
                                   : "Every recorded period carries a plan"
                               }
-                              className={c.plannedGapPeriods.length ? "text-amber-700" : "text-slate-400"}
+                              className="text-slate-400"
                             >
                               {c.plannedCount}/{c.periodCount}
+                              {/* Presence of the dot is the signal, not its hue — it
+                                  stays legible without colour, and the count itself
+                                  lives in the tooltip rather than shouting in-row. */}
                               {c.plannedGapPeriods.length > 0 && (
-                                <span className="ml-1 text-[11px]">({c.plannedGapPeriods.length} unplanned)</span>
+                                <span className="ml-1.5 text-amber-500" aria-label="has periods with no plan">•</span>
                               )}
                             </span>
                           )}
