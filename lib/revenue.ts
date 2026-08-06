@@ -166,6 +166,10 @@ export type CompanyRevenue = {
   /** On the roster. False here means "has figures but was untracked". */
   tracked: boolean
   periodCount: number
+  /** Periods carrying a plan. Below periodCount means variance can't be computed everywhere. */
+  plannedCount: number
+  /** Reported periods with NO plan — the ones silently missing from variance. */
+  plannedGapPeriods: string[]
   latestPeriod: string | null
   latestActual: number | null
   /** Plan for that same period, so the variance compares like with like. */
@@ -213,7 +217,7 @@ export function buildCompanyRevenue(
       // The annual plan and the progress column both follow the company's own
       // plan year, so the two can never disagree about which year they describe.
       const planYear = planYearFor(rs, fiscalYear)
-      const fyProj = currentYearProjection(rs, planYear)
+      const fyProj = annualProjection(rs, planYear)
       const ytd = ytdActual(rs, planYear)
       const pctOfPlan = fyProj && fyProj.value !== 0 && ytd ? (ytd.value / fyProj.value) * 100 : null
       const prior = annualActual(rs, fiscalYear - 1)
@@ -229,7 +233,11 @@ export function buildCompanyRevenue(
         varianceAbs: v?.abs ?? null,
         variancePct: v?.pct ?? null,
         fyProjected: fyProj?.value ?? null,
-        fyProjectedBasis: fyProj ? `Basis: ${fyProj.basis}` : null,
+        fyProjectedBasis: fyProj ? `Basis: ${fyProj.basis} ${planYear}` : null,
+        plannedCount: rs.filter((r) => r.projected != null).length,
+        plannedGapPeriods: rs
+          .filter((r) => r.actual != null && r.projected == null)
+          .map((r) => periodLabel(r)),
         priorYearActual: prior?.value ?? null,
         yoyPct: last ? yoyGrowth(rs, last) : null,
         seqPct: last ? sequentialGrowth(rs, last) : null,
@@ -344,21 +352,55 @@ export function annualProjection(
 }
 
 /**
- * The projection to headline: the current fiscal year's FY row if there is one,
- * otherwise the sum of that year's quarters/halves so a company that only plans
- * quarterly still shows an annual number. Returns the basis so the UI can say
- * which it used rather than implying a precision it doesn't have.
+ * Which sub-periods of a year carry a plan. Lets the UI say "Q1 + Q2 planned
+ * only" instead of silently showing nothing where an annual figure would go.
  */
-export function currentYearProjection(
+export function plannedPeriods(rows: PortfolioRevenue[], year: number): string[] {
+  return rows
+    .filter((r) => r.fiscal_year === year && r.period_type !== "FY" && r.projected != null)
+    .map((r) => r.period_type)
+    .sort()
+}
+
+/** A year's FY figure and its quarters disagree by more than this fraction. */
+export const ANNUAL_RECONCILE_TOLERANCE = 0.005
+
+/**
+ * Flags an FY row that contradicts its own four quarters on `field`.
+ *
+ * Both are legitimate rows and the FY one wins by convention, so this never
+ * blocks or rewrites anything — it exists because a contradiction is otherwise
+ * invisible until someone sums by hand. Vesalio's FY2026 plan reads $12,660,000
+ * while its quarters sum to $11,861,468; that sat unnoticed until it was checked
+ * manually.
+ *
+ * Null unless an FY row AND all four quarters carry the field, so a partly
+ * planned year never trips it. The tolerance absorbs the basis differences that
+ * are expected and documented — Vesalio's 2025 quarters sum $11,932 under the FY
+ * actual (0.15%) because the quarters are product sales and the FY row is net
+ * sales. That is not an error and must not nag.
+ *
+ * Also silent when any quarter's plan is a REFORECAST. Vektor's 2025 is the
+ * case: the FY row is January's original $2.6M goal while Q3 and Q4 are
+ * mid-year reforecasts entered because no original quarterly budget was ever
+ * located. Those quarters are a different basis by design, so their sum is not
+ * meant to reconcile to the original annual plan and flagging it would be noise.
+ */
+export function annualMismatch(
   rows: PortfolioRevenue[],
   year: number,
-): { value: number; basis: string } | null {
-  const fy = rows.find((r) => r.fiscal_year === year && r.period_type === "FY" && r.projected != null)
-  if (fy) return { value: Number(fy.projected), basis: `FY ${year}` }
-  const parts = rows.filter((r) => r.fiscal_year === year && r.period_type !== "FY" && r.projected != null)
-  if (!parts.length) return null
-  return {
-    value: parts.reduce((s, r) => s + Number(r.projected), 0),
-    basis: `${parts.map((p) => p.period_type).sort().join(" + ")} ${year}`,
-  }
+  field: "projected" | "actual",
+): { fy: number; quarters: number; diff: number; pct: number } | null {
+  const fyRow = rows.find((r) => r.fiscal_year === year && r.period_type === "FY" && r[field] != null)
+  if (!fyRow) return null
+  const qs = rows.filter(
+    (r) => r.fiscal_year === year && QUARTER_TYPES.has(r.period_type) && r[field] != null,
+  )
+  if (qs.length !== 4) return null
+  if (field === "projected" && qs.some((r) => r.projected_source === "Reforecast")) return null
+  const fy = Number(fyRow[field])
+  const quarters = qs.reduce((s, r) => s + Number(r[field]), 0)
+  const diff = quarters - fy
+  if (fy === 0 || Math.abs(diff) / Math.abs(fy) <= ANNUAL_RECONCILE_TOLERANCE) return null
+  return { fy, quarters, diff, pct: (diff / Math.abs(fy)) * 100 }
 }

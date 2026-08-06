@@ -62,6 +62,7 @@ export default function RevenueView({
       ...prev,
       {
         id: company.id, name: company.name, status: company.status, tracked: true, periodCount: 0,
+        plannedCount: 0, plannedGapPeriods: [],
         latestPeriod: null, latestActual: null, latestProjected: null, varianceAbs: null,
         variancePct: null, fyProjected: null, fyProjectedBasis: null, priorYearActual: null, yoyPct: null,
         // A freshly added company has no periods yet; router.refresh() fills these
@@ -194,7 +195,7 @@ export default function RevenueView({
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[920px]">
+                <table className="w-full text-sm min-w-[1040px]">
                   <thead>
                     <tr className="border-b border-slate-100">
                       <Th>Company</Th>
@@ -206,6 +207,7 @@ export default function RevenueView({
                       <Th right>vs prior</Th>
                       <Th right>FY {planYear} plan</Th>
                       <Th right>% of plan</Th>
+                      <Th right>Plan coverage</Th>
                       <th className="w-8" />
                     </tr>
                   </thead>
@@ -273,6 +275,30 @@ export default function RevenueView({
                             </span>
                           ) : (
                             <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                        {/* Plan coverage. A gap here is invisible everywhere else:
+                            a reported period with no plan simply drops out of
+                            variance, so the company looks fine while three
+                            quarters go unmeasured. Amber only when a period that
+                            WAS reported has no plan to compare against. */}
+                        <td className="px-4 py-2.5 text-right tabular-nums">
+                          {c.periodCount === 0 ? (
+                            <span className="text-slate-300">—</span>
+                          ) : (
+                            <span
+                              title={
+                                c.plannedGapPeriods.length
+                                  ? `Reported with no plan: ${c.plannedGapPeriods.join(", ")}`
+                                  : "Every recorded period carries a plan"
+                              }
+                              className={c.plannedGapPeriods.length ? "text-amber-700" : "text-slate-400"}
+                            >
+                              {c.plannedCount}/{c.periodCount}
+                              {c.plannedGapPeriods.length > 0 && (
+                                <span className="ml-1 text-[11px]">({c.plannedGapPeriods.length} unplanned)</span>
+                              )}
+                            </span>
                           )}
                         </td>
                         <td className="px-2 py-2.5">

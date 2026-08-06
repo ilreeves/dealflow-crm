@@ -21,7 +21,8 @@ import {
   fmtSignedPct,
   yoyGrowth,
   latestActual,
-  currentYearProjection,
+  plannedPeriods,
+  annualMismatch,
   sortRows,
 } from "@/lib/revenue"
 import Field from "@/components/shared/Field"
@@ -67,7 +68,16 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
   // ── headline figures ──
   const last = latestActual(rows)
   const thisYear = new Date().getFullYear()
-  const proj = currentYearProjection(rows, thisYear)
+  const proj = annualProjection(rows, thisYear)
+  const planParts = proj ? [] : plannedPeriods(rows, thisYear)
+  // FY rows that contradict their own quarters. Both are legitimate and the FY
+  // row wins by convention, so this only surfaces the conflict — it never edits.
+  const mismatches = Array.from(new Set(rows.map((r) => r.fiscal_year)))
+    .sort((a, b) => b - a)
+    .flatMap((y) =>
+      (["projected", "actual"] as const).map((f) => ({ year: y, field: f, m: annualMismatch(rows, y, f) })),
+    )
+    .filter((x) => x.m)
   const lastVar = last ? variance(last) : null
   const lastYoy = last ? yoyGrowth(rows, last) : null
 
@@ -86,8 +96,16 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
         />
         <Stat
           label={`FY ${thisYear} projected`}
-          value={fmtMoney(proj?.value)}
-          sub={proj && proj.basis !== `FY ${thisYear}` ? `sum of ${proj.basis}` : undefined}
+          value={proj ? fmtMoney(proj.value) : "—"}
+          sub={
+            proj
+              ? proj.basis !== "FY"
+                ? `sum of ${proj.basis}`
+                : undefined
+              : planParts.length
+                ? `${planParts.join(" + ")} planned only`
+                : undefined
+          }
         />
         <Stat
           label="vs plan"
@@ -134,6 +152,18 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
               onCancel={() => setAdding(false)}
               onDone={() => { setAdding(false); load() }}
             />
+          </div>
+        )}
+
+        {mismatches.length > 0 && (
+          <div className="border-t border-slate-100 px-4 py-2 space-y-1 bg-amber-50/60">
+            {mismatches.map(({ year, field, m }) => (
+              <p key={`${year}-${field}`} className="text-xs text-amber-800">
+                <span className="font-medium">FY {year} {field === "projected" ? "plan" : "actual"}</span>{" "}
+                is {fmtMoney(m!.fy)} but the four quarters sum to {fmtMoney(m!.quarters)} —{" "}
+                {fmtSignedPct(m!.pct)}. The FY row is used; worth confirming which is right.
+              </p>
+            ))}
           </div>
         )}
 
