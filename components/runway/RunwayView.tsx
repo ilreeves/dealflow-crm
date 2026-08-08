@@ -309,6 +309,13 @@ function Row({ c, onOpen }: { c: CompanyRunway; onOpen: () => void }) {
           >
             {fmtMonths(c.runwayMonths)}
             <span className="text-slate-300 ml-1 text-xs">{c.runwayBasis === "stated" ? "stated" : "calc"}</span>
+            {/* Runway can be a different vintage from the cash figure. Say so,
+                or the balance date column silently mislabels it. */}
+            {c.runwayAsOf && c.runwayAsOf !== c.asOf && (
+              <span className="text-slate-300 ml-1 text-xs" title={`Runway stated as of ${exactDate(c.runwayAsOf)}, cash as of ${exactDate(c.asOf ?? "")}`}>
+                @{exactDate(c.runwayAsOf)}
+              </span>
+            )}
           </span>
         ) : (
           <span className="text-slate-300">—</span>

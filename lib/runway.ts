@@ -310,6 +310,23 @@ export function latestCash(rows: PortfolioCash[]): PortfolioCash | null {
   return sortCash(rows).find((r) => r.cash_on_hand != null) ?? null
 }
 
+/**
+ * Most recent observation that actually YIELDS a runway.
+ *
+ * Deliberately a different row from latestCash, because cash and runway are
+ * different facts with different best sources. Stimdia is the case that forced
+ * this: its newest cash balance (12/2025) has no burn, so it produces no runway,
+ * while a later investor presentation (04/2026) states "funding through Aug '27"
+ * with no balance attached. Keying everything off the cash row threw that
+ * statement away and showed a company with no runway at all when we had one.
+ *
+ * Each figure is therefore sourced independently and labelled with its own
+ * as-of date, so the two can be a different vintage without either one lying.
+ */
+export function latestRunwaySource(rows: PortfolioCash[]): PortfolioCash | null {
+  return sortCash(rows).find((r) => runwayMonths(r) != null) ?? null
+}
+
 /** Two cash balances closer together than this can't support a monthly rate. */
 export const MIN_MOVEMENT_MONTHS = 0.5
 
@@ -389,7 +406,13 @@ export type CompanyRunway = {
   status: string | null
   /** Number of cash observations recorded. */
   snapshotCount: number
+  /** Date of the CASH figure. */
   asOf: string | null
+  /**
+   * Date of the observation the RUNWAY comes from. Usually the same as asOf;
+   * differs when a later row states a runway without restating a balance.
+   */
+  runwayAsOf: string | null
   cashOnHand: number | null
   monthlyBurn: number | null
   burnBasis: string | null
@@ -456,10 +479,13 @@ export function buildCompanyRunway(
       // newer row that recorded only a burn figure updates the trend but must
       // not blank out the balance we do have.
       const last = latestCash(rs) ?? rs[0] ?? null
-      const r = last ? runwayMonths(last) : null
-      const z = last ? zeroCashDate(last) : null
+      // Runway is sourced independently of cash — see latestRunwaySource.
+      const rwRow = latestRunwaySource(rs)
+      const r = rwRow ? runwayMonths(rwRow) : null
+      const z = rwRow ? zeroCashDate(rwRow) : null
+      // Staleness describes the CASH figure, which is what goes stale.
       const stale = last ? staleness(last, today) : null
-      const mm = last ? runwayMismatch(last) : null
+      const mm = rwRow ? runwayMismatch(rwRow) : null
       const trend = burnTrendPct(rs)
       // Only usable as a burn rate when cash actually fell — see cashMovementBurn.
       const mv = cashMovementBurn(rs)
@@ -470,6 +496,7 @@ export function buildCompanyRunway(
         status: c.status,
         snapshotCount: rs.length,
         asOf: last?.as_of ?? null,
+        runwayAsOf: rwRow?.as_of ?? null,
         cashOnHand: last?.cash_on_hand != null ? Number(last.cash_on_hand) : null,
         monthlyBurn: last?.monthly_burn != null ? Number(last.monthly_burn) : null,
         burnBasis: last?.burn_basis ?? null,
@@ -477,12 +504,12 @@ export function buildCompanyRunway(
         runwayBasis: r?.basis ?? null,
         derivedMonths: r?.derived ?? null,
         outOfCash: z?.date ?? null,
-        monthsLeft: last ? monthsLeft(last, today) : null,
+        monthsLeft: rwRow ? monthsLeft(rwRow, today) : null,
         impliedCashToday: last ? impliedCash(last, today) : null,
         staleMonths: stale?.months ?? null,
         stale: !!stale?.stale,
         mismatchPct: mm?.pct ?? null,
-        proFormaMonths: last ? proFormaRunwayMonths(last) : null,
+        proFormaMonths: rwRow ? proFormaRunwayMonths(rwRow) : null,
         committedFunding: last?.committed_funding != null ? Number(last.committed_funding) : null,
         burnTrendPct: trend?.pct ?? null,
         notBurning: !!last && last.monthly_burn != null && Number(last.monthly_burn) <= 0,

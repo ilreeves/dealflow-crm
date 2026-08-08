@@ -11,6 +11,7 @@ import {
   STALE_MONTHS,
   sortCash,
   latestCash,
+  latestRunwaySource,
   runwayMonths,
   derivedRunwayMonths,
   zeroCashDate,
@@ -69,13 +70,15 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
   // ── headline figures, all from the most recent row carrying a balance ──
   const today = todayISO()
   const last = latestCash(rows)
-  const r = last ? runwayMonths(last) : null
-  const z = last ? zeroCashDate(last) : null
-  const left = last ? monthsLeft(last, today) : null
+  // Runway can come from a different (usually later) observation than cash.
+  const rwRow = latestRunwaySource(rows)
+  const r = rwRow ? runwayMonths(rwRow) : null
+  const z = rwRow ? zeroCashDate(rwRow) : null
+  const left = rwRow ? monthsLeft(rwRow, today) : null
   const implied = last ? impliedCash(last, today) : null
   const stale = last ? staleness(last, today) : null
-  const mismatch = last ? runwayMismatch(last) : null
-  const proForma = last ? proFormaRunwayMonths(last) : null
+  const mismatch = rwRow ? runwayMismatch(rwRow) : null
+  const proForma = rwRow ? proFormaRunwayMonths(rwRow) : null
   const trend = burnTrendPct(rows)
   const movement = cashMovementBurn(rows)
   // See MOVEMENT_CONFLICT_RATIO: financing that only OFFSETS burn keeps
@@ -118,8 +121,8 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
           sub={
             r
               ? r.basis === "stated"
-                ? `company-stated, at ${exactDate(last!.as_of)}`
-                : `cash ÷ burn, at ${exactDate(last!.as_of)}`
+                ? `company-stated, at ${exactDate(rwRow!.as_of)}`
+                : `cash ÷ burn, at ${exactDate(rwRow!.as_of)}`
               : undefined
           }
           accent={r ? runwayBandColor(r.months) : undefined}
@@ -488,6 +491,10 @@ function CashEditor({
 
     setSaving(true)
     setError("")
+    // Stamp WHO, not just when. A Basking figure was changed by an unidentified
+    // hand and only the timestamp survived — see supabase/migration_runway_audit.sql.
+    const { data: auth } = await supabase.auth.getUser()
+    const uid = auth?.user?.id ?? null
     const payload = {
       company_id: companyId,
       as_of: f.as_of,
@@ -501,9 +508,11 @@ function CashEditor({
       source_detail: f.source_detail || null,
       notes: f.notes || null,
       updated_at: new Date().toISOString(),
+      updated_by: uid,
     }
     const { error: e } = isNew
-      ? await supabase.from("portfolio_cash").insert(payload)
+      // created_by is set on insert only, so it always records the original author.
+      ? await supabase.from("portfolio_cash").insert({ ...payload, created_by: uid })
       : await supabase.from("portfolio_cash").update(payload).eq("id", initial!.id)
     if (e) { setError(saveHint(e.message)); setSaving(false); return }
     setSaving(false)

@@ -347,7 +347,10 @@ export interface PortfolioCash {
   /** Which deck, which slide — so a figure stays traceable. */
   source_detail: string | null
   notes: string | null
+  /** Who first entered the row. NULL for rows bulk-loaded over the REST API. */
   created_by: string | null
+  /** Who last edited it through the app. NULL means never edited since creation. */
+  updated_by: string | null
   created_at: string
   updated_at: string
 }

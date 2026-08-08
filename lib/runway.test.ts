@@ -21,6 +21,7 @@ import {
   cashMovementBurn,
   movementUnderstatesBurn,
   latestCash,
+  latestRunwaySource,
   buildCompanyRunway,
   byUrgency,
   isActive,
@@ -50,6 +51,7 @@ function row(p: Partial<PortfolioCash> & { as_of: string }): PortfolioCash {
     source_detail: null,
     notes: null,
     created_by: null,
+    updated_by: null,
     created_at: "",
     updated_at: "",
     ...p,
@@ -363,6 +365,39 @@ describe("row selection and ordering", () => {
   it("sorts newest first", () => {
     const rows = sortCash([row({ as_of: "2026-01-31" }), row({ as_of: "2026-06-30" }), row({ as_of: "2026-03-31" })])
     expect(rows.map((r) => r.as_of)).toEqual(["2026-06-30", "2026-03-31", "2026-01-31"])
+  })
+
+  it("sources CASH and RUNWAY from different rows when it has to", () => {
+    // Stimdia's real shape: newest balance has no burn so yields no runway, and a
+    // LATER investor presentation states a date with no balance attached. Keying
+    // both off the cash row threw the statement away and showed no runway at all.
+    const rows = [
+      row({ as_of: "2026-04-23", out_of_cash_date: "2027-08-31" }),
+      row({ as_of: "2025-12-31", cash_on_hand: 1_554_080 }),
+    ]
+    expect(latestCash(rows)!.as_of).toBe("2025-12-31")
+    expect(latestRunwaySource(rows)!.as_of).toBe("2026-04-23")
+
+    const built = buildCompanyRunway(
+      [{ id: "s", name: "Stimdia", status: "Active" }],
+      rows.map((r) => ({ ...r, company_id: "s" })) as PortfolioCash[],
+      "2026-08-08",
+    )[0]
+    expect(built.cashOnHand).toBe(1_554_080)
+    expect(built.asOf).toBe("2025-12-31")          // cash vintage
+    expect(built.runwayAsOf).toBe("2026-04-23")    // runway vintage, later
+    expect(built.outOfCash).toBe("2027-08-31")
+    expect(built.monthsLeft!).toBeGreaterThan(11)
+    // Staleness still describes the CASH figure — that's what goes stale.
+    expect(built.stale).toBe(true)
+  })
+
+  it("leaves both vintages equal when one row carries everything", () => {
+    const rows = [
+      { ...row({ as_of: "2026-06-30", cash_on_hand: 3_000_000, monthly_burn: 500_000 }), company_id: "a" },
+    ] as PortfolioCash[]
+    const built = buildCompanyRunway([{ id: "a", name: "A", status: "Active" }], rows, "2026-08-08")[0]
+    expect(built.asOf).toBe(built.runwayAsOf)
   })
 
   it("takes the headline from the newest row that has a balance", () => {
