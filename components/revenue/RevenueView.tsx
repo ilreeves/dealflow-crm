@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, X, Loader2, ChevronRight, RotateCcw } from "lucide-react"
 import { PortfolioCompany } from "@/lib/types"
-import { CompanyRevenue, fmtSignedPct, varianceBandColor } from "@/lib/revenue"
+import { CompanyRevenue, fmtSignedPct, varianceBandColor, REVENUE_COLORS, VARIANCE_BAND_PCT } from "@/lib/revenue"
 import { fmtMoney } from "@/lib/rounds"
 import { createClient } from "@/lib/supabase/client"
 import PortfolioCompanyDetail from "@/components/portfolio/PortfolioCompanyDetail"
@@ -305,6 +305,31 @@ export default function RevenueView({
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          
+            {rows.length > 0 && (
+              /* Legend. Swatches are driven by varianceBandColor itself, not by
+                 hardcoded hexes, so the legend cannot drift from the rule it
+                 documents. The neutral band matters: a small beat is navy, not
+                 green — colour marks a MATERIAL move, not merely a positive one. */
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 border-t border-slate-100 text-xs text-slate-400">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: varianceBandColor(VARIANCE_BAND_PCT + 1) }} />
+                  Beat by more than {VARIANCE_BAND_PCT}%
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: varianceBandColor(-VARIANCE_BAND_PCT - 1) }} />
+                  Missed by more than {VARIANCE_BAND_PCT}%
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: REVENUE_COLORS.navy }} />
+                  Within {VARIANCE_BAND_PCT}% of plan
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="text-slate-300">—</span>
+                  No plan set, or not yet reported
+                </span>
               </div>
             )}
           </div>
