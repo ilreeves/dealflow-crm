@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, X, Loader2, ChevronRight, RotateCcw } from "lucide-react"
 import { PortfolioCompany } from "@/lib/types"
-import { CompanyRevenue, fmtSignedPct, varianceBandColor, REVENUE_COLORS, VARIANCE_BAND_PCT } from "@/lib/revenue"
+import { CompanyRevenue, fmtSignedPct, varianceBandColor, REVENUE_COLORS, VARIANCE_BAND_PCT, SEVERE_MISS_PCT } from "@/lib/revenue"
 import { fmtMoney } from "@/lib/rounds"
 import { createClient } from "@/lib/supabase/client"
 import PortfolioCompanyDetail from "@/components/portfolio/PortfolioCompanyDetail"
@@ -321,6 +321,10 @@ export default function RevenueView({
                 <span className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: varianceBandColor(-VARIANCE_BAND_PCT - 1) }} />
                   Missed by more than {VARIANCE_BAND_PCT}%
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: varianceBandColor(-SEVERE_MISS_PCT - 1) }} />
+                  Missed by more than {SEVERE_MISS_PCT}%
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: REVENUE_COLORS.navy }} />

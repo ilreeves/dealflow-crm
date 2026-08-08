@@ -54,16 +54,20 @@ export function variance(r: Pick<PortfolioRevenue, "projected" | "actual">): { a
 }
 
 /** Solas brand. One definition so every revenue surface draws from the same set. */
-export const REVENUE_COLORS = { navy: "#023a51", green: "#5ba200", orange: "#e98925" } as const
+export const REVENUE_COLORS = { navy: "#023a51", green: "#5ba200", orange: "#e98925", red: "#dc2626" } as const
 
 /** Variance beyond this many percent counts as a material beat or miss. */
 export const VARIANCE_BAND_PCT = 10
+
+/** A miss beyond this many percent is severe enough to read as red, not amber. */
+export const SEVERE_MISS_PCT = 50
 
 /**
  * THE variance colour rule — every surface uses this one, so the chart and the
  * tables can never disagree about whether a quarter was a beat.
  *
- * Green a material beat, orange a material miss, navy anything inside the band.
+ * Green a material beat, orange a material miss, red a severe miss, navy
+ * anything inside the band.
  * Threshold-based rather than sign-based: an earlier sign-based helper painted
  * a +0.3% beat green, which reads as a result when it is noise. Removed in
  * favour of this — do not reintroduce a second convention.
@@ -73,6 +77,7 @@ export const VARIANCE_BAND_PCT = 10
  * miss, and the chart draws no plan tick in that case so the absence is visible.
  *
  * ⚠️ Green and orange are indistinguishable under protanopia (OKLab ΔE ~0.6),
+ * and red compounds that — it is the same hue family as orange to a protanope,
  * so this colour must never be the ONLY thing carrying the verdict. Every
  * surface using it also shows the signed variance, and in the chart the bar's
  * distance from the plan tick encodes the same fact positionally.
@@ -81,6 +86,9 @@ export function varianceBandColor(pct: number | null | undefined): string {
   if (pct == null || isNaN(Number(pct))) return REVENUE_COLORS.navy
   const n = Number(pct)
   if (n > VARIANCE_BAND_PCT) return REVENUE_COLORS.green
+  // Severe first — a -60% quarter would otherwise be painted the same amber as
+  // a -11% one, which flattens the difference between a wobble and a failure.
+  if (n < -SEVERE_MISS_PCT) return REVENUE_COLORS.red
   if (n < -VARIANCE_BAND_PCT) return REVENUE_COLORS.orange
   return REVENUE_COLORS.navy
 }

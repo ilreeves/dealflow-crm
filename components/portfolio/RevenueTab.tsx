@@ -24,10 +24,12 @@ import {
   plannedPeriods,
   annualMismatch,
   sortRows,
+  VARIANCE_BAND_PCT,
+  SEVERE_MISS_PCT,
 } from "@/lib/revenue"
 import Field from "@/components/shared/Field"
 
-const NAVY = "#023a51", GREEN = "#5ba200", ORANGE = "#e98925"
+const NAVY = "#023a51"  // variance colours come from varianceBandColor
 
 // Revenue, projected against actual, one row per fiscal period. Rows are held
 // newest-first throughout — the stat cards and the YoY lookup both rely on that
@@ -431,14 +433,19 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
         })}
       </div>
       <div className="flex items-center gap-x-4 gap-y-1.5 mt-2 text-xs text-slate-400 flex-wrap">
+        {/* Swatches are produced by varianceBandColor itself rather than local
+            hexes, so this legend cannot drift from the rule it documents. */}
         <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: GREEN }} /> &gt;10% ahead
+          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: varianceBandColor(VARIANCE_BAND_PCT + 1) }} /> &gt;{VARIANCE_BAND_PCT}% ahead
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: NAVY }} /> Within 10%
+          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: varianceBandColor(0) }} /> Within {VARIANCE_BAND_PCT}%
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: ORANGE }} /> &gt;10% behind
+          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: varianceBandColor(-VARIANCE_BAND_PCT - 1) }} /> &gt;{VARIANCE_BAND_PCT}% behind
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: varianceBandColor(-SEVERE_MISS_PCT - 1) }} /> &gt;{SEVERE_MISS_PCT}% behind
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-3 h-[2.5px] rounded-full bg-slate-400" /> Plan
