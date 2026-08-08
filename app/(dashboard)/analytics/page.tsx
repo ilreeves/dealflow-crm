@@ -133,6 +133,17 @@ export default async function AnalyticsPage() {
   // Average time in current stage, per stage
   const STAGE_ORDER = ['Sourced', 'Science Committee', 'Finance Committee', 'Investment Committee', 'Term Sheet', 'Invested', 'Passed']
   const stageTime: Record<string, number[]> = {}
+  // Reading the clock during render is impure, and react-hooks/purity flags it.
+  // It is safe HERE and only here: this is an async server component that renders
+  // once per request and never hydrates, so there is no client render to disagree
+  // with, and createClient() reads cookies — which opts the route out of static
+  // generation (build output confirms it: `ƒ /analytics`, server-rendered on
+  // demand). So `now` really is request time.
+  //
+  // ⚠️ If this page were ever made statically rendered, `now` would freeze at
+  // build time and every "days in stage" figure below would drift further from
+  // reality each day, silently and without erroring. Keep this route dynamic.
+  // eslint-disable-next-line react-hooks/purity -- request-time clock read, safe here; see above
   const now = Date.now()
   for (const d of deals) {
     if (!d.stage_entered_at || d.stage === 'Passed' || d.stage === 'Invested') continue
