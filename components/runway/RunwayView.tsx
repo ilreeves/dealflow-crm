@@ -249,9 +249,11 @@ function Row({ c, onOpen }: { c: CompanyRunway; onOpen: () => void }) {
           <span
             title={[
               c.burnBasis ? `Deck basis: ${c.burnBasis}` : null,
-              c.movementBurn != null
-                ? `Actual cash movement: ${fmtMoney(c.movementBurn)}/mo (${c.movementBasis})`
-                : "No second cash balance yet, so actual cash movement can't be computed.",
+              c.movementBurn == null
+                ? "No second cash balance yet, so actual cash movement can't be computed."
+                : c.movementUnderstated
+                  ? `Cash movement implies only ${fmtMoney(c.movementBurn)}/mo (${c.movementBasis}) — capital came in over that window, so it is NOT comparable. Use the reported burn.`
+                  : `Actual cash movement: ${fmtMoney(c.movementBurn)}/mo (${c.movementBasis})`,
             ].filter(Boolean).join("\n")}
           >
             {fmtMoney(c.monthlyBurn)}

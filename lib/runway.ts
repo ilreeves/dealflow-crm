@@ -309,6 +309,33 @@ export function latestCash(rows: PortfolioCash[]): PortfolioCash | null {
 export const MIN_MOVEMENT_MONTHS = 0.5
 
 /**
+ * Movement burn below this fraction of the reported burn means money came in.
+ *
+ * ⚠️ THIS EXISTS BECAUSE `cashRose` IS NOT ENOUGH. That flag only catches
+ * financing that EXCEEDS burn, making the balance go up. Financing that merely
+ * OFFSETS burn leaves the balance drifting gently down, so cashRose stays false
+ * while the movement figure is badly wrong.
+ *
+ * Tvardi is the live case: cash went $20.6M (6/2025) → $19.9M (3/2026) while
+ * operating burn ran ~$1.95M/mo, because roughly $21M was raised over the
+ * window. The movement implies $299k/mo — an EIGHTFOLD understatement — and
+ * nothing caught it until the two figures were put side by side.
+ */
+export const MOVEMENT_CONFLICT_RATIO = 0.7
+
+/**
+ * True when the cash-movement burn is implausibly low against the reported
+ * burn, which means capital came in between the two observations.
+ *
+ * Needs BOTH figures — with only one there is nothing to compare, and the
+ * movement figure alone gives no hint that it's been flattered.
+ */
+export function movementUnderstatesBurn(reported: number | null, movement: number | null): boolean {
+  if (reported == null || movement == null || reported <= 0) return false
+  return movement < reported * MOVEMENT_CONFLICT_RATIO
+}
+
+/**
  * Burn implied by the ACTUAL movement in the cash balance between the two most
  * recent observations that report one.
  *
@@ -388,6 +415,12 @@ export type CompanyRunway = {
   movementBurn: number | null
   /** e.g. "$13.4M → $12.9M over 1.0 mo" — the basis for movementBurn. */
   movementBasis: string | null
+  /**
+   * Movement burn is implausibly low against the reported burn, so capital came
+   * in between the observations. When set, movementBurn must NOT be presented
+   * as the comparable figure — see MOVEMENT_CONFLICT_RATIO.
+   */
+  movementUnderstated: boolean
 }
 
 /**
@@ -452,6 +485,10 @@ export function buildCompanyRunway(
         movementBasis: usableMv
           ? `${fmtCompact(Number(usableMv.from.cash_on_hand))} → ${fmtCompact(Number(usableMv.to.cash_on_hand))} over ${usableMv.months.toFixed(1)} mo`
           : null,
+        movementUnderstated: movementUnderstatesBurn(
+          last?.monthly_burn != null ? Number(last.monthly_burn) : null,
+          usableMv?.perMonth ?? null,
+        ),
       }
     })
     .sort(byUrgency)

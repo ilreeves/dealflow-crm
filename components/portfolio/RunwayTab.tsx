@@ -23,6 +23,7 @@ import {
   fmtMonths,
   burnTrendPct,
   cashMovementBurn,
+  movementUnderstatesBurn,
   todayISO,
 } from "@/lib/runway"
 import Field from "@/components/shared/Field"
@@ -77,6 +78,12 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
   const proForma = last ? proFormaRunwayMonths(last) : null
   const trend = burnTrendPct(rows)
   const movement = cashMovementBurn(rows)
+  // See MOVEMENT_CONFLICT_RATIO: financing that only OFFSETS burn keeps
+  // cashRose false while flattering the movement figure.
+  const understated = movementUnderstatesBurn(
+    last?.monthly_burn != null ? Number(last.monthly_burn) : null,
+    movement && !movement.cashRose ? movement.perMonth : null,
+  )
   const notBurning = !!last && last.monthly_burn != null && Number(last.monthly_burn) <= 0
 
   if (loading) {
@@ -159,7 +166,21 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
           {/* The cross-check on burn, mirroring stated-vs-derived on runway.
               Every deck defines burn differently; the movement in the bank
               balance is the same quantity for every company. */}
-          {movement && !movement.cashRose && (
+          {/* Financing that merely OFFSETS burn leaves the balance drifting
+              down, so cashRose stays false while the movement figure is badly
+              flattered. Catch it by comparing against the reported burn. */}
+          {movement && !movement.cashRose && understated && (
+            <p className="text-xs text-amber-800">
+              <span className="font-medium">
+                Ignore the cash movement here — it implies only {fmtMoney(movement.perMonth)}/mo against a reported{" "}
+                {fmtMoney(last?.monthly_burn)}/mo
+              </span>
+              . Cash fell far less than it was spent between {exactDate(movement.from.as_of)} and{" "}
+              {exactDate(movement.to.as_of)}, so capital came in over that window. The reported burn is the reliable
+              figure; the movement is not comparable to other companies.
+            </p>
+          )}
+          {movement && !movement.cashRose && !understated && (
             <p className="text-xs text-amber-800">
               <span className="font-medium">Actual cash movement: {fmtMoney(movement.perMonth)}/mo</span>{" "}
               — {fmtMoney(movement.from.cash_on_hand)} on {exactDate(movement.from.as_of)} to{" "}

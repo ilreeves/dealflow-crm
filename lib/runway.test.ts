@@ -19,6 +19,7 @@ import {
   sortCash,
   burnTrendPct,
   cashMovementBurn,
+  movementUnderstatesBurn,
   latestCash,
   buildCompanyRunway,
   byUrgency,
@@ -300,6 +301,43 @@ describe("cash-movement burn — the only cross-company comparable figure", () =
     const built = buildCompanyRunway([{ id: "a", name: "Raised", status: "Active" }], raised, "2026-08-07")[0]
     expect(built.movementBurn).toBeNull()
     expect(built.movementBasis).toBeNull()
+  })
+
+  it("FLAGS financing that merely OFFSETS burn, which cashRose cannot catch", () => {
+    // Tvardi's real numbers. Cash drifts DOWN $20.648M → $19.851M over 9 months
+    // while operating burn runs $1.953M/mo, because ~$21M was raised over the
+    // window. cashRose stays FALSE because the balance fell — yet the movement
+    // figure is an eightfold understatement. Without this check nothing catches it.
+    const rows = [
+      row({ as_of: "2026-03-31", cash_on_hand: 19_851_000, monthly_burn: 1_953_000 }),
+      row({ as_of: "2025-06-30", cash_on_hand: 20_648_000 }),
+    ]
+    const m = cashMovementBurn(rows)!
+    expect(m.cashRose).toBe(false)
+    expect(m.perMonth).toBeLessThan(400_000)
+    expect(movementUnderstatesBurn(1_953_000, m.perMonth)).toBe(true)
+  })
+
+  it("does not flag a movement that agrees with the reported burn", () => {
+    // Francis Medical: $2,560,148 movement vs $2,607,000 reported — inside 2%.
+    expect(movementUnderstatesBurn(2_607_000, 2_560_148)).toBe(false)
+    // Vektor: $1,151,552 vs $1,127,000 — movement slightly HIGHER, fine.
+    expect(movementUnderstatesBurn(1_127_000, 1_151_552)).toBe(false)
+  })
+
+  it("needs both figures to compare, and ignores a non-positive reported burn", () => {
+    expect(movementUnderstatesBurn(null, 300_000)).toBe(false)
+    expect(movementUnderstatesBurn(1_000_000, null)).toBe(false)
+    expect(movementUnderstatesBurn(0, 300_000)).toBe(false)
+  })
+
+  it("surfaces the flag on the page row", () => {
+    const rows = [
+      { ...row({ as_of: "2026-03-31", cash_on_hand: 19_851_000, monthly_burn: 1_953_000 }), company_id: "t" },
+      { ...row({ as_of: "2025-06-30", cash_on_hand: 20_648_000 }), company_id: "t" },
+    ] as PortfolioCash[]
+    const built = buildCompanyRunway([{ id: "t", name: "Tvardi", status: "Active" }], rows, "2026-08-07")[0]
+    expect(built.movementUnderstated).toBe(true)
   })
 
   it("refuses balances too close together to imply a monthly rate", () => {
