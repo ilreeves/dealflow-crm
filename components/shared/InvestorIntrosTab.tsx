@@ -22,20 +22,31 @@ interface Props {
 export default function InvestorIntrosTab({ table, fkColumn, entityId }: Props) {
   const [intros, setIntros] = useState<InvestorIntro[]>([])
   const [contacts, setContacts] = useState<InvestorContact[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loadedKey, setLoadedKey] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ investor_name: '', investor_firm: '', contact_email: '', intro_date: '', status: 'Introduced', notes: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const supabase = createClient()
 
+  // Derived, not stored — a setLoading(true) inside the effect would force an extra
+  // render pass. Pointing the tab at another entity reads as loading until its rows land.
+  const entityKey = `${table}:${fkColumn}:${entityId}`
+  const loading = loadedKey !== entityKey
+
   useEffect(() => {
-    setLoading(true)
+    let cancelled = false
     supabase.from(table).select('*').eq(fkColumn, entityId)
       .order('intro_date', { ascending: false })
-      .then(({ data }) => { setIntros((data as InvestorIntro[]) ?? []); setLoading(false) })
+      .then(({ data }) => {
+        if (cancelled) return
+        setIntros((data as InvestorIntro[]) ?? [])
+        setLoadedKey(entityKey)
+      })
     supabase.from('investor_contacts').select('*').order('name')
-      .then(({ data }) => setContacts((data as InvestorContact[]) ?? []))
+      .then(({ data }) => { if (!cancelled) setContacts((data as InvestorContact[]) ?? []) })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table, fkColumn, entityId])
 
   // Typing a name that matches a known investor auto-fills firm + email (only into still-empty fields)

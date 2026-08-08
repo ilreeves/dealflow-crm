@@ -9,10 +9,20 @@ import CatalystEditModal from './CatalystEditModal'
 import { logCatalystActivity } from '@/lib/activity'
 
 interface Props {
+  /** Request-time YYYY-MM-DD, supplied by the page. Kept out of this component so the
+   *  server and client renders always agree on where the reminder windows fall. */
+  today: string
   initialCatalysts: Catalyst[]
   companyNames: string[]
   initialLegacy: string[]
   initialDismissed: string[]
+}
+
+// Pure: shifts a YYYY-MM-DD string by whole days without reading the clock.
+function shiftDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
 }
 
 const PERIODS = ['1Q', '2Q', '3Q', '4Q', '1H', '2H', 'FY'] as const
@@ -49,7 +59,7 @@ function periodLabel(c: Catalyst): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export default function CatalystCalendar({ initialCatalysts, companyNames, initialLegacy, initialDismissed }: Props) {
+export default function CatalystCalendar({ today, initialCatalysts, companyNames, initialLegacy, initialDismissed }: Props) {
   const [catalysts, setCatalysts] = useState<Catalyst[]>(initialCatalysts)
   const [legacy, setLegacy] = useState<string[]>(initialLegacy)
   // Collapsed by default — the reminder bar is a summary you open when you want it.
@@ -161,9 +171,9 @@ export default function CatalystCalendar({ initialCatalysts, companyNames, initi
   // Group by year (list view) — exclude legacy companies entirely
   const legacySet = new Set(legacy)
   // Catalyst reminders: open (non-closed, non-legacy, unresolved) catalysts that are overdue or due soon
-  const horizonStr = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10)
+  const horizonStr = shiftDays(today, 90)
   // 30-day grace: a window that just ended isn't "overdue" yet — only flag overdue once it's comfortably past
-  const graceStr = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+  const graceStr = shiftDays(today, -30)
   const openForReminders = catalysts.filter(
     (c) => !legacySet.has(c.company_name) && !CLOSED_STATUSES.includes(c.status ?? 'Pending') && c.status !== 'Delayed' && c.status !== 'On Hold' && !c.resolved_date
   )

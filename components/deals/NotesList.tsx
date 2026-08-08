@@ -13,26 +13,31 @@ interface Props {
 export default function NotesList({ dealId }: Props) {
   const [notes, setNotes] = useState<DealNote[]>([])
   const [newNote, setNewNote] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [loadedDealId, setLoadedDealId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
   const supabase = createClient()
 
-  useEffect(() => {
-    loadNotes()
-  }, [dealId])
+  // Derived, not stored — a setLoading(true) inside the effect would force an extra
+  // render pass on every mount. Switching deals reads as loading until its rows land.
+  const loading = loadedDealId !== dealId
 
-  async function loadNotes() {
-    setLoading(true)
-    const { data } = await supabase
+  useEffect(() => {
+    let cancelled = false
+    supabase
       .from('deal_notes')
       .select('*')
       .eq('deal_id', dealId)
       .order('created_at', { ascending: false })
-    setNotes((data as DealNote[]) ?? [])
-    setLoading(false)
-  }
+      .then(({ data }) => {
+        if (cancelled) return
+        setNotes((data as DealNote[]) ?? [])
+        setLoadedDealId(dealId)
+      })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dealId])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

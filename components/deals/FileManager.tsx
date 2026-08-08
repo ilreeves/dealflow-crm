@@ -19,30 +19,42 @@ function isPdf(f: DealFile) {
   return f.mime_type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')
 }
 
+// Timestamped so two uploads of the same filename never collide. Lives at module
+// scope: a clock read inside the component body reads as an impure render to the
+// React compiler, even though this only ever runs from an upload handler.
+function storagePath(dealId: string, fileName: string) {
+  return `${dealId}/${Date.now()}-${fileName}`
+}
+
 export default function FileManager({ dealId }: Props) {
   const [files, setFiles] = useState<DealFile[]>([])
   const [uploading, setUploading] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [loadedDealId, setLoadedDealId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [isDragging, setIsDragging] = useState(false)
   const [viewing, setViewing] = useState<DealFile | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
-  useEffect(() => {
-    loadFiles()
-  }, [dealId])
+  // Derived, not stored — a setLoading(true) inside the effect would force an extra
+  // render pass on every mount. Switching deals reads as loading until its rows land.
+  const loading = loadedDealId !== dealId
 
-  async function loadFiles() {
-    setLoading(true)
-    const { data } = await supabase
+  useEffect(() => {
+    let cancelled = false
+    supabase
       .from('deal_files')
       .select('*')
       .eq('deal_id', dealId)
       .order('created_at', { ascending: false })
-    setFiles((data as DealFile[]) ?? [])
-    setLoading(false)
-  }
+      .then(({ data }) => {
+        if (cancelled) return
+        setFiles((data as DealFile[]) ?? [])
+        setLoadedDealId(dealId)
+      })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dealId])
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     await uploadFiles(Array.from(e.target.files ?? []))
@@ -56,7 +68,7 @@ export default function FileManager({ dealId }: Props) {
     setError('')
 
     for (const file of selectedFiles) {
-      const path = `${dealId}/${Date.now()}-${file.name}`
+      const path = storagePath(dealId, file.name)
       const { error: uploadError } = await supabase.storage
         .from('deal-files')
         .upload(path, file)

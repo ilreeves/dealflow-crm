@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { Plus, LayoutList, Columns3, ChevronRight } from 'lucide-react'
 import { Deal, DealStage, DEAL_STAGES, STAGE_COLORS } from '@/lib/types'
@@ -28,7 +29,11 @@ export default function PipelineBoard({ initialDeals }: Props) {
   const [actorName, setActorName] = useState<string | null>(null)
   const [pendingPass, setPendingPass] = useState<{ id: string; name: string; fromStage: DealStage } | null>(null)
   const [isMobile, setIsMobile] = useState(false)
-  const [openDealId, setOpenDealId] = useState<string | null>(null)
+  // ?open=<id> deep-links a deal modal (global search sends people here). Read as the
+  // initial value only — closing the modal clears the query string itself, so re-reading
+  // the param on every render would fight that.
+  const searchParams = useSearchParams()
+  const [openDealId, setOpenDealId] = useState<string | null>(() => searchParams.get('open'))
   const [moveError, setMoveError] = useState('')
   const supabase = createClient()
 
@@ -37,11 +42,6 @@ export default function PipelineBoard({ initialDeals }: Props) {
     check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
-  }, [])
-
-  useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('open')
-    if (id) setOpenDealId(id)
   }, [])
 
   useEffect(() => {

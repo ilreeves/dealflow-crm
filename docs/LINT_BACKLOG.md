@@ -1,67 +1,88 @@
-# Lint backlog — errors to triage
+# Lint backlog
 
-Captured 2026-08-04, end of the revenue-tracking work. **None of these block `next build`**
-(Next 16 does not run ESLint during build) and **none were introduced by that work** —
-they are all pre-existing. Reproduce with:
+Reproduce with:
 
 ```bash
 npx eslint app components lib
 ```
 
-## Errors, worst first
+## Status: 0 errors (cleared 2026-08-08)
 
-### `react-hooks/rules-of-hooks` — 1 × · **LIKELY REAL BUG**
+All 14 errors captured on 2026-08-04 are fixed. What each one turned out to be, and
+the shape of the fix, so the same patterns aren't reintroduced:
 
-A hook called conditionally or outside a component. Breaks React's hook ordering — can crash, or silently bind state to the wrong render.
+### `react-hooks/rules-of-hooks` × 1 — real bug
 
-- `components/catalysts/CatalystGantt.tsx:160` — React Hook "useMemo" is called conditionally. React Hooks must be called in the exact same order in every component render.
+`CatalystGantt` called `useMemo` *below* its `catalysts.length === 0` early return, so
+the hook count changed between an empty and a non-empty board. The memo moved above the
+return. **Any hook must sit above every early return in the component.**
 
-### `react-hooks/set-state-in-effect` — 6 × · **LIKELY REAL BUG**
+### `react-hooks/set-state-in-effect` × 6 — real, all the same two shapes
 
-setState inside useEffect without a guard forces an extra render pass and can loop. Often a sign the value should be derived during render instead of stored.
+**Shape A — `setLoading(true)` at the top of a fetch effect** (`NotesList`, `FileManager`,
+`settings/page`, `InvestorIntrosTab`). Replaced by deriving `loading` from *which key the
+loaded rows belong to*:
 
-- `app/deck/[token]/DeckGate.tsx:27` — Error: Calling setState synchronously within an effect can trigger cascading renders
-- `components/GlobalSearch.tsx:43` — Error: Calling setState synchronously within an effect can trigger cascading renders
-- `components/GlobalSearch.tsx:48` — Error: Calling setState synchronously within an effect can trigger cascading renders
-- `components/pipeline/PipelineBoard.tsx:44` — Error: Calling setState synchronously within an effect can trigger cascading renders
-- `components/shared/DecksSection.tsx:193` — Error: Calling setState synchronously within an effect can trigger cascading renders
-- `components/shared/InvestorIntrosTab.tsx:33` — Error: Calling setState synchronously within an effect can trigger cascading renders
+```tsx
+const [loadedDealId, setLoadedDealId] = useState<string | null>(null)
+const loading = loadedDealId !== dealId
+```
 
-### `react-hooks/immutability` — 3 × · **PROBABLY REAL**
+That removes the extra render pass and is strictly more correct — the old version showed
+stale rows as "loaded" for one frame after the id changed. The fetches also picked up a
+`cancelled` flag so a slow response for a previous entity can't overwrite the current one.
 
-Mutating a value React owns. Mutations React cannot see do not trigger a re-render, so the UI silently goes stale.
+**Shape B — clearing state synchronously when an input goes away** (`DecksSection` on a
+deck with no share token, `GlobalSearch` on close/empty query). Replaced by tagging the
+stored data with the key it answers and deriving the empty case at render:
 
-- `app/(dashboard)/settings/page.tsx:43` — Error: Cannot access variable before it is declared
-- `components/deals/FileManager.tsx:33` — Error: Cannot access variable before it is declared
-- `components/deals/NotesList.tsx:23` — Error: Cannot access variable before it is declared
+```tsx
+const views = loadedViews?.token === deck.token ? loadedViews.rows : []
+```
 
-### `react-hooks/purity` — 3 × · **CHECK CONTEXT FIRST**
+`PipelineBoard` was a third shape: it read `?open=` from `window.location` in a mount
+effect. Now `useSearchParams()` feeds the `useState` initializer directly. It stays an
+*initial* read — closing the modal clears the query string via `history.replaceState`,
+so a live-derived value would fight that.
 
-Impure call during render (clock, random). BENIGN in an async server component that renders once per request; a real hydration/staleness bug in a client component.
+### `react-hooks/immutability` × 3 — real, mechanical
 
-- `components/catalysts/CatalystCalendar.tsx:164` — Error: Cannot call impure function during render
-- `components/catalysts/CatalystCalendar.tsx:166` — Error: Cannot call impure function during render
-- `components/deals/FileManager.tsx:59` — Error: Cannot call impure function during render
+`useEffect(() => { loadX() }, [dep])` with `loadX` declared *below* the effect. Hoisting
+alone only converted them into `set-state-in-effect` errors (the loaders each opened with
+`setLoading(true)`), so the fetch bodies were inlined into their effects and `loading`
+derived as above.
 
-### `react/no-unescaped-entities` — 1 × · **COSMETIC**
+### `react-hooks/purity` × 3 — two real, one false positive
 
-Raw apostrophe or quote in JSX text. No runtime effect.
+`CatalystCalendar` read `Date.now()` twice during render to size the overdue / due-soon
+windows. In a client component that is a genuine hydration hazard across midnight, so the
+clock read moved up into `app/(dashboard)/catalysts/page.tsx` — an async server component
+that renders once per request — and arrives as a `today: string` prop. The component now
+shifts that string with a pure helper.
 
-- `app/forgot-password/page.tsx:41` — `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`.
+`FileManager`'s `Date.now()` was a false positive: it only runs inside an upload handler,
+but the compiler can't prove that for a function declared in the component body. Moved to
+a module-scope `storagePath()` helper, which is where it belonged anyway.
 
-## Warnings (lower priority)
+### `react/no-unescaped-entities` × 1 — cosmetic
 
-- 20 × `react-hooks/exhaustive-deps`
-- 7 × `@typescript-eslint/no-unused-vars`
+`forgot-password` now uses a real `’` rather than a straight quote, matching the rest of
+the JSX in this codebase.
 
-## How to approach it
+## Remaining: 21 warnings, deliberately left
 
-1. Start with `rules-of-hooks` and `set-state-in-effect` — the two most likely to be real defects rather than style.
-2. For each `purity` hit, check FIRST whether the file is a server component. An async server component that reads
-   cookies renders once per request and never hydrates, so a clock read there is safe and wants a *documented
-   suppression*, not a code change. Worked example: the `now` constant in `app/(dashboard)/analytics/page.tsx`,
-   which records both why it is safe and the condition that would make it a genuine bug.
-3. Fix one rule at a time and run `npx next build` after each — the build type-checks even though it does not lint.
-4. Do NOT bulk-fix `exhaustive-deps`. Several are deliberate in this codebase and already carry a disable comment.
+- 14 × `react-hooks/exhaustive-deps` — almost all "missing dependency: `supabase`".
+  `createClient()` returns the browser singleton, so adding it changes nothing but the
+  rule can't know that. The codebase convention is
+  `// eslint-disable-next-line react-hooks/exhaustive-deps` on the deps line.
+  **Do NOT bulk-fix these.**
+- 7 × `@typescript-eslint/no-unused-vars` — dead imports and placeholder params.
 
-⚠️ Never 'fix' one of these by deleting a suppression that carries a rationale — the reasoning is the point.
+## Rules of engagement
+
+1. `next build` does **not** run ESLint (Next 16), which is how these accumulated
+   unnoticed. Run `npx eslint app components lib` explicitly.
+2. Run `npx next build` after a batch — the build still type-checks.
+3. Never "fix" an error by deleting a suppression that carries a rationale. The worked
+   example is the `now` constant in `app/(dashboard)/analytics/page.tsx`, which records
+   both why the clock read is safe there and the condition that would make it a bug.

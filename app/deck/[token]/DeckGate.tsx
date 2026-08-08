@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { Loader2, Download, FileText } from 'lucide-react'
 
 interface Props {
@@ -12,22 +12,50 @@ interface Props {
 
 const LS_KEY = 'solas-deck-viewer'
 
+// The last viewer's name/email, so a returning visitor doesn't retype them. This page
+// is server-rendered and localStorage only exists in the browser, so it is read as an
+// external store: the server snapshot is empty and React fills the saved values in
+// right after hydration. Cached because getSnapshot has to return a stable reference.
+type SavedViewer = { name?: string; email?: string }
+
+const NO_SAVED_VIEWER: SavedViewer = {}
+let savedViewerCache: SavedViewer | null = null
+
+function readSavedViewer(): SavedViewer {
+  if (!savedViewerCache) {
+    try {
+      const parsed: unknown = JSON.parse(localStorage.getItem(LS_KEY) || '{}')
+      savedViewerCache = parsed && typeof parsed === 'object' ? (parsed as SavedViewer) : NO_SAVED_VIEWER
+    } catch {
+      savedViewerCache = NO_SAVED_VIEWER
+    }
+  }
+  return savedViewerCache
+}
+
+// Nothing else writes the key, so there is no change to subscribe to.
+function subscribeToSavedViewer() {
+  return () => {}
+}
+
+function serverSavedViewer() {
+  return NO_SAVED_VIEWER
+}
+
 export default function DeckGate({ token, company, label, expired }: Props) {
   // "Series B" -> "Series B", generic "Deck" -> "Non-Confidential"
   const deckLabel = label && label.toLowerCase() !== 'deck' ? label : 'Non-Confidential'
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
+  const saved = useSyncExternalStore(subscribeToSavedViewer, readSavedViewer, serverSavedViewer)
+  // null means "untouched" — fall back to whatever was saved. Clearing a field to ''
+  // is a real edit and must not be overwritten by the saved value.
+  const [nameInput, setNameInput] = useState<string | null>(null)
+  const [emailInput, setEmailInput] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [deckUrl, setDeckUrl] = useState<string | null>(null)
 
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}')
-      if (saved.name) setName(saved.name)
-      if (saved.email) setEmail(saved.email)
-    } catch { /* ignore */ }
-  }, [])
+  const name = nameInput ?? saved.name ?? ''
+  const email = emailInput ?? saved.email ?? ''
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -46,7 +74,9 @@ export default function DeckGate({ token, company, label, expired }: Props) {
         setSubmitting(false)
         return
       }
-      try { localStorage.setItem(LS_KEY, JSON.stringify({ name: name.trim(), email: email.trim() })) } catch { /* ignore */ }
+      const viewer = { name: name.trim(), email: email.trim() }
+      savedViewerCache = viewer
+      try { localStorage.setItem(LS_KEY, JSON.stringify(viewer)) } catch { /* ignore */ }
       setDeckUrl(data.url as string)
     } catch {
       setError('Network error. Please try again.')
@@ -116,7 +146,7 @@ export default function DeckGate({ token, company, label, expired }: Props) {
           <label className="block text-xs text-slate-500 mb-1">Name</label>
           <input
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => setNameInput(e.target.value)}
             required
             className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
           />
@@ -126,7 +156,7 @@ export default function DeckGate({ token, company, label, expired }: Props) {
           <input
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => setEmailInput(e.target.value)}
             required
             className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
           />

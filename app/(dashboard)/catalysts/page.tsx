@@ -18,8 +18,19 @@ export default async function CatalystsPage() {
     ...((portfolio as { name: string }[]) ?? []).map((p) => p.name),
   ])).sort()
 
+  // The reminder bar's overdue / due-soon windows are measured from today. The clock
+  // is read HERE rather than in the calendar itself: this is an async server component
+  // that renders once per request and never hydrates, and createClient() reads cookies,
+  // which keeps the route server-rendered on demand. Reading it inside the client
+  // component instead would make the server and client renders disagree across midnight.
+  //
+  // ⚠️ If this route were ever made statically rendered, `today` would freeze at build
+  // time and every catalyst would drift toward "overdue" silently. Keep it dynamic.
+  const today = new Date().toISOString().slice(0, 10)
+
   return (
     <CatalystCalendar
+      today={today}
       initialCatalysts={(catalysts as Catalyst[]) ?? []}
       companyNames={companyNames}
       initialLegacy={((legacy as { company_name: string }[]) ?? []).map((l) => l.company_name)}

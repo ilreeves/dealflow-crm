@@ -174,7 +174,7 @@ function DeckItem({ deck, rounds, entityName, buildEmail, onUpdated, onDeleted }
   const [editingLabel, setEditingLabel] = useState(false)
   const [labelDraft, setLabelDraft] = useState(deck.label)
   const [roundDraft, setRoundDraft] = useState(deck.round_id ?? '')
-  const [views, setViews] = useState<DeckView[]>([])
+  const [loadedViews, setLoadedViews] = useState<{ token: string; rows: DeckView[] } | null>(null)
   const [showViews, setShowViews] = useState(false)
   const [rowError, setRowError] = useState('')
   const replaceRef = useRef<HTMLInputElement>(null)
@@ -189,10 +189,19 @@ function DeckItem({ deck, rounds, entityName, buildEmail, onUpdated, onDeleted }
   const linkExpired = isExpired(deck.shared_at)
   const expiryDate = deck.shared_at ? formatDate(new Date(new Date(deck.shared_at).getTime() + DECK_LINK_TTL_MS).toISOString()) : null
 
+  // Tagged with the token they belong to, so a deck without a share link — or one
+  // whose link was just regenerated — reads as zero views without an effect that
+  // clears state synchronously.
+  const views = loadedViews?.token === deck.token ? loadedViews.rows : []
+
   useEffect(() => {
-    if (!deck.token) { setViews([]); return }
-    supabase.from('deck_views').select('*').eq('token', deck.token).order('viewed_at', { ascending: false })
-      .then(({ data }) => setViews((data as DeckView[]) ?? []))
+    const token = deck.token
+    if (!token) return
+    let cancelled = false
+    supabase.from('deck_views').select('*').eq('token', token).order('viewed_at', { ascending: false })
+      .then(({ data }) => { if (!cancelled) setLoadedViews({ token, rows: (data as DeckView[]) ?? [] }) })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deck.token])
 
   async function handleDownload() {

@@ -73,6 +73,21 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, legacyC
   const [drag, setDrag] = useState<{ id: string; startX: number; dx: number; moved: boolean } | null>(null)
   const supabase = createClient()
 
+  // Must sit above the empty-state early return below — a hook may not be called conditionally.
+  const companies = useMemo(() => {
+    const out: { name: string; items: Catalyst[] }[] = []
+    for (const cat of [...catalysts].sort((a, b) => (a.resolved_date ?? a.catalyst_date).localeCompare(b.resolved_date ?? b.catalyst_date))) {
+      let group = out.find((g) => g.name === cat.company_name)
+      if (!group) {
+        group = { name: cat.company_name, items: [] }
+        out.push(group)
+      }
+      group.items.push(cat)
+    }
+    out.sort((a, b) => a.name.localeCompare(b.name))
+    return out
+  }, [catalysts])
+
   function toggleCompany(name: string) {
     setCollapsed((prev) => {
       const next = new Set(prev)
@@ -156,20 +171,6 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, legacyC
 
   const now = new Date()
   const nowQ = (now.getFullYear() - minYear) * 4 + Math.floor(now.getMonth() / 3)
-
-  const companies = useMemo(() => {
-    const out: { name: string; items: Catalyst[] }[] = []
-    for (const cat of [...catalysts].sort((a, b) => (a.resolved_date ?? a.catalyst_date).localeCompare(b.resolved_date ?? b.catalyst_date))) {
-      let group = out.find((g) => g.name === cat.company_name)
-      if (!group) {
-        group = { name: cat.company_name, items: [] }
-        out.push(group)
-      }
-      group.items.push(cat)
-    }
-    out.sort((a, b) => a.name.localeCompare(b.name))
-    return out
-  }, [catalysts])
 
   const legacySet = new Set(legacyCompanies)
   const activeGroups = companies.filter((g) => !legacySet.has(g.name))

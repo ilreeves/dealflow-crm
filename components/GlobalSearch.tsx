@@ -9,27 +9,48 @@ interface DealHit { id: string; name: string; stage: string; sector: string | nu
 interface PortfolioHit { id: string; name: string; sector: string | null; category: string | null }
 interface CatalystHit { id: string; company_name: string; title: string; period: string | null; status: string | null }
 
+interface Results {
+  q: string
+  deals: DealHit[]
+  portfolio: PortfolioHit[]
+  catalysts: CatalystHit[]
+}
+
+const NO_RESULTS: Results = { q: '', deals: [], portfolio: [], catalysts: [] }
+
 export default function GlobalSearch() {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [deals, setDeals] = useState<DealHit[]>([])
-  const [portfolio, setPortfolio] = useState<PortfolioHit[]>([])
-  const [catalysts, setCatalysts] = useState<CatalystHit[]>([])
+  const [results, setResults] = useState<Results>(NO_RESULTS)
   const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const supabase = createClient()
+
+  const clean = q.trim().replace(/[,()%*]/g, '')
+  // Results carry the query they answer, so an empty box or a query still in flight
+  // shows nothing without an effect that clears state synchronously.
+  const { deals, portfolio, catalysts } = results.q === clean ? results : NO_RESULTS
+  const loading = clean !== '' && results.q !== clean
+
+  // Reopening the palette should start from a blank box, so the reset rides along
+  // with every close rather than firing from an effect on `open`.
+  function closeSearch() {
+    setOpen(false)
+    setQ('')
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
+        setQ('')
         setOpen((o) => !o)
       } else if (e.key === 'Escape') {
         setOpen(false)
+        setQ('')
       }
     }
-    const onOpen = () => setOpen(true)
+    const onOpen = () => { setQ(''); setOpen(true) }
     window.addEventListener('keydown', onKey)
     window.addEventListener('open-global-search', onOpen)
     return () => {
@@ -39,15 +60,12 @@ export default function GlobalSearch() {
   }, [])
 
   useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 30)
-    else { setQ(''); setDeals([]); setPortfolio([]); setCatalysts([]) }
+    if (open) inputRef.current?.focus()
   }, [open])
 
   useEffect(() => {
-    const clean = q.trim().replace(/[,()%*]/g, '')
-    if (!clean) { setDeals([]); setPortfolio([]); setCatalysts([]); setLoading(false); return }
+    if (!clean) return
     let cancelled = false
-    setLoading(true)
     const t = setTimeout(async () => {
       const term = `*${clean}*`
       const [d, p, c] = await Promise.all([
@@ -56,16 +74,19 @@ export default function GlobalSearch() {
         supabase.from('catalysts').select('id,company_name,title,period,status').or(`company_name.ilike.${term},title.ilike.${term}`).limit(6),
       ])
       if (cancelled) return
-      setDeals((d.data as DealHit[]) ?? [])
-      setPortfolio((p.data as PortfolioHit[]) ?? [])
-      setCatalysts((c.data as CatalystHit[]) ?? [])
-      setLoading(false)
+      setResults({
+        q: clean,
+        deals: (d.data as DealHit[]) ?? [],
+        portfolio: (p.data as PortfolioHit[]) ?? [],
+        catalysts: (c.data as CatalystHit[]) ?? [],
+      })
     }, 180)
     return () => { cancelled = true; clearTimeout(t) }
-  }, [q])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clean])
 
   function go(path: string) {
-    setOpen(false)
+    closeSearch()
     router.push(path)
   }
 
@@ -74,7 +95,7 @@ export default function GlobalSearch() {
   const hasResults = deals.length > 0 || portfolio.length > 0 || catalysts.length > 0
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-start justify-center pt-[15vh] px-4 bg-black/30" onClick={() => setOpen(false)}>
+    <div className="fixed inset-0 z-[80] flex items-start justify-center pt-[15vh] px-4 bg-black/30" onClick={closeSearch}>
       <div onClick={(e) => e.stopPropagation()} className="w-full max-w-xl bg-white rounded-2xl shadow-xl overflow-hidden">
         <div className="flex items-center gap-2.5 px-4 border-b border-slate-100">
           <Search className="w-4 h-4 text-slate-400 shrink-0" />

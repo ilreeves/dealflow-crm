@@ -39,19 +39,19 @@ export default function SettingsPage() {
   })
   const supabase = createClient()
 
+  // Runs once on mount, so `loading` starts true and is only ever cleared here —
+  // a setLoading(true) in the effect body would just force an extra render pass.
   useEffect(() => {
-    loadFields()
-  }, [])
-
-  async function loadFields() {
-    setLoading(true)
-    const { data } = await supabase
+    supabase
       .from('custom_field_definitions')
       .select('*')
       .order('sort_order')
-    setFields((data as CustomFieldDefinition[]) ?? [])
-    setLoading(false)
-  }
+      .then(({ data }) => {
+        setFields((data as CustomFieldDefinition[]) ?? [])
+        setLoading(false)
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function toSnakeCase(str: string) {
     return str.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
