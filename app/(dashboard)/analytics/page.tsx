@@ -2,6 +2,9 @@ import { createClient } from '@/lib/supabase/server'
 import { Deal } from '@/lib/types'
 import BreakdownTable, { BreakdownRow } from '@/components/analytics/BreakdownTable'
 import CollapsibleSection from '@/components/analytics/CollapsibleSection'
+// One variance convention app-wide. A local helper here painted +2.6% green
+// while the Revenue page painted the same figure navy; lib/revenue owns the rule.
+import { varianceBandColor, VARIANCE_BAND_PCT, SEVERE_MISS_PCT } from '@/lib/revenue'
 
 export default async function AnalyticsPage() {
   const supabase = await createClient()
@@ -303,12 +306,6 @@ export default async function AnalyticsPage() {
     : null
   const annualAvg = annualDeltas.length ? annualDeltas.reduce((a, b) => a + b, 0) / annualDeltas.length : null
 
-  function deltaColor(d: number): string {
-    if (d >= 0) return '#5ba200'
-    if (d >= -10) return '#e98925'
-    return '#dc2626'
-  }
-
   // Green when they hit guidance, through amber, to red when nothing held.
   function reliabilityColor(rate: number): string {
     if (rate >= 0.9) return '#5ba200'
@@ -573,6 +570,17 @@ export default async function AnalyticsPage() {
                 </tbody>
               </table>
             </div>
+            <div className="flex items-center gap-2 px-4 py-2.5 border-t border-slate-100 text-xs text-slate-400">
+              <span>0%</span>
+              <span className="flex">
+                {[0, 0.2, 0.4, 0.6, 0.8, 1].map((r) => (
+                  <span key={r} className="w-6 h-2 first:rounded-l last:rounded-r" style={{ backgroundColor: reliabilityColor(r) }} />
+                ))}
+              </span>
+              <span>100%</span>
+              <span className="text-slate-300">·</span>
+              <span>share of catalysts that held</span>
+            </div>
           </div>
         )}
 
@@ -617,7 +625,7 @@ export default async function AnalyticsPage() {
                       <td className="px-4 py-2.5 text-right text-slate-600">{periods}</td>
                       <td className={`px-4 py-2.5 text-right font-medium ${hits === 0 ? 'text-slate-300' : 'text-green-700'}`}>{hits}</td>
                       <td className="px-4 py-2.5 text-right font-medium" style={{ color: reliabilityColor(rate) }}>{Math.round(rate * 100)}%</td>
-                      <td className="px-4 py-2.5 text-right font-medium tabular-nums whitespace-nowrap" style={{ color: deltaColor(avgDelta) }}>
+                      <td className="px-4 py-2.5 text-right font-medium tabular-nums whitespace-nowrap" style={{ color: varianceBandColor(avgDelta) }}>
                         {avgDelta > 0 ? '+' : ''}{avgDelta.toFixed(1)}%
                       </td>
                       <td className="px-4 py-2.5">
@@ -630,6 +638,36 @@ export default async function AnalyticsPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+            <div className="flex items-center gap-2 px-4 py-2.5 border-t border-slate-100 text-xs text-slate-400">
+              <span>0%</span>
+              <span className="flex">
+                {[0, 0.2, 0.4, 0.6, 0.8, 1].map((r) => (
+                  <span key={r} className="w-6 h-2 first:rounded-l last:rounded-r" style={{ backgroundColor: reliabilityColor(r) }} />
+                ))}
+              </span>
+              <span>100%</span>
+              <span className="text-slate-300">·</span>
+              <span>share of quarters that met plan that held</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 pb-2.5 text-xs text-slate-400">
+              <span className="text-slate-300">Avg delta</span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: varianceBandColor(VARIANCE_BAND_PCT + 1) }} />
+                &gt;{VARIANCE_BAND_PCT}% ahead
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: varianceBandColor(0) }} />
+                within {VARIANCE_BAND_PCT}%
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: varianceBandColor(-VARIANCE_BAND_PCT - 1) }} />
+                &gt;{VARIANCE_BAND_PCT}% behind
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: varianceBandColor(-SEVERE_MISS_PCT - 1) }} />
+                &gt;{SEVERE_MISS_PCT}% behind
+              </span>
             </div>
           </div>
         )}
