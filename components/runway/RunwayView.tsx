@@ -30,6 +30,8 @@ export default function RunwayView({
   const [openId, setOpenId] = useState<string | null>(null)
   const [comps, setComps] = useState(companies)
   const [showWoundDown, setShowWoundDown] = useState(false)
+  // Collapsed by default — see the group header in the table below.
+  const [showNoData, setShowNoData] = useState(false)
 
   // Three groups, in the order they deserve attention. A company with no cash
   // data is a gap in OUR coverage, so it stays visible — but muted and below the
@@ -137,14 +139,24 @@ export default function RunwayView({
                       <Row key={c.id} c={c} onOpen={() => setOpenId(c.id)} />
                     ))}
 
+                    {/* Collapsed by default, matching the wound-down footer and
+                        the alert bars elsewhere in the app. The count stays
+                        visible while collapsed so the coverage gap is never
+                        hidden — only the names are folded away. */}
                     {noData.length > 0 && (
                       <>
-                        <tr className="bg-slate-50/70">
-                          <td colSpan={8} className="px-4 py-1.5 text-xs font-medium text-slate-400">
-                            No cash data ({noData.length}) — nothing recorded yet, not a company at zero
+                        <tr
+                          className="bg-slate-50/70 hover:bg-slate-100/70 cursor-pointer transition"
+                          onClick={() => setShowNoData((s) => !s)}
+                        >
+                          <td colSpan={8} className="px-4 py-1.5">
+                            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
+                              {showNoData ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                              No cash data ({noData.length}) — nothing recorded yet, not a company at zero
+                            </span>
                           </td>
                         </tr>
-                        {noData.map((c) => (
+                        {showNoData && noData.map((c) => (
                           <tr
                             key={c.id}
                             onClick={() => setOpenId(c.id)}
