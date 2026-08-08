@@ -200,6 +200,31 @@ export default function FundPerformanceView({
                   )
                 })()}
               </div>
+              {/* Legend for valueColor, which drives every current-value figure on
+                  this page — fund rows, the nested companies, and top positions.
+                  Swatches call valueColor itself so they cannot drift from it. */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-slate-400">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: valueColor(2, 1) }} />
+                  Above cost
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: valueColor(1, 1) }} />
+                  At cost
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: valueColor(1, 2) }} />
+                  Below cost
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: valueColor(0, 1) }} />
+                  Written to zero
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: valueColor(null, 1) }} />
+                  No mark recorded
+                </span>
+              </div>
               {lookthroughCost > 0 && (
                 <p className="text-xs text-slate-400 mt-2">
                   Fund rows include {fmtMoney(lookthroughCost)} invested via sidecars we also track directly, so they sum
