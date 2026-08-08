@@ -10,13 +10,15 @@ import PortfolioCompanyForm from './PortfolioCompanyForm'
 import CapRoundsTab from './CapRoundsTab'
 import FundraisingTab from './FundraisingTab'
 import RevenueTab from './RevenueTab'
+import RunwayTab from './RunwayTab'
+import { isActive } from '@/lib/runway'
 import { useLatestRound } from '@/lib/useLatestRound'
 import InvestorIntrosTab from '@/components/shared/InvestorIntrosTab'
 import DecksSection from '@/components/shared/DecksSection'
 import ClinicalContextSection from '@/components/shared/ClinicalContextSection'
 import KnownCompetitors from '@/components/shared/KnownCompetitors'
 
-type Tab = 'overview' | 'fundraising' | 'rounds' | 'revenue' | 'intros' | 'catalysts'
+type Tab = 'overview' | 'fundraising' | 'rounds' | 'revenue' | 'runway' | 'intros' | 'catalysts'
 
 interface Props {
   company: PortfolioCompany
@@ -53,11 +55,18 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
   // visible if it's the tab we were asked to open, so a stale link can't land on
   // a tab that isn't there.
   const showRevenue = !!company.track_revenue || initialTab === 'revenue'
+  // Runway applies to any operating company, so unlike Revenue it needs no
+  // roster — every Active company gets the tab. A wound-down company has no
+  // runway and gets none, but stays reachable when opened deliberately on it,
+  // which is how the Runway page's "wound down" list links in — so figures
+  // already recorded against a legacy company never become unreachable.
+  const showRunway = isActive(company.status) || initialTab === 'runway'
   const tabs: { key: Tab; label: string }[] = [
     { key: 'overview', label: 'Overview' },
     { key: 'fundraising', label: 'Fundraising' },
     { key: 'rounds', label: 'Ownership' },
     ...(showRevenue ? [{ key: 'revenue' as Tab, label: 'Revenue' }] : []),
+    ...(showRunway ? [{ key: 'runway' as Tab, label: 'Runway' }] : []),
     { key: 'intros', label: 'Investor Intros' },
     { key: 'catalysts', label: 'Catalysts' },
   ]
@@ -111,6 +120,7 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
             {tab === 'fundraising' && <FundraisingTab companyId={company.id} />}
             {tab === 'rounds' && <CapRoundsTab companyId={company.id} />}
             {tab === 'revenue' && <RevenueTab companyId={company.id} />}
+            {tab === 'runway' && <RunwayTab companyId={company.id} />}
             {tab === 'intros' && <InvestorIntrosTab table="portfolio_investor_intros" fkColumn="company_id" entityId={company.id} />}
             {tab === 'catalysts' && <CatalystsTab companyName={company.name} />}
           </div>

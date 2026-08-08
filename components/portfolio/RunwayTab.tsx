@@ -1,0 +1,563 @@
+"use client"
+
+import { useState, useEffect, useCallback } from "react"
+import { Plus, Trash2, Loader2, Pencil, Wallet } from "lucide-react"
+import { PortfolioCash, BURN_BASES, CASH_SOURCES } from "@/lib/types"
+import { createClient } from "@/lib/supabase/client"
+import { parseNum, numToStr, numError, fmtMoney, saveHint, exactDate, inputCls } from "@/lib/rounds"
+import {
+  RUNWAY_COLORS,
+  RUNWAY_BANDS,
+  STALE_MONTHS,
+  sortCash,
+  latestCash,
+  runwayMonths,
+  derivedRunwayMonths,
+  zeroCashDate,
+  monthsLeft,
+  impliedCash,
+  proFormaRunwayMonths,
+  runwayMismatch,
+  staleness,
+  runwayBandColor,
+  fmtMonths,
+  burnTrendPct,
+  cashMovementBurn,
+  todayISO,
+} from "@/lib/runway"
+import Field from "@/components/shared/Field"
+
+const { navy: NAVY, green: GREEN, orange: ORANGE, red: RED } = RUNWAY_COLORS
+
+// Cash, burn, and when the money runs out — one row per observation, newest
+// first. The headline figures deliberately age the most recent report forward to
+// today rather than presenting it as current: a stale balance shown as-is is the
+// exact mistake this tab exists to prevent.
+export default function RunwayTab({ companyId }: { companyId: string }) {
+  const supabase = createClient()
+  const [rows, setRows] = useState<PortfolioCash[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [adding, setAdding] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const { data, error: e } = await supabase
+      .from("portfolio_cash")
+      .select("*")
+      .eq("company_id", companyId)
+      .order("as_of", { ascending: false })
+    if (e) setError(saveHint(e.message))
+    setRows(sortCash((data as PortfolioCash[]) ?? []))
+    setLoading(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  async function handleDelete(id: string) {
+    const { error: e } = await supabase.from("portfolio_cash").delete().eq("id", id)
+    if (e) { setError("Couldn't delete that snapshot: " + e.message); return }
+    setRows((prev) => prev.filter((r) => r.id !== id))
+    if (editingId === id) setEditingId(null)
+  }
+
+  // ── headline figures, all from the most recent row carrying a balance ──
+  const today = todayISO()
+  const last = latestCash(rows)
+  const r = last ? runwayMonths(last) : null
+  const z = last ? zeroCashDate(last) : null
+  const left = last ? monthsLeft(last, today) : null
+  const implied = last ? impliedCash(last, today) : null
+  const stale = last ? staleness(last, today) : null
+  const mismatch = last ? runwayMismatch(last) : null
+  const proForma = last ? proFormaRunwayMonths(last) : null
+  const trend = burnTrendPct(rows)
+  const movement = cashMovementBurn(rows)
+  const notBurning = !!last && last.monthly_burn != null && Number(last.monthly_burn) <= 0
+
+  if (loading) {
+    return <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Stat cards */}
+      <div className="grid grid-cols-4 gap-2.5">
+        <Stat
+          label="Cash on hand"
+          value={fmtMoney(last?.cash_on_hand)}
+          sub={last ? `as of ${exactDate(last.as_of)}` : undefined}
+        />
+        <Stat
+          label="Monthly burn"
+          value={notBurning ? "not burning" : fmtMoney(last?.monthly_burn)}
+          sub={
+            notBurning
+              ? "covering its own costs"
+              : trend
+                ? `${trend.pct > 0 ? "+" : ""}${trend.pct.toFixed(0)}% vs ${exactDate(trend.from.as_of)}`
+                : (last?.burn_basis ?? undefined)
+          }
+          // A rising burn is worth noticing but is not itself bad news, so this
+          // stays neutral — only the runway columns carry a verdict colour.
+        />
+        <Stat
+          label="Runway"
+          value={r ? fmtMonths(r.months) : "—"}
+          sub={
+            r
+              ? r.basis === "stated"
+                ? `company-stated, at ${exactDate(last!.as_of)}`
+                : `cash ÷ burn, at ${exactDate(last!.as_of)}`
+              : undefined
+          }
+          accent={r ? runwayBandColor(r.months) : undefined}
+        />
+        {/* The actionable one: not what the deck said, but what it means now. */}
+        <Stat
+          label="Out of cash"
+          value={z ? exactDate(z.date) : "—"}
+          sub={
+            left == null
+              ? undefined
+              : left <= 0
+                ? `lapsed ${Math.abs(left).toFixed(1)} mo ago`
+                : `${fmtMonths(left)} from today`
+          }
+          accent={left != null ? runwayBandColor(left) : undefined}
+        />
+      </div>
+
+      <p className="text-xs text-slate-400 -mt-1.5 px-0.5">
+        {rows.length === 0
+          ? "Add a cash observation to start tracking runway. Take the balance date from the deck, not the date it was sent."
+          : "Runway counts from the date cash was measured. “From today” ages that report forward at the reported burn rate — it is an extrapolation, not a new report."}
+      </p>
+
+      {/* Things worth knowing before trusting the numbers above. Each is a
+          legitimate state rather than an error, so these inform and never block. */}
+      {(stale?.stale || mismatch || notBurning || proForma != null || movement) && (
+        <div className="border border-amber-200 rounded-xl bg-amber-50/60 px-4 py-2.5 space-y-1">
+          {stale?.stale && (
+            <p className="text-xs text-amber-800">
+              <span className="font-medium">Cash figure is {stale.months.toFixed(1)} months old</span> — measured{" "}
+              {exactDate(last!.as_of)}. Anything over {STALE_MONTHS} months means a board cycle went unrecorded, so
+              the runway above is an extrapolation, not a report.
+            </p>
+          )}
+          {mismatch && (
+            <p className="text-xs text-amber-800">
+              <span className="font-medium">Company said {fmtMonths(mismatch.stated)}, cash ÷ burn gives{" "}
+              {fmtMonths(mismatch.derived)}</span> — {mismatch.diff > 0 ? "the arithmetic is more generous" : "the arithmetic is shorter"}.
+              The stated figure is used. Often legitimate — burn planned to step down or up — but worth reading the note.
+            </p>
+          )}
+          {/* The cross-check on burn, mirroring stated-vs-derived on runway.
+              Every deck defines burn differently; the movement in the bank
+              balance is the same quantity for every company. */}
+          {movement && !movement.cashRose && (
+            <p className="text-xs text-amber-800">
+              <span className="font-medium">Actual cash movement: {fmtMoney(movement.perMonth)}/mo</span>{" "}
+              — {fmtMoney(movement.from.cash_on_hand)} on {exactDate(movement.from.as_of)} to{" "}
+              {fmtMoney(movement.to.cash_on_hand)} on {exactDate(movement.to.as_of)} ({movement.months.toFixed(1)} mo).
+              This is the figure comparable across the portfolio; the reported burn above is on the deck&apos;s own basis
+              {last?.burn_basis ? ` (${last.burn_basis})` : ""}.
+            </p>
+          )}
+          {movement?.cashRose && (
+            <p className="text-xs text-amber-800">
+              <span className="font-medium">Cash rose between the last two balances</span> —{" "}
+              {fmtMoney(movement.from.cash_on_hand)} to {fmtMoney(movement.to.cash_on_hand)}, so money came in over that
+              window and no burn rate can be read from the movement. Worth recording the financing in the notes.
+            </p>
+          )}
+          {notBurning && (
+            <p className="text-xs text-amber-800">
+              <span className="font-medium">Reported burn is zero or below</span>, so no runway is computed. That&apos;s
+              a company covering its costs, not a company out of money.
+            </p>
+          )}
+          {proForma != null && (
+            <p className="text-xs text-amber-800">
+              <span className="font-medium">Pro-forma runway {fmtMonths(proForma)}</span> including{" "}
+              {fmtMoney(last!.committed_funding)} committed but not yet funded. Excluded from the headline — a signed
+              tranche isn&apos;t cash.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Observations over time */}
+      <div className="border border-slate-200 rounded-xl bg-white">
+        <div className="flex items-center justify-between px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <Wallet className="w-4 h-4 text-slate-400" />
+            <span className="text-sm font-medium text-slate-600">Cash &amp; burn</span>
+            <span className="text-xs text-slate-400">by observation date</span>
+          </div>
+          {!adding && !editingId && (
+            <button
+              onClick={() => setAdding(true)}
+              className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 hover:border-slate-300 transition"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add snapshot
+            </button>
+          )}
+        </div>
+
+        {adding && (
+          <div className="border-t border-slate-100">
+            <CashEditor
+              companyId={companyId}
+              existing={rows}
+              onCancel={() => setAdding(false)}
+              onDone={() => { setAdding(false); load() }}
+            />
+          </div>
+        )}
+
+        {rows.length > 0 && (
+          <div className="border-t border-slate-100">
+            <CashBars rows={rows} />
+            <div className="divide-y divide-slate-50">
+              {rows.map((row) =>
+                editingId === row.id ? (
+                  <div key={row.id}>
+                    <CashEditor
+                      companyId={companyId}
+                      existing={rows}
+                      initial={row}
+                      onCancel={() => setEditingId(null)}
+                      onDone={() => { setEditingId(null); load() }}
+                    />
+                  </div>
+                ) : (
+                  <CashRow
+                    key={row.id}
+                    row={row}
+                    onEdit={() => { setEditingId(row.id); setAdding(false) }}
+                    onDelete={() => handleDelete(row.id)}
+                  />
+                ),
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {implied != null && (
+        <p className="text-xs text-slate-400">
+          Extrapolating {fmtMoney(last!.cash_on_hand)} at {fmtMoney(last!.monthly_burn)}/mo, implied cash today is{" "}
+          <span style={{ color: runwayBandColor(left) }}>
+            {implied > 0 ? fmtMoney(implied) : "nil"}
+          </span>
+          . Replace it with a reported balance as soon as one arrives.
+        </p>
+      )}
+
+      {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+    </div>
+  )
+}
+
+function Stat({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
+  return (
+    <div className="bg-slate-50 rounded-lg px-3 py-2.5">
+      <p className="text-xs text-slate-400">{label}</p>
+      <p className="text-xl font-semibold mt-0.5 tabular-nums" style={{ color: accent ?? "#0f172a" }}>{value}</p>
+      {sub && <p className="text-xs text-slate-400 mt-0.5 truncate" title={sub}>{sub}</p>}
+    </div>
+  )
+}
+
+// ─── one observation row ──────────────────────────────────────────────────────
+function CashRow({ row, onEdit, onDelete }: { row: PortfolioCash; onEdit: () => void; onDelete: () => void }) {
+  const r = runwayMonths(row)
+  const derived = derivedRunwayMonths(row)
+  const z = zeroCashDate(row)
+  return (
+    <div className="px-4 py-2.5 group">
+      <div className="flex items-center gap-3 text-sm">
+        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-lg bg-slate-100 text-xs font-bold text-slate-600 shrink-0 w-[6rem]">
+          {exactDate(row.as_of)}
+        </span>
+        <div className="flex items-baseline gap-1.5 w-32 shrink-0">
+          <span className="text-xs text-slate-400">cash</span>
+          <span className="font-medium tabular-nums" style={{ color: row.cash_on_hand != null ? NAVY : undefined }}>
+            {row.cash_on_hand != null ? fmtMoney(row.cash_on_hand) : <span className="text-slate-300">not reported</span>}
+          </span>
+        </div>
+        <div className="flex items-baseline gap-1.5 w-32 shrink-0">
+          <span className="text-xs text-slate-400">burn</span>
+          <span className="text-slate-600 tabular-nums">
+            {row.monthly_burn == null
+              ? <span className="text-slate-300">—</span>
+              : Number(row.monthly_burn) <= 0
+                ? "none"
+                : `${fmtMoney(row.monthly_burn)}/mo`}
+          </span>
+        </div>
+        <span className="flex-1 text-xs tabular-nums" style={{ color: runwayBandColor(r?.months) }}>
+          {r ? (
+            <span
+              title={
+                r.basis === "stated"
+                  ? derived != null
+                    ? `Company-stated. Cash ÷ burn gives ${fmtMonths(derived)}.`
+                    : "Company-stated."
+                  : "Derived: cash ÷ burn."
+              }
+            >
+              {fmtMonths(r.months)}
+              <span className="text-slate-400 ml-1">{r.basis === "stated" ? "stated" : "derived"}</span>
+            </span>
+          ) : ""}
+        </span>
+        {z && (
+          <span className="text-xs tabular-nums shrink-0 text-slate-500" title="Date cash reaches zero from this observation">
+            out {exactDate(z.date)}
+          </span>
+        )}
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
+          <button onClick={onEdit} className="p-1 text-slate-400 hover:text-slate-700"><Pencil className="w-3.5 h-3.5" /></button>
+          <button onClick={onDelete} className="p-1 text-slate-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+        </div>
+      </div>
+      {(row.source || row.source_detail || row.burn_basis || row.committed_funding != null || row.notes) && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 pl-[6.75rem] text-xs text-slate-400">
+          {row.source && <span>{row.source}{row.source_detail ? ` · ${row.source_detail}` : ""}</span>}
+          {row.burn_basis && <span>{row.burn_basis}</span>}
+          {row.committed_funding != null && <span>+{fmtMoney(row.committed_funding)} committed</span>}
+          {row.notes && <span className="text-slate-500">{row.notes}</span>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── cash balance over time ───────────────────────────────────────────────────
+// Oldest → newest left to right, so the depletion reads the way a chart should
+// even though the list below it is newest-first. Each bar is coloured by that
+// observation's OWN runway, so a series can visibly go from green to orange as
+// the company burns down — that progression is the point of the chart.
+function CashBars({ rows }: { rows: PortfolioCash[] }) {
+  const pts = sortCash(rows).slice().reverse().filter((r) => r.cash_on_hand != null)
+  if (pts.length < 2) return null
+
+  // Headroom so the tallest bar isn't flush against the top edge.
+  const max = Math.max(1, ...pts.map((r) => Number(r.cash_on_hand))) * 1.08
+
+  return (
+    <div className="px-4 pt-3 pb-4 border-b border-slate-100">
+      <div className="flex items-end gap-3 h-32 overflow-x-auto">
+        {pts.map((row) => {
+          const r = runwayMonths(row)
+          const fill = runwayBandColor(r?.months)
+          const tip = [
+            exactDate(row.as_of),
+            `Cash: ${fmtMoney(row.cash_on_hand)}`,
+            row.monthly_burn != null
+              ? Number(row.monthly_burn) <= 0 ? "Burn: none reported" : `Burn: ${fmtMoney(row.monthly_burn)}/mo`
+              : "Burn: not reported",
+            r ? `Runway: ${fmtMonths(r.months)} (${r.basis})` : null,
+            row.source ?? null,
+          ].filter(Boolean).join("\n")
+
+          return (
+            <div key={row.id} className="flex flex-col items-center gap-1 shrink-0 min-w-[3.5rem]">
+              {/* The runway length in text as well as colour — colour alone can't
+                  carry the verdict for protan viewers. */}
+              <span className="text-[9px] leading-none tabular-nums h-2.5" style={{ color: r ? fill : "transparent" }}>
+                {r ? fmtMonths(r.months) : "—"}
+              </span>
+              <div className="relative w-9 h-20" title={tip}>
+                <div
+                  className="absolute inset-x-0 bottom-0 rounded-t"
+                  style={{ height: `${Math.max(2, (Number(row.cash_on_hand) / max) * 100)}%`, backgroundColor: fill }}
+                />
+              </div>
+              <span className="text-[10px] text-slate-500 leading-none">
+                {new Date(row.as_of + "T00:00:00").toLocaleDateString("en-US", { month: "short" })}
+              </span>
+              <span className="text-[9px] text-slate-400 leading-none h-2.5">
+                {new Date(row.as_of + "T00:00:00").getFullYear()}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+      <div className="flex items-center gap-x-4 gap-y-1.5 mt-2 text-xs text-slate-400 flex-wrap">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: GREEN }} /> {RUNWAY_BANDS.caution}+ mo
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: NAVY }} /> {RUNWAY_BANDS.critical}–{RUNWAY_BANDS.caution} mo
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: ORANGE }} /> under {RUNWAY_BANDS.critical} mo
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: RED }} /> lapsed
+        </span>
+        <span>Bar height is cash; colour is that date&apos;s runway.</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── observation editor ───────────────────────────────────────────────────────
+function CashEditor({
+  companyId, existing, initial, onDone, onCancel,
+}: {
+  companyId: string
+  existing: PortfolioCash[]
+  initial?: PortfolioCash
+  onDone: () => void
+  onCancel: () => void
+}) {
+  const supabase = createClient()
+  const isNew = !initial
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+  const [f, setF] = useState({
+    as_of: initial?.as_of ?? "",
+    cash_on_hand: numToStr(initial?.cash_on_hand),
+    monthly_burn: numToStr(initial?.monthly_burn),
+    burn_basis: initial?.burn_basis ?? "Net burn",
+    runway_months: numToStr(initial?.runway_months),
+    out_of_cash_date: initial?.out_of_cash_date ?? "",
+    committed_funding: numToStr(initial?.committed_funding),
+    source: initial?.source ?? "Board deck",
+    source_detail: initial?.source_detail ?? "",
+    notes: initial?.notes ?? "",
+  })
+  function set<K extends keyof typeof f>(k: K, v: (typeof f)[K]) { setF((p) => ({ ...p, [k]: v })) }
+
+  // Live preview of what will be stored, so a $000s figure entered by mistake is
+  // obvious before saving rather than after it reaches the portfolio page.
+  const preview = (() => {
+    const cash = parseNum(f.cash_on_hand)
+    const burn = parseNum(f.monthly_burn)
+    if (cash == null || burn == null || burn <= 0) return null
+    return cash / burn
+  })()
+
+  async function save() {
+    if (!f.as_of) { setError("Enter the date the cash balance was measured."); return }
+    if (!f.cash_on_hand.trim() && !f.monthly_burn.trim()) {
+      setError("Enter a cash balance or a monthly burn (or both)."); return
+    }
+    const numErr =
+      numError("Cash on hand", f.cash_on_hand) ??
+      numError("Monthly burn", f.monthly_burn) ??
+      numError("Runway (months)", f.runway_months) ??
+      numError("Committed funding", f.committed_funding)
+    if (numErr) { setError(numErr); return }
+    // UNIQUE (company_id, as_of) — catch it here so the message is readable
+    // rather than a Postgres 23505.
+    const clash = existing.find((r) => r.id !== initial?.id && r.as_of === f.as_of)
+    if (clash) { setError(`An observation for ${exactDate(f.as_of)} already exists — edit that row instead.`); return }
+    if (f.out_of_cash_date && f.out_of_cash_date < f.as_of) {
+      setError("The out-of-cash date is before the balance date."); return
+    }
+
+    setSaving(true)
+    setError("")
+    const payload = {
+      company_id: companyId,
+      as_of: f.as_of,
+      cash_on_hand: parseNum(f.cash_on_hand),
+      monthly_burn: parseNum(f.monthly_burn),
+      burn_basis: f.burn_basis || null,
+      runway_months: parseNum(f.runway_months),
+      out_of_cash_date: f.out_of_cash_date || null,
+      committed_funding: parseNum(f.committed_funding),
+      source: f.source || null,
+      source_detail: f.source_detail || null,
+      notes: f.notes || null,
+      updated_at: new Date().toISOString(),
+    }
+    const { error: e } = isNew
+      ? await supabase.from("portfolio_cash").insert(payload)
+      : await supabase.from("portfolio_cash").update(payload).eq("id", initial!.id)
+    if (e) { setError(saveHint(e.message)); setSaving(false); return }
+    setSaving(false)
+    onDone()
+  }
+
+  return (
+    <div className="p-4 space-y-3 bg-slate-50">
+      <div className="grid grid-cols-4 gap-3">
+        <Field label="Balance date *">
+          <input type="date" value={f.as_of} onChange={(e) => set("as_of", e.target.value)} className={inputCls} />
+        </Field>
+        <Field label="Cash on hand">
+          <input placeholder="$ e.g. 4.2M" value={f.cash_on_hand} onChange={(e) => set("cash_on_hand", e.target.value)} className={inputCls} />
+        </Field>
+        <Field label="Monthly burn">
+          <input placeholder="$ e.g. 450K" value={f.monthly_burn} onChange={(e) => set("monthly_burn", e.target.value)} className={inputCls} />
+        </Field>
+        <Field label="Burn basis">
+          <select value={f.burn_basis} onChange={(e) => set("burn_basis", e.target.value)} className={inputCls}>
+            <option value="">—</option>
+            {BURN_BASES.map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+        </Field>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="Runway the company stated (months)">
+          <input placeholder="blank if not stated" value={f.runway_months} onChange={(e) => set("runway_months", e.target.value)} className={inputCls} />
+        </Field>
+        <Field label="Out-of-cash date they stated">
+          <input type="date" value={f.out_of_cash_date} onChange={(e) => set("out_of_cash_date", e.target.value)} className={inputCls} />
+        </Field>
+        <Field label="Committed, not yet funded">
+          <input placeholder="$ blank if none" value={f.committed_funding} onChange={(e) => set("committed_funding", e.target.value)} className={inputCls} />
+        </Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Source">
+          <select value={f.source} onChange={(e) => set("source", e.target.value)} className={inputCls}>
+            <option value="">—</option>
+            {CASH_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Field>
+        <Field label="Source detail">
+          <input placeholder="deck name, slide number…" value={f.source_detail} onChange={(e) => set("source_detail", e.target.value)} className={inputCls} />
+        </Field>
+      </div>
+      <div>
+        <label className="block text-xs text-slate-500 mb-1">Notes</label>
+        <textarea
+          rows={2}
+          value={f.notes}
+          onChange={(e) => set("notes", e.target.value)}
+          className={`${inputCls} resize-none`}
+          placeholder="Why burn is set to change, financing in progress, one-off payments…"
+        />
+      </div>
+      {preview != null && (
+        <p className="text-xs text-slate-500">
+          Cash ÷ burn = <span className="tabular-nums" style={{ color: runwayBandColor(preview) }}>{fmtMonths(preview)}</span>
+          {f.runway_months.trim() ? " — compared against the stated figure once saved." : ". Enter dollars, not thousands."}
+        </p>
+      )}
+      {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancel} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 transition">Cancel</button>
+        <button
+          onClick={save}
+          disabled={saving}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg disabled:opacity-40 transition"
+          style={{ backgroundColor: NAVY }}
+        >
+          {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />} {isNew ? "Add snapshot" : "Save snapshot"}
+        </button>
+      </div>
+    </div>
+  )
+}

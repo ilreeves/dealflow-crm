@@ -307,6 +307,51 @@ export interface PortfolioRevenue {
   updated_at: string
 }
 
+// ─── Runway / cash ────────────────────────────────────────────────────────────
+
+// What a burn figure actually measures. Recorded per observation because decks
+// are inconsistent about it, and net burn against gross opex burn is not a
+// comparison — it's two different numbers. 'Net' is the one runway means.
+export const BURN_BASES = [
+  'Net burn',
+  'Gross opex',
+  'Net burn — 3-mo average',
+  'Net burn — single month',
+  'Operating cash outflow',
+] as const
+
+export const CASH_SOURCES = [
+  'Board deck',
+  'Management reported',
+  'Investor update',
+  'Audited',
+  'Public filing',
+  'Solas estimate',
+] as const
+
+export interface PortfolioCash {
+  id: string
+  company_id: string
+  /** Date the balance was MEASURED — not when the deck was sent or found. */
+  as_of: string
+  cash_on_hand: number | null
+  /** Dollars per month, positive when spending. Zero or below = not burning. */
+  monthly_burn: number | null
+  burn_basis: string | null
+  /** The company's own runway claim, kept separate from cash ÷ burn. */
+  runway_months: number | null
+  out_of_cash_date: string | null
+  /** Committed but not yet in the bank — drives a pro-forma runway only. */
+  committed_funding: number | null
+  source: string | null
+  /** Which deck, which slide — so a figure stays traceable. */
+  source_detail: string | null
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 export const INTRO_STATUSES = ['Introduced', 'Meeting Scheduled', 'In Diligence', 'Passed', 'Invested'] as const
 export type IntroStatus = typeof INTRO_STATUSES[number]
 
