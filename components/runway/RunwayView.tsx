@@ -8,7 +8,9 @@ import { CompanyRunway, RUNWAY_BANDS, RUNWAY_COLORS, isActive, runwayBandColor, 
 import { fmtMoney, exactDate } from "@/lib/rounds"
 import PortfolioCompanyDetail from "@/components/portfolio/PortfolioCompanyDetail"
 
-const { navy: NAVY, orange: ORANGE, red: RED } = RUNWAY_COLORS
+// Only navy is used directly, for the cash figure. Every verdict colour comes
+// from runwayBandColor so the tiles and the rows can't diverge.
+const { navy: NAVY } = RUNWAY_COLORS
 
 // Runway across the portfolio: cash on hand, monthly burn, and when each company
 // runs out.
@@ -47,7 +49,15 @@ export default function RunwayView({
   // Oldest balance in the total, so the aggregate carries its own health warning.
   const oldest = withCash.reduce<string | null>((o, r) => (!o || (r.asOf && r.asOf < o) ? r.asOf : o), null)
   const urgent = live.filter((r) => r.monthsLeft != null && r.monthsLeft < RUNWAY_BANDS.caution)
+  const critical = live.filter((r) => r.monthsLeft != null && r.monthsLeft < RUNWAY_BANDS.critical)
   const lapsed = live.filter((r) => r.monthsLeft != null && r.monthsLeft <= 0)
+  // The tile takes its colour from the SAME band rule as the rows, applied to
+  // the most urgent company. Picking a colour independently is how a tile ends
+  // up amber while red rows sit directly beneath it.
+  const worst = live.reduce<number | null>(
+    (m, r) => (r.monthsLeft == null ? m : m == null ? r.monthsLeft : Math.min(m, r.monthsLeft)),
+    null,
+  )
 
   const openCompany = openId ? comps.find((c) => c.id === openId) : null
 
@@ -83,8 +93,14 @@ export default function RunwayView({
             <Tile
               label={`Under ${RUNWAY_BANDS.caution} months`}
               value={live.length ? String(urgent.length) : "—"}
-              color={urgent.length ? (lapsed.length ? RED : ORANGE) : undefined}
-              sub={lapsed.length ? `${lapsed.length} already lapsed` : "counted from today"}
+              color={urgent.length ? runwayBandColor(worst) : undefined}
+              sub={
+                lapsed.length
+                  ? `${lapsed.length} already lapsed`
+                  : critical.length
+                    ? `${critical.length} under ${RUNWAY_BANDS.critical} months`
+                    : "counted from today"
+              }
             />
           </div>
 

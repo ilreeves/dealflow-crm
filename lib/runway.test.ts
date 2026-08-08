@@ -25,6 +25,7 @@ import {
   byUrgency,
   isActive,
   RUNWAY_COLORS,
+  RUNWAY_BANDS,
   STALE_MONTHS,
 } from "./runway"
 
@@ -437,12 +438,24 @@ describe("roster", () => {
 })
 
 describe("presentation", () => {
-  it("bands runway by how long a raise takes, red once lapsed", () => {
+  it("bands runway by how long a raise takes — Isaiah's four thresholds", () => {
+    // >12 green · 6-12 navy · 3-6 orange · <3 red (and red once lapsed).
     expect(runwayBandColor(18)).toBe(RUNWAY_COLORS.green)
+    expect(runwayBandColor(12)).toBe(RUNWAY_COLORS.green)
+    expect(runwayBandColor(11.9)).toBe(RUNWAY_COLORS.navy)
     expect(runwayBandColor(9)).toBe(RUNWAY_COLORS.navy)
+    expect(runwayBandColor(6)).toBe(RUNWAY_COLORS.navy)
+    expect(runwayBandColor(5.9)).toBe(RUNWAY_COLORS.orange)
     expect(runwayBandColor(3)).toBe(RUNWAY_COLORS.orange)
+    expect(runwayBandColor(2.9)).toBe(RUNWAY_COLORS.red)
+    expect(runwayBandColor(1)).toBe(RUNWAY_COLORS.red)
     expect(runwayBandColor(0)).toBe(RUNWAY_COLORS.red)
     expect(runwayBandColor(-4)).toBe(RUNWAY_COLORS.red)
+  })
+
+  it("keeps the bands ordered so no gap or overlap can open up", () => {
+    expect(RUNWAY_BANDS.critical).toBeLessThan(RUNWAY_BANDS.acute)
+    expect(RUNWAY_BANDS.acute).toBeLessThan(RUNWAY_BANDS.caution)
   })
 
   it("treats an absent runway as neutral, never as a warning", () => {

@@ -416,13 +416,13 @@ function CashBars({ rows }: { rows: PortfolioCash[] }) {
           <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: GREEN }} /> {RUNWAY_BANDS.caution}+ mo
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: NAVY }} /> {RUNWAY_BANDS.critical}–{RUNWAY_BANDS.caution} mo
+          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: NAVY }} /> {RUNWAY_BANDS.acute}–{RUNWAY_BANDS.caution} mo
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: ORANGE }} /> under {RUNWAY_BANDS.critical} mo
+          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: ORANGE }} /> {RUNWAY_BANDS.critical}–{RUNWAY_BANDS.acute} mo
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: RED }} /> lapsed
+          <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: RED }} /> under {RUNWAY_BANDS.critical} mo or lapsed
         </span>
         <span>Bar height is cash; colour is that date&apos;s runway.</span>
       </div>

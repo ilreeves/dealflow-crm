@@ -232,15 +232,20 @@ export function runwayMismatch(row: PortfolioCash): { stated: number; derived: n
 }
 
 /**
- * Urgency bands, in months of runway remaining. Thresholds chosen around how
- * long a raise actually takes: under 6 months there is no time to run a
- * process, 6–12 means the raise should already be live, past 12 is comfortable.
+ * Urgency bands, in months of runway remaining (Isaiah's thresholds, 2026-08-07).
+ * Read against how long a raise actually takes: under 3 months there is no time
+ * left to run any process, 3–6 is acute, 6–12 means the raise should already be
+ * live, past 12 is comfortable.
  */
-export const RUNWAY_BANDS = { critical: 6, caution: 12 } as const
+export const RUNWAY_BANDS = { critical: 3, acute: 6, caution: 12 } as const
 
 /**
  * THE runway colour rule — one definition, so the page and the tab can never
  * disagree about whether a company is in trouble.
+ *
+ * Red covers BOTH a lapsed runway and anything under `critical`: at that point
+ * the distinction between "out last month" and "out next month" is not worth a
+ * colour, and both need the same reaction.
  *
  * ⚠️ Green and orange are indistinguishable under protanopia, and red/orange
  * are close, so colour must never be the only thing carrying the verdict. Every
@@ -249,8 +254,8 @@ export const RUNWAY_BANDS = { critical: 6, caution: 12 } as const
 export function runwayBandColor(months: number | null | undefined): string {
   if (months == null || isNaN(Number(months))) return RUNWAY_COLORS.navy
   const n = Number(months)
-  if (n <= 0) return RUNWAY_COLORS.red
-  if (n < RUNWAY_BANDS.critical) return RUNWAY_COLORS.orange
+  if (n < RUNWAY_BANDS.critical) return RUNWAY_COLORS.red
+  if (n < RUNWAY_BANDS.acute) return RUNWAY_COLORS.orange
   if (n < RUNWAY_BANDS.caution) return RUNWAY_COLORS.navy
   return RUNWAY_COLORS.green
 }
