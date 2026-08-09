@@ -55,8 +55,12 @@ export function saveHint(msg: string): string {
   // Checked before the generic portfolio_revenue case: the table exists, it's the
   // revised-plan columns that are missing, so pointing at migration_revenue.sql
   // would send someone to re-run the wrong file.
-  // Checked before the generic portfolio_cash case below: the table exists, it's
-  // the flag-clearing columns that are missing.
+  // Both of these must precede the generic portfolio_cash case below, which says
+  // the TABLE is missing. It isn't — a column is — so that message sends you to
+  // re-run the wrong migration, which is exactly what happened on 2026-08-08.
+  if (/updated_by|created_by/i.test(msg)) {
+    return "Save failed — the audit columns don't exist yet. Run supabase/migration_runway_audit.sql in Supabase, then try again. (" + msg + ")"
+  }
   if (/mismatch_ack|mismatch_acked/i.test(msg)) {
     return "Couldn't clear the flag — the columns for it don't exist yet. Run supabase/migration_runway_mismatch_ack.sql in Supabase, then try again. (" + msg + ")"
   }
