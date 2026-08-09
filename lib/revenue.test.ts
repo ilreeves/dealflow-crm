@@ -11,6 +11,8 @@ import {
   annualActual,
   annualProjection,
   annualMismatch,
+  planValue,
+  isRevised,
   plannedPeriods,
   planYearFor,
   latestActual,
@@ -29,9 +31,12 @@ function row(p: Partial<PortfolioRevenue> & { period_type: string; fiscal_year: 
     company_id: "c1",
     period_end: periodEnd(p.period_type, p.fiscal_year),
     projected: null,
+    revised_projected: null,
     actual: null,
     projected_source: null,
     projected_as_of: null,
+    revised_source: null,
+    revised_as_of: null,
     actual_source: null,
     notes: null,
     created_by: null,
@@ -167,7 +172,7 @@ describe("annualProjection", () => {
 
   it("sums only when all four quarters are planned", () => {
     const rows = quarters(2026, [[100, null], [120, null], [140, null], [160, null]])
-    expect(annualProjection(rows, 2026)).toEqual({ value: 520, basis: "Q1 + Q2 + Q3 + Q4" })
+    expect(annualProjection(rows, 2026)).toEqual({ value: 520, basis: "Q1 + Q2 + Q3 + Q4", revised: false })
   })
 
   it("prefers the FY row", () => {
@@ -175,7 +180,78 @@ describe("annualProjection", () => {
       ...quarters(2026, [[100, null], [120, null], [140, null], [160, null]]),
       row({ period_type: "FY", fiscal_year: 2026, projected: 600 }),
     ]
-    expect(annualProjection(rows, 2026)).toEqual({ value: 600, basis: "FY" })
+    expect(annualProjection(rows, 2026)).toEqual({ value: 600, basis: "FY", revised: false })
+  })
+
+  // The two bases must not bleed into each other. A restatement raising one
+  // quarter has to move the revised annual figure and leave the original alone —
+  // if it moved both, /analytics would silently start scoring companies against
+  // the softer target, which is the exact failure the column split prevents.
+  it("keeps the original basis clean when a quarter is restated", () => {
+    const rows = quarters(2026, [[100, null], [120, null], [140, null], [160, null]])
+    rows[1] = { ...rows[1], revised_projected: 200 }
+    expect(annualProjection(rows, 2026, "original")).toEqual({
+      value: 520, basis: "Q1 + Q2 + Q3 + Q4", revised: false,
+    })
+    expect(annualProjection(rows, 2026, "revised")).toEqual({
+      value: 600, basis: "Q1 + Q2 + Q3 + Q4", revised: true,
+    })
+  })
+
+  // A revision on one quarter must not make the other three vanish — the revised
+  // basis falls back to the original per period, so the year stays complete.
+  it("falls back to the original for periods that were never restated", () => {
+    const rows = quarters(2026, [[100, null], [120, null], [140, null], [160, null]])
+    rows[0] = { ...rows[0], revised_projected: 90 }
+    expect(annualProjection(rows, 2026, "revised")!.value).toBe(510)
+  })
+
+  // Only the FY row was restated, so the revised annual figure is that number and
+  // the original annual figure is still January's.
+  it("prefers a restated FY row on the revised basis only", () => {
+    const rows = [row({ period_type: "FY", fiscal_year: 2026, projected: 600, revised_projected: 450 })]
+    expect(annualProjection(rows, 2026, "original")!.value).toBe(600)
+    expect(annualProjection(rows, 2026, "revised")).toEqual({ value: 450, basis: "FY", revised: true })
+  })
+})
+
+describe("planValue / variance across bases", () => {
+  // The fallback is what makes "revised" usable at all: only a handful of periods
+  // are ever restated, and without it most of the book would read as having no plan.
+  it("falls back to the original when nothing was restated", () => {
+    const r = row({ period_type: "Q1", fiscal_year: 2026, projected: 100 })
+    expect(planValue(r, "original")).toBe(100)
+    expect(planValue(r, "revised")).toBe(100)
+    expect(isRevised(r)).toBe(false)
+  })
+
+  it("uses the restatement on the revised basis and never on the original", () => {
+    const r = row({ period_type: "Q1", fiscal_year: 2026, projected: 100, revised_projected: 60 })
+    expect(planValue(r, "original")).toBe(100)
+    expect(planValue(r, "revised")).toBe(60)
+    expect(isRevised(r)).toBe(true)
+  })
+
+  // The case that motivated the split: a period beats a lowered target while
+  // missing the one actually set. Both readings have to survive.
+  it("scores the same actual differently on each basis", () => {
+    const r = row({ period_type: "Q2", fiscal_year: 2026, projected: 100, revised_projected: 50, actual: 60 })
+    expect(variance(r, "original")!.pct).toBeCloseTo(-40)
+    expect(variance(r, "revised")!.pct).toBeCloseTo(20)
+  })
+
+  // Vektor Q3 2025: the reforecast is the only plan on record. It must not be
+  // borrowed as an original — /analytics has to see "no target", not an easy one.
+  it("reports no original plan when only a restatement exists", () => {
+    const r = row({ period_type: "Q3", fiscal_year: 2025, revised_projected: 685000, actual: 616350 })
+    expect(planValue(r, "original")).toBeNull()
+    expect(variance(r, "original")).toBeNull()
+    expect(variance(r, "revised")!.pct).toBeLessThan(0)
+  })
+
+  it("defaults to the original basis, so an unconsidered caller gets the strict answer", () => {
+    const r = row({ period_type: "Q2", fiscal_year: 2026, projected: 100, revised_projected: 50, actual: 60 })
+    expect(variance(r)!.pct).toBeCloseTo(-40)
   })
 })
 
@@ -203,17 +279,37 @@ describe("annualMismatch", () => {
     expect(annualMismatch(rows, 2025, "actual")).toBeNull()
   })
 
-  it("stays silent when any quarter's plan is a reforecast", () => {
-    // Vektor 2025: FY is January's original $2.6M goal; Q3 and Q4 are mid-year
-    // reforecasts. Different basis by design — the sums are not meant to tie.
+  // Vektor 2025, the case that used to need a `projected_source === 'Reforecast'`
+  // escape hatch here. Now that a restatement lives in its own column, Q3/Q4 carry
+  // no original at all, so the year simply isn't fully planned on the original
+  // basis and the check falls silent for the honest reason.
+  it("stays silent when a year's restated quarters leave no original plan", () => {
     const rows = [
       row({ period_type: "Q1", fiscal_year: 2025, projected: 365000, projected_source: "Board deck" }),
       row({ period_type: "Q2", fiscal_year: 2025, projected: 450000, projected_source: "Board deck" }),
-      row({ period_type: "Q3", fiscal_year: 2025, projected: 685000, projected_source: "Reforecast" }),
-      row({ period_type: "Q4", fiscal_year: 2025, projected: 900000, projected_source: "Reforecast" }),
+      row({ period_type: "Q3", fiscal_year: 2025, revised_projected: 685000, revised_source: "Company reforecast" }),
+      row({ period_type: "Q4", fiscal_year: 2025, revised_projected: 900000, revised_source: "Company reforecast" }),
       row({ period_type: "FY", fiscal_year: 2025, projected: 2600000, projected_source: "Board deck" }),
     ]
     expect(annualMismatch(rows, 2025, "projected")).toBeNull()
+    // And no false alarm on the revised column either — the FY row was never restated.
+    expect(annualMismatch(rows, 2025, "revised_projected")).toBeNull()
+  })
+
+  // Each basis reconciles against itself. A restated FY row that contradicts its
+  // own restated quarters is just as worth flagging as the original pair was.
+  it("flags a revised FY row that contradicts its revised quarters", () => {
+    const rows = [
+      ...quarters(2026, [[100, null], [100, null], [100, null], [100, null]]).map((r) => ({
+        ...r, revised_projected: 200,
+      })),
+      row({ period_type: "FY", fiscal_year: 2026, projected: 400, revised_projected: 1000 }),
+    ]
+    expect(annualMismatch(rows, 2026, "projected")).toBeNull()
+    const m = annualMismatch(rows, 2026, "revised_projected")
+    expect(m).not.toBeNull()
+    expect(m!.fy).toBe(1000)
+    expect(m!.quarters).toBe(800)
   })
 
   it("stays silent on a partly populated year", () => {

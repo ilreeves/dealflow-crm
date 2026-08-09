@@ -6,6 +6,7 @@ import {
   PortfolioRevenue,
   REVENUE_PERIODS,
   REVENUE_PROJECTED_SOURCES,
+  REVENUE_REVISED_SOURCES,
   REVENUE_ACTUAL_SOURCES,
 } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
@@ -24,6 +25,8 @@ import {
   plannedPeriods,
   annualMismatch,
   sortRows,
+  planValue,
+  isRevised,
   VARIANCE_BAND_PCT,
   SEVERE_MISS_PCT,
 } from "@/lib/revenue"
@@ -68,24 +71,36 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
   }
 
   // ── headline figures ──
+  // This tab reports the plan now in force, so everything below is on the REVISED
+  // basis (restatement where one exists, original otherwise). The original is
+  // carried alongside rather than dropped — /analytics scores reliability on it,
+  // and a target that moved is worth seeing move.
   const last = latestActual(rows)
   const thisYear = new Date().getFullYear()
-  const proj = annualProjection(rows, thisYear)
-  const planParts = proj ? [] : plannedPeriods(rows, thisYear)
+  const proj = annualProjection(rows, thisYear, "revised")
+  const projOriginal = annualProjection(rows, thisYear, "original")
+  const planParts = proj ? [] : plannedPeriods(rows, thisYear, "revised")
   // FY rows that contradict their own quarters. Both are legitimate and the FY
   // row wins by convention, so this only surfaces the conflict — it never edits.
+  // Each basis reconciles only against itself; an original is never compared
+  // with a restatement.
   const mismatches = Array.from(new Set(rows.map((r) => r.fiscal_year)))
     .sort((a, b) => b - a)
     .flatMap((y) =>
-      (["projected", "actual"] as const).map((f) => ({ year: y, field: f, m: annualMismatch(rows, y, f) })),
+      (["projected", "revised_projected", "actual"] as const).map((f) => ({
+        year: y,
+        field: f,
+        m: annualMismatch(rows, y, f),
+      })),
     )
     .filter((x) => x.m)
-  // Reported periods with no plan. These drop out of variance silently, so the
-  // company reads fine while the quarters go unmeasured — Vesalio's 2025 was
-  // three of four. Flagged here rather than as a column on the Revenue page:
-  // it's a note about one company, not something to scan a table for.
-  const unplanned = rows.filter((r) => r.actual != null && r.projected == null)
-  const lastVar = last ? variance(last) : null
+  // Reported periods with no plan on EITHER basis. These drop out of variance
+  // silently, so the company reads fine while the quarters go unmeasured —
+  // Vesalio's 2025 was three of four. Flagged here rather than as a column on the
+  // Revenue page: it's a note about one company, not something to scan a table for.
+  const unplanned = rows.filter((r) => r.actual != null && planValue(r, "revised") == null)
+  const lastVar = last ? variance(last, "revised") : null
+  const lastVarOriginal = last && isRevised(last) ? variance(last, "original") : null
   const lastYoy = last ? yoyGrowth(rows, last) : null
 
   if (loading) {
@@ -102,13 +117,19 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
           sub={last ? periodLabel(last) : undefined}
         />
         <Stat
-          label={`FY ${thisYear} projected`}
+          label={`FY ${thisYear} plan`}
           value={proj ? fmtMoney(proj.value) : "—"}
           sub={
             proj
-              ? proj.basis !== "FY"
-                ? `sum of ${proj.basis}`
-                : undefined
+              ? [
+                  proj.basis !== "FY" ? `sum of ${proj.basis}` : null,
+                  // Only when the restatement actually moved the number.
+                  proj.revised && projOriginal?.value !== proj.value
+                    ? `revised · orig ${projOriginal ? fmtMoney(projOriginal.value) : "incomplete"}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || undefined
               : planParts.length
                 ? `${planParts.join(" + ")} planned only`
                 : undefined
@@ -117,7 +138,13 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
         <Stat
           label="vs plan"
           value={lastVar ? fmtSignedPct(lastVar.pct) : "—"}
-          sub={lastVar ? `${fmtMoney(Math.abs(lastVar.abs))} ${lastVar.abs >= 0 ? "above" : "below"}` : undefined}
+          sub={
+            lastVar
+              ? lastVarOriginal
+                ? `${fmtSignedPct(lastVarOriginal.pct)} vs original plan`
+                : `${fmtMoney(Math.abs(lastVar.abs))} ${lastVar.abs >= 0 ? "above" : "below"}`
+              : undefined
+          }
           accent={lastVar ? varianceBandColor(lastVar.pct) : undefined}
         />
         <Stat
@@ -129,8 +156,8 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
       </div>
       <p className="text-xs text-slate-400 -mt-1.5 px-0.5">
         {rows.length === 0
-          ? "Add a fiscal period to start tracking projected against actual revenue."
-          : "Variance compares an actual to the projection for the same period. Periods with no actual reported yet are left blank rather than counted as a shortfall."}
+          ? "Add a fiscal period to start tracking plan against actual revenue."
+          : "Variance compares an actual to the plan for the same period — the revised plan where one was entered, the original otherwise. Both are kept, and the original is what Analytics scores projection reliability against. Periods with no actual reported yet are left blank rather than counted as a shortfall."}
       </p>
 
       {/* Projected vs actual by period */}
@@ -166,7 +193,10 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
           <div className="border-t border-slate-100 px-4 py-2 space-y-1 bg-amber-50/60">
             {mismatches.map(({ year, field, m }) => (
               <p key={`${year}-${field}`} className="text-xs text-amber-800">
-                <span className="font-medium">FY {year} {field === "projected" ? "plan" : "actual"}</span>{" "}
+                <span className="font-medium">
+                  FY {year}{" "}
+                  {field === "projected" ? "original plan" : field === "revised_projected" ? "revised plan" : "actual"}
+                </span>{" "}
                 is {fmtMoney(m!.fy)} but the four quarters sum to {fmtMoney(m!.quarters)} —{" "}
                 {fmtSignedPct(m!.pct)}. The FY row is used; worth confirming which is right.
               </p>
@@ -237,16 +267,27 @@ function RevenueRow({
   onEdit: () => void
   onDelete: () => void
 }) {
-  const v = variance(row)
+  const v = variance(row, "revised")
+  const revised = isRevised(row)
   return (
     <div className="px-4 py-2.5 group">
       <div className="flex items-center gap-3 text-sm">
         <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-lg bg-slate-100 text-xs font-bold text-slate-600 shrink-0 w-[4.5rem]">
           {periodLabel(row)}
         </span>
+        {/* The plan in force, with the original kept beside it when the target
+            moved. Struck through rather than hidden: a restatement is a fact about
+            the period, and replacing the number outright would erase it. */}
         <div className="flex items-baseline gap-1.5 w-32 shrink-0">
-          <span className="text-xs text-slate-400">plan</span>
-          <span className="text-slate-600 tabular-nums">{fmtMoney(row.projected)}</span>
+          <span className="text-xs text-slate-400">{revised ? "rev plan" : "plan"}</span>
+          <span className="text-slate-600 tabular-nums">{fmtMoney(planValue(row, "revised"))}</span>
+        </div>
+        <div className="flex items-baseline gap-1.5 w-24 shrink-0">
+          {revised && row.projected != null && (
+            <span className="text-xs text-slate-400 tabular-nums line-through" title="Original plan">
+              {fmtMoney(row.projected)}
+            </span>
+          )}
         </div>
         <div className="flex items-baseline gap-1.5 w-32 shrink-0">
           <span className="text-xs text-slate-400">actual</span>
@@ -267,12 +308,18 @@ function RevenueRow({
           <button onClick={onDelete} className="p-1 text-slate-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
         </div>
       </div>
-      {(row.projected_source || row.actual_source || row.projected_as_of || row.notes) && (
+      {(row.projected_source || row.revised_source || row.actual_source || row.projected_as_of || row.notes) && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 pl-[5.25rem] text-xs text-slate-400">
           {row.projected_source && (
             <span>
               plan: {row.projected_source}
               {row.projected_as_of ? ` (${exactDate(row.projected_as_of)})` : ""}
+            </span>
+          )}
+          {row.revised_source && (
+            <span>
+              revised: {row.revised_source}
+              {row.revised_as_of ? ` (${exactDate(row.revised_as_of)})` : ""}
             </span>
           )}
           {row.actual_source && <span>actual: {row.actual_source}</span>}
@@ -297,7 +344,10 @@ type ChartPoint = {
   label: string
   /** Year caption under a quarter; blank when it repeats the one to its left. */
   group: string
+  /** The plan in force — revised where one exists. This is what the bar is scored against. */
   projected: number | null
+  /** The original plan, drawn as a second, fainter tick when the target moved. */
+  original: number | null
   actual: number | null
   /** Tooltip detail when a figure was derived rather than entered as an FY row. */
   basis: string | null
@@ -309,7 +359,8 @@ function quarterPoints(rows: PortfolioRevenue[]): ChartPoint[] {
     key: r.id,
     label: r.period_type,
     group: i === 0 || chron[i - 1].fiscal_year !== r.fiscal_year ? String(r.fiscal_year) : "",
-    projected: r.projected != null ? Number(r.projected) : null,
+    projected: planValue(r, "revised"),
+    original: isRevised(r) ? planValue(r, "original") : null,
     actual: r.actual != null ? Number(r.actual) : null,
     basis: null,
   }))
@@ -319,7 +370,8 @@ function annualPoints(rows: PortfolioRevenue[]): ChartPoint[] {
   const years = Array.from(new Set(rows.map((r) => r.fiscal_year))).sort((a, b) => a - b)
   return years
     .map((y) => {
-      const p = annualProjection(rows, y)
+      const p = annualProjection(rows, y, "revised")
+      const orig = annualProjection(rows, y, "original")
       const a = annualActual(rows, y)
       const derived = [
         p && p.basis !== "FY" ? `plan summed from ${p.basis}` : null,
@@ -330,6 +382,9 @@ function annualPoints(rows: PortfolioRevenue[]): ChartPoint[] {
         label: String(y),
         group: "",
         projected: p?.value ?? null,
+        // Only when the restatement moved the annual figure — an identical
+        // second tick would just look like a rendering fault.
+        original: p?.revised && orig && orig.value !== p.value ? orig.value : null,
         actual: a?.value ?? null,
         basis: derived.length ? derived.join("\n") : null,
       }
@@ -374,7 +429,7 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
   }
 
   // Headroom so the tallest plan tick never sits flush against the top edge.
-  const max = Math.max(1, ...pts.flatMap((p) => [p.projected ?? 0, p.actual ?? 0])) * 1.08
+  const max = Math.max(1, ...pts.flatMap((p) => [p.projected ?? 0, p.original ?? 0, p.actual ?? 0])) * 1.08
 
   return (
     <div className="px-4 pt-3 pb-4 border-b border-slate-100">
@@ -384,12 +439,13 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
           // Null is NOT zero on either side. A plan that was never recorded draws
           // no tick, and a period not yet reported draws a hollow stub — neither
           // may render as a short bar, which reads as "≈0" instead of "absent".
-          const { projected: p, actual: a } = pt
+          const { projected: p, original: orig, actual: a } = pt
           const v = variance({ projected: p, actual: a })
           const fill = varianceBandColor(v?.pct)
           const tip = [
             mode === "quarterly" ? `${pt.label} ${pt.group || ""}`.trim() : `FY ${pt.label}`,
-            `Plan: ${p != null ? fmtMoney(p) : "not recorded"}`,
+            `Plan${orig != null ? " (revised)" : ""}: ${p != null ? fmtMoney(p) : "not recorded"}`,
+            orig != null ? `Original plan: ${fmtMoney(orig)}` : null,
             `Actual: ${a != null ? fmtMoney(a) : "not reported yet"}`,
             v?.pct != null ? `Variance: ${fmtSignedPct(v.pct)}` : null,
             pt.basis,
@@ -417,6 +473,14 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
                   />
                 ) : (
                   <div className="absolute inset-x-0 bottom-0 h-4 rounded-t border border-dashed border-slate-300" />
+                )}
+                {/* Original tick first, so the plan actually in force draws over it
+                    if the two nearly coincide. */}
+                {orig != null && (
+                  <div
+                    className="absolute -inset-x-1 border-t border-dashed border-slate-300"
+                    style={{ bottom: `${(orig / max) * 100}%` }}
+                  />
                 )}
                 {p != null && (
                   <div
@@ -448,7 +512,10 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
           <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: varianceBandColor(-SEVERE_MISS_PCT - 1) }} /> &gt;{SEVERE_MISS_PCT}% behind
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-3 h-[2.5px] rounded-full bg-slate-400" /> Plan
+          <span className="w-3 h-[2.5px] rounded-full bg-slate-400" /> Plan in force
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 border-t border-dashed border-slate-300" /> Original plan, where revised
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded border border-dashed border-slate-300" /> Not reported
@@ -459,6 +526,12 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
 }
 
 // ─── period editor ────────────────────────────────────────────────────────────
+/** A stored value that isn't in the current option list still gets an option, so
+ *  editing an old row can't quietly blank its source. */
+function withCurrent(list: readonly string[], current: string): string[] {
+  return current && !list.includes(current) ? [...list, current] : [...list]
+}
+
 function RevenueEditor({
   companyId, existing, initial, onDone, onCancel,
 }: {
@@ -476,9 +549,12 @@ function RevenueEditor({
     period_type: initial?.period_type ?? "FY",
     fiscal_year: String(initial?.fiscal_year ?? new Date().getFullYear()),
     projected: numToStr(initial?.projected),
+    revised_projected: numToStr(initial?.revised_projected),
     actual: numToStr(initial?.actual),
     projected_source: initial?.projected_source ?? "",
     projected_as_of: initial?.projected_as_of ?? "",
+    revised_source: initial?.revised_source ?? "",
+    revised_as_of: initial?.revised_as_of ?? "",
     actual_source: initial?.actual_source ?? "",
     notes: initial?.notes ?? "",
   })
@@ -487,9 +563,15 @@ function RevenueEditor({
   async function save() {
     const year = parseInt(f.fiscal_year, 10)
     if (!year || year < 2000 || year > 2100) { setError("Enter a fiscal year between 2000 and 2100."); return }
-    if (!f.projected.trim() && !f.actual.trim()) { setError("Enter a projected or an actual figure (or both)."); return }
+    if (!f.projected.trim() && !f.revised_projected.trim() && !f.actual.trim()) {
+      setError("Enter an original plan, a revised plan, or an actual figure.")
+      return
+    }
     // Surface typos rather than letting them persist as null.
-    const numErr = numError("Projected", f.projected) ?? numError("Actual", f.actual)
+    const numErr =
+      numError("Original plan", f.projected) ??
+      numError("Revised plan", f.revised_projected) ??
+      numError("Actual", f.actual)
     if (numErr) { setError(numErr); return }
     // The table has a UNIQUE (company, period_type, fiscal_year); catch the clash
     // here so the user gets a readable message instead of a Postgres 23505.
@@ -506,9 +588,12 @@ function RevenueEditor({
       fiscal_year: year,
       period_end: periodEnd(f.period_type, year),
       projected: parseNum(f.projected),
+      revised_projected: parseNum(f.revised_projected),
       actual: parseNum(f.actual),
       projected_source: f.projected_source || null,
       projected_as_of: f.projected_as_of || null,
+      revised_source: f.revised_source || null,
+      revised_as_of: f.revised_as_of || null,
       actual_source: f.actual_source || null,
       notes: f.notes || null,
       updated_at: new Date().toISOString(),
@@ -532,7 +617,7 @@ function RevenueEditor({
         <Field label="Fiscal year *">
           <input type="number" min={2000} max={2100} value={f.fiscal_year} onChange={(e) => set("fiscal_year", e.target.value)} className={inputCls} />
         </Field>
-        <Field label="Projected">
+        <Field label="Original plan">
           <input placeholder="$ e.g. 4.5M" value={f.projected} onChange={(e) => set("projected", e.target.value)} className={inputCls} />
         </Field>
         <Field label="Actual">
@@ -540,20 +625,46 @@ function RevenueEditor({
         </Field>
       </div>
       <div className="grid grid-cols-3 gap-3">
-        <Field label="Projection source">
+        <Field label="Original plan source">
+          {/* An unrecognised stored value is kept as an option so a row written
+              before this list changed doesn't silently lose its source on save. */}
           <select value={f.projected_source} onChange={(e) => set("projected_source", e.target.value)} className={inputCls}>
             <option value="">—</option>
-            {REVENUE_PROJECTED_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+            {withCurrent(REVENUE_PROJECTED_SOURCES, f.projected_source).map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </Field>
-        <Field label="Projection as of">
+        <Field label="Original plan as of">
           <input type="date" value={f.projected_as_of} onChange={(e) => set("projected_as_of", e.target.value)} className={inputCls} />
         </Field>
         <Field label="Actual source">
           <select value={f.actual_source} onChange={(e) => set("actual_source", e.target.value)} className={inputCls}>
             <option value="">—</option>
-            {REVENUE_ACTUAL_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+            {withCurrent(REVENUE_ACTUAL_SOURCES, f.actual_source).map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
+        </Field>
+      </div>
+
+      {/* The restatement. Deliberately its own block rather than a second column
+          next to "Original plan" — filling it in is a decision about the period,
+          not a correction of the number to its left, and the original must survive
+          it. Leave blank while the original still stands. */}
+      <div className="grid grid-cols-3 gap-3 pt-1 border-t border-slate-200">
+        <Field label="Revised plan">
+          <input
+            placeholder="$ blank if unchanged"
+            value={f.revised_projected}
+            onChange={(e) => set("revised_projected", e.target.value)}
+            className={inputCls}
+          />
+        </Field>
+        <Field label="Revised plan source">
+          <select value={f.revised_source} onChange={(e) => set("revised_source", e.target.value)} className={inputCls}>
+            <option value="">—</option>
+            {withCurrent(REVENUE_REVISED_SOURCES, f.revised_source).map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Field>
+        <Field label="Revised as of">
+          <input type="date" value={f.revised_as_of} onChange={(e) => set("revised_as_of", e.target.value)} className={inputCls} />
         </Field>
       </div>
       <div>

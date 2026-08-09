@@ -42,15 +42,50 @@ export function sortRows(rows: PortfolioRevenue[]): PortfolioRevenue[] {
 }
 
 /**
- * Variance of actual against projection. Returns null unless BOTH sides exist —
+ * Which plan a figure is measured against.
+ *
+ * "original" is strictly the start-of-year budget; a restatement never counts.
+ * That is what makes projection reliability meaningful — scoring a company
+ * against a target rewritten once the year was half known flatters it.
+ *
+ * "revised" is the current expectation: the restatement where one exists, and
+ * the original everywhere else. The fallback is the whole point — only a handful
+ * of periods are ever restated, so without it the revised basis would blank out
+ * most of the book rather than reading as "unchanged".
+ */
+export type PlanBasis = "original" | "revised"
+
+/** The two plan slots. Loosened from PortfolioRevenue so chart points can pass literals. */
+type PlanFields = { projected?: number | null; revised_projected?: number | null }
+
+/** The plan figure for a period on a given basis. Null when that basis has none. */
+export function planValue(r: PlanFields, basis: PlanBasis): number | null {
+  if (basis === "revised" && r.revised_projected != null) return Number(r.revised_projected)
+  return r.projected == null ? null : Number(r.projected)
+}
+
+/** True when the period's plan was restated, so the two bases actually differ. */
+export function isRevised(r: PlanFields): boolean {
+  return r.revised_projected != null
+}
+
+/**
+ * Variance of actual against plan. Returns null unless BOTH sides exist —
  * a missing actual is "not reported yet", not a shortfall, and showing it as
  * -100% would read as a business collapse.
+ *
+ * Defaults to the ORIGINAL plan so a caller that hasn't thought about basis gets
+ * the conservative answer rather than silently being scored against a softened
+ * target; the revenue surfaces opt into "revised" explicitly.
  */
-export function variance(r: Pick<PortfolioRevenue, "projected" | "actual">): { abs: number; pct: number | null } | null {
-  if (r.projected == null || r.actual == null) return null
-  const p = Number(r.projected)
+export function variance(
+  r: PlanFields & Pick<PortfolioRevenue, "actual">,
+  basis: PlanBasis = "original",
+): { abs: number; pct: number | null } | null {
+  const plan = planValue(r, basis)
+  if (plan == null || r.actual == null) return null
   const a = Number(r.actual)
-  return { abs: a - p, pct: p !== 0 ? ((a - p) / Math.abs(p)) * 100 : null }
+  return { abs: a - plan, pct: plan !== 0 ? ((a - plan) / Math.abs(plan)) * 100 : null }
 }
 
 /** Solas brand. One definition so every revenue surface draws from the same set. */
@@ -149,16 +184,17 @@ export function ytdActual(
  * plan exists AND a 2027 period has been reported — not merely because a
  * forward-year plan was entered early.
  */
-export function planYearFor(rows: PortfolioRevenue[], fallback: number): number {
+export function planYearFor(rows: PortfolioRevenue[], fallback: number, basis: PlanBasis = "original"): number {
   const years = Array.from(new Set(rows.map((r) => r.fiscal_year))).sort((a, b) => b - a)
+  const hasAnnualPlan = (y: number) =>
+    rows.some((r) => r.fiscal_year === y && r.period_type === "FY" && planValue(r, basis) != null)
   for (const y of years) {
-    const hasPlan = rows.some((r) => r.fiscal_year === y && r.period_type === "FY" && r.projected != null)
-    if (hasPlan && ytdActual(rows, y)) return y
+    if (hasAnnualPlan(y) && ytdActual(rows, y)) return y
   }
   // No year qualifies yet — fall back to the most recent year with an annual
   // plan, so a company that has a plan but no reported periods still shows it.
   for (const y of years) {
-    if (rows.some((r) => r.fiscal_year === y && r.period_type === "FY" && r.projected != null)) return y
+    if (hasAnnualPlan(y)) return y
   }
   return fallback
 }
@@ -176,12 +212,29 @@ export type CompanyRevenue = {
   periodCount: number
   latestPeriod: string | null
   latestActual: number | null
-  /** Plan for that same period, so the variance compares like with like. */
+  /**
+   * The plan the variance is measured against, on this page's basis, for the
+   * same period as latestActual — so the comparison is like with like.
+   */
   latestProjected: number | null
+  /** The ORIGINAL plan for that period. Equals latestProjected when nothing was restated. */
+  latestOriginal: number | null
+  /** True when latestProjected came from a restatement rather than the original budget. */
+  latestRevised: boolean
+  /**
+   * Variance against the ORIGINAL plan — carried only when a restatement exists,
+   * so the table can show what the period looked like before the target moved.
+   * Null when there is nothing to contrast.
+   */
+  originalVariancePct: number | null
   varianceAbs: number | null
   variancePct: number | null
   fyProjected: number | null
   fyProjectedBasis: string | null
+  /** Annual plan on the ORIGINAL basis. Null when the year has no complete original plan. */
+  fyOriginal: number | null
+  /** True when the annual figure includes at least one restated period. */
+  fyRevised: boolean
   priorYearActual: number | null
   yoyPct: number | null
   /** Growth vs the immediately preceding period of the same cadence. */
@@ -205,6 +258,10 @@ export function buildCompanyRevenue(
   companies: { id: string; name: string; status: string | null; track_revenue: boolean | null }[],
   rows: PortfolioRevenue[],
   fiscalYear: number,
+  // The Revenue page reports the current expectation, so a restated period is
+  // measured against the target that now stands. /analytics deliberately does
+  // NOT use this builder — reliability there stays on the original budget.
+  basis: PlanBasis = "revised",
 ): CompanyRevenue[] {
   const byCompany = new Map<string, PortfolioRevenue[]>()
   for (const r of rows) {
@@ -217,11 +274,15 @@ export function buildCompanyRevenue(
       // Sorted here rather than trusting the query order — period_end ties.
       const rs = sortRows(byCompany.get(c.id) ?? [])
       const last = latestActual(rs)
-      const v = last ? variance(last) : null
+      const v = last ? variance(last, basis) : null
+      // Only meaningful as a contrast — when nothing was restated the two bases
+      // are the same number and showing it twice would just read as noise.
+      const vOriginal = last && isRevised(last) ? variance(last, "original") : null
       // The annual plan and the progress column both follow the company's own
       // plan year, so the two can never disagree about which year they describe.
-      const planYear = planYearFor(rs, fiscalYear)
-      const fyProj = annualProjection(rs, planYear)
+      const planYear = planYearFor(rs, fiscalYear, basis)
+      const fyProj = annualProjection(rs, planYear, basis)
+      const fyOrig = annualProjection(rs, planYear, "original")
       const ytd = ytdActual(rs, planYear)
       const pctOfPlan = fyProj && fyProj.value !== 0 && ytd ? (ytd.value / fyProj.value) * 100 : null
       const prior = annualActual(rs, fiscalYear - 1)
@@ -233,11 +294,18 @@ export function buildCompanyRevenue(
         periodCount: rs.length,
         latestPeriod: last ? periodLabel(last) : null,
         latestActual: last?.actual != null ? Number(last.actual) : null,
-        latestProjected: last?.projected != null ? Number(last.projected) : null,
+        latestProjected: last ? planValue(last, basis) : null,
+        latestOriginal: last ? planValue(last, "original") : null,
+        latestRevised: !!last && basis === "revised" && isRevised(last),
+        originalVariancePct: vOriginal?.pct ?? null,
         varianceAbs: v?.abs ?? null,
         variancePct: v?.pct ?? null,
         fyProjected: fyProj?.value ?? null,
-        fyProjectedBasis: fyProj ? `Basis: ${fyProj.basis} ${planYear}` : null,
+        fyProjectedBasis: fyProj
+          ? `Basis: ${fyProj.basis} ${planYear}${fyProj.revised ? " · includes a revised period" : ""}`
+          : null,
+        fyOriginal: fyOrig?.value ?? null,
+        fyRevised: !!fyProj?.revised,
         priorYearActual: prior?.value ?? null,
         yoyPct: last ? yoyGrowth(rs, last) : null,
         seqPct: last ? sequentialGrowth(rs, last) : null,
@@ -338,16 +406,20 @@ export function annualActual(
 export function annualProjection(
   rows: PortfolioRevenue[],
   year: number,
-): { value: number; basis: string } | null {
-  const fy = rows.find((r) => r.fiscal_year === year && r.period_type === "FY" && r.projected != null)
-  if (fy) return { value: Number(fy.projected), basis: "FY" }
+  basis: PlanBasis = "original",
+): { value: number; basis: string; revised: boolean } | null {
+  const fy = rows.find((r) => r.fiscal_year === year && r.period_type === "FY" && planValue(r, basis) != null)
+  if (fy) return { value: planValue(fy, basis)!, basis: "FY", revised: basis === "revised" && isRevised(fy) }
   const quarters = rows.filter(
-    (r) => r.fiscal_year === year && QUARTER_TYPES.has(r.period_type) && r.projected != null,
+    (r) => r.fiscal_year === year && QUARTER_TYPES.has(r.period_type) && planValue(r, basis) != null,
   )
   if (quarters.length !== 4) return null
   return {
-    value: quarters.reduce((s, r) => s + Number(r.projected), 0),
+    value: quarters.reduce((s, r) => s + planValue(r, basis)!, 0),
     basis: "Q1 + Q2 + Q3 + Q4",
+    // A year is "revised" as soon as ANY of its quarters was restated — the
+    // annual figure is then a mix, which is exactly what the reader needs to know.
+    revised: basis === "revised" && quarters.some(isRevised),
   }
 }
 
@@ -355,9 +427,9 @@ export function annualProjection(
  * Which sub-periods of a year carry a plan. Lets the UI say "Q1 + Q2 planned
  * only" instead of silently showing nothing where an annual figure would go.
  */
-export function plannedPeriods(rows: PortfolioRevenue[], year: number): string[] {
+export function plannedPeriods(rows: PortfolioRevenue[], year: number, basis: PlanBasis = "original"): string[] {
   return rows
-    .filter((r) => r.fiscal_year === year && r.period_type !== "FY" && r.projected != null)
+    .filter((r) => r.fiscal_year === year && r.period_type !== "FY" && planValue(r, basis) != null)
     .map((r) => r.period_type)
     .sort()
 }
@@ -380,16 +452,17 @@ export const ANNUAL_RECONCILE_TOLERANCE = 0.005
  * actual (0.15%) because the quarters are product sales and the FY row is net
  * sales. That is not an error and must not nag.
  *
- * Also silent when any quarter's plan is a REFORECAST. Vektor's 2025 is the
- * case: the FY row is January's original $2.6M goal while Q3 and Q4 are
- * mid-year reforecasts entered because no original quarterly budget was ever
- * located. Those quarters are a different basis by design, so their sum is not
- * meant to reconcile to the original annual plan and flagging it would be noise.
+ * Each field reconciles only against itself. Mixing bases is what used to make
+ * this noisy: Vektor's 2025 FY row is January's original $2.6M goal while its Q3
+ * and Q4 were mid-year reforecasts stored in the same column, so the sum was
+ * never meant to tie and the check needed a `projected_source === 'Reforecast'`
+ * escape hatch. Restatements now live in `revised_projected`, so an original is
+ * only ever compared with originals and that special case is gone.
  */
 export function annualMismatch(
   rows: PortfolioRevenue[],
   year: number,
-  field: "projected" | "actual",
+  field: "projected" | "revised_projected" | "actual",
 ): { fy: number; quarters: number; diff: number; pct: number } | null {
   const fyRow = rows.find((r) => r.fiscal_year === year && r.period_type === "FY" && r[field] != null)
   if (!fyRow) return null
@@ -397,7 +470,6 @@ export function annualMismatch(
     (r) => r.fiscal_year === year && QUARTER_TYPES.has(r.period_type) && r[field] != null,
   )
   if (qs.length !== 4) return null
-  if (field === "projected" && qs.some((r) => r.projected_source === "Reforecast")) return null
   const fy = Number(fyRow[field])
   const quarters = qs.reduce((s, r) => s + Number(r[field]), 0)
   const diff = quarters - fy

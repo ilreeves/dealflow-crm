@@ -281,11 +281,17 @@ export const REVENUE_PERIOD_END: Record<RevenuePeriod, string> = {
   'H1': '06-30', 'H2': '12-31', 'FY': '12-31',
 }
 
-// 'Reforecast' marks a plan that is NOT the original start-of-year budget —
-// a mid-year revision, used only where no original was ever located. Kept as its
-// own source so a mixed-basis dataset stays auditable at a glance rather than the
-// distinction living only in a notes field.
-export const REVENUE_PROJECTED_SOURCES = ['Company plan', 'Board deck', 'Reforecast', 'Management update', 'Investor update', 'Solas estimate'] as const
+// Where the ORIGINAL plan came from. 'Reforecast' used to live here, marking a
+// row whose `projected` was a mid-year revision rather than a start-of-year
+// budget — the two series sharing one column. Restatements now have their own
+// field, so it was removed to stop the conflation being recreated by hand.
+export const REVENUE_PROJECTED_SOURCES = ['Company plan', 'Board deck', 'Management update', 'Investor update', 'Solas estimate'] as const
+
+// Where a RESTATED plan came from. A revision can be the company's own
+// reforecast or the Solas team's view, and which one it is changes how much
+// weight the number carries — so it's recorded rather than inferred.
+export const REVENUE_REVISED_SOURCES = ['Company reforecast', 'Board deck', 'Management update', 'Investor update', 'Solas team estimate'] as const
+
 export const REVENUE_ACTUAL_SOURCES = ['Audited', 'Management reported', 'Board deck', 'Investor update', 'Public filing', 'Unaudited estimate'] as const
 
 export interface PortfolioRevenue {
@@ -295,11 +301,22 @@ export interface PortfolioRevenue {
   fiscal_year: number
   /** Derived from period_type + fiscal_year on save; stored so the DB can sort. */
   period_end: string | null
+  /** The ORIGINAL plan for the period. Never overwritten by a later restatement. */
   projected: number | null
+  /**
+   * Restated plan — a company reforecast or the Solas team's own revision. Null
+   * means the original still stands. Kept beside `projected` rather than
+   * replacing it so both the target that was set and the target now expected
+   * remain readable; /analytics measures reliability against the former.
+   */
+  revised_projected: number | null
   actual: number | null
   projected_source: string | null
   /** When the projection was made — a forecast has a vintage, not just a target. */
   projected_as_of: string | null
+  revised_source: string | null
+  /** When the revision was made. A reforecast has a vintage too. */
+  revised_as_of: string | null
   actual_source: string | null
   notes: string | null
   created_by: string | null

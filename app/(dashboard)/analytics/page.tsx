@@ -17,7 +17,7 @@ export default async function AnalyticsPage() {
     supabase.from('list_options').select('list_key,value,sort_order').order('sort_order'),
     // Returns null data if the revenue migration hasn't been run — the section
     // then simply doesn't render rather than breaking the page.
-    supabase.from('portfolio_revenue').select('company_id,period_type,fiscal_year,projected,actual,projected_source'),
+    supabase.from('portfolio_revenue').select('company_id,period_type,fiscal_year,projected,revised_projected,actual,projected_source'),
   ])
 
   const deals = (data as Deal[]) ?? []
@@ -261,7 +261,13 @@ export default async function AnalyticsPage() {
   // met, and the average signed delta. Only periods carrying BOTH a plan and an
   // actual count — a quarter with no plan is not a miss, and one not yet reported
   // is not a shortfall.
-  type RevRow = { company_id: string; period_type: string; fiscal_year: number; projected: number | null; actual: number | null; projected_source: string | null }
+  //
+  // Measured against `projected`, the ORIGINAL budget, and never against
+  // `revised_projected`. That is the whole point of the column split: scoring a
+  // company on a target rewritten once the year was half known measures nothing.
+  // The Revenue page deliberately reports the revised plan instead, so the two
+  // pages will disagree on a restated period — see supabase/migration_revenue_revised.sql.
+  type RevRow = { company_id: string; period_type: string; fiscal_year: number; projected: number | null; revised_projected: number | null; actual: number | null; projected_source: string | null }
   const revRows = (revenueData as RevRow[]) ?? []
   const nameById: Record<string, string> = {}
   for (const pc of portfolioCompaniesAll) nameById[pc.id] = pc.name
@@ -270,10 +276,11 @@ export default async function AnalyticsPage() {
   const revMap: Record<string, { deltas: number[]; hits: number }> = {}
   const annualDeltas: number[] = []
   let annualHits = 0
-  // Some plans are mid-year reforecasts rather than original budgets, where no
-  // original was ever located. Counted so the page discloses the mixed basis
-  // instead of presenting every comparison as against a start-of-year budget.
-  let reforecastQuarters = 0
+  // Periods whose ONLY plan is a restatement — no original budget was ever
+  // recorded. They are excluded from the sample rather than scored against the
+  // easier target, and counted here so the page discloses what it dropped
+  // instead of just looking like a smaller dataset than the Revenue page.
+  let revRevisedOnly = 0
   // Every recorded period is accounted for, so the quarterly sample never looks
   // arbitrarily smaller than the Revenue page without explanation.
   let revNoPlan = 0
@@ -282,13 +289,16 @@ export default async function AnalyticsPage() {
     const company = nameById[r.company_id]
     if (!company || excludedNames.has(company)) continue
     if (r.actual == null) { revInProgress++; continue }
-    if (r.projected == null || Number(r.projected) === 0) { revNoPlan++; continue }
+    if (r.projected == null || Number(r.projected) === 0) {
+      if (r.revised_projected != null) revRevisedOnly++
+      else revNoPlan++
+      continue
+    }
     const delta = ((Number(r.actual) - Number(r.projected)) / Math.abs(Number(r.projected))) * 100
     if (QUARTERS.has(r.period_type)) {
       if (!revMap[company]) revMap[company] = { deltas: [], hits: 0 }
       revMap[company].deltas.push(delta)
       if (delta >= 0) revMap[company].hits++
-      if (r.projected_source === 'Reforecast') reforecastQuarters++
     } else if (r.period_type === 'FY') {
       // Tracked separately: annual plans are set a year out and tend to embed
       // assumptions (regulatory clearances, launch timing) that quarterly
@@ -601,17 +611,19 @@ export default async function AnalyticsPage() {
             <p
               className="text-sm font-semibold text-slate-700 mb-3"
               title={
-                `Quarterly plan vs actual. Only quarters with BOTH a plan and a reported actual count.\n` +
+                `Quarterly plan vs actual, measured against the ORIGINAL budget \u2014 never a mid-year revision. ` +
+                `The Revenue page reports the revised plan instead, so the two disagree on a restated period by design.\n` +
+                `Only quarters with BOTH an original plan and a reported actual count.\n` +
                 `${revTotalHits} of ${revTotalPeriods} met plan` +
                 (revAvgAll !== null ? `, average delta ${revAvgAll > 0 ? '+' : ''}${revAvgAll.toFixed(1)}%` : '') + `.\n` +
-                `Of ${revTotalPeriods + annualDeltas.length + revNoPlan + revInProgress} recorded periods, ` +
+                `Of ${revTotalPeriods + annualDeltas.length + revNoPlan + revRevisedOnly + revInProgress} recorded periods, ` +
                 `${revTotalPeriods} qualify: ${annualDeltas.length} annual, ${revNoPlan} with no plan on record, ` +
                 `${revInProgress} still in progress.` +
                 (annualDeltas.length > 0
                   ? `\nAnnual plans: ${annualHits} of ${annualDeltas.length} met, average ${(annualAvg as number) > 0 ? '+' : ''}${(annualAvg as number).toFixed(1)}%.`
                   : '') +
-                (reforecastQuarters > 0
-                  ? `\n${reforecastQuarters} compare against a mid-year reforecast, not an original budget \u2014 an easier target.`
+                (revRevisedOnly > 0
+                  ? `\n${revRevisedOnly} excluded: a revised plan is the only one on record, so there is no original target to score against.`
                   : '')
               }
             >

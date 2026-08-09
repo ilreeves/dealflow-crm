@@ -52,6 +52,12 @@ export function fmtPct(n: number | null | undefined): string {
 }
 
 export function saveHint(msg: string): string {
+  // Checked before the generic portfolio_revenue case: the table exists, it's the
+  // revised-plan columns that are missing, so pointing at migration_revenue.sql
+  // would send someone to re-run the wrong file.
+  if (/revised_projected|revised_source|revised_as_of/i.test(msg)) {
+    return "Save failed — the revised-plan columns don't exist yet. Run supabase/migration_revenue_revised.sql in Supabase, then try again. (" + msg + ")"
+  }
   if (/portfolio_revenue/i.test(msg)) {
     return "Save failed — the revenue table doesn't exist yet. Run supabase/migration_revenue.sql in Supabase, then try again. (" + msg + ")"
   }

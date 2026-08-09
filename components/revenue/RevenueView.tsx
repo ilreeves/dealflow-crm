@@ -62,8 +62,10 @@ export default function RevenueView({
       ...prev,
       {
         id: company.id, name: company.name, status: company.status, tracked: true, periodCount: 0,
-        latestPeriod: null, latestActual: null, latestProjected: null, varianceAbs: null,
-        variancePct: null, fyProjected: null, fyProjectedBasis: null, priorYearActual: null, yoyPct: null,
+        latestPeriod: null, latestActual: null, latestProjected: null, latestOriginal: null,
+        latestRevised: false, originalVariancePct: null, varianceAbs: null,
+        variancePct: null, fyProjected: null, fyProjectedBasis: null, fyOriginal: null,
+        fyRevised: false, priorYearActual: null, yoyPct: null,
         // A freshly added company has no periods yet; router.refresh() fills these
         // in from the server once a plan or actual is entered.
         seqPct: null, seqBasis: null,
@@ -103,6 +105,10 @@ export default function RevenueView({
   const tracked = rows.filter((r) => r.tracked)
   const fyPlanTotal = tracked.reduce((s, c) => s + (c.fyProjected ?? 0), 0)
   const fyPlanCount = tracked.filter((c) => c.fyProjected != null).length
+  // How much of the headline plan has been restated. Disclosed rather than
+  // assumed: the same tile reads very differently if half of it was rewritten
+  // mid-year, and /analytics is scoring these companies against the original.
+  const fyRevisedCount = tracked.filter((c) => c.fyRevised).length
   // Only companies whose prior year is FULLY reported contribute, so the total is
   // a real annual figure rather than a mix of full and partial years.
   const priorTotal = tracked.reduce((s, c) => s + (c.priorYearActual ?? 0), 0)
@@ -115,7 +121,12 @@ export default function RevenueView({
   return (
     <div className="flex flex-col h-full">
       <div className="px-6 py-4 bg-white border-b border-slate-200 shrink-0">
-        <h1 className="text-lg font-semibold text-slate-900" title={`Projected against actual revenue for the revenue-generating portfolio · FY ${fiscalYear}`}>Revenue</h1>
+        <h1
+          className="text-lg font-semibold text-slate-900"
+          title={`Plan against actual revenue for the revenue-generating portfolio · FY ${fiscalYear}\nPlans shown on the REVISED basis: the restated target where one exists, the original everywhere else.`}
+        >
+          Revenue
+        </h1>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-6">
@@ -123,7 +134,15 @@ export default function RevenueView({
           {/* Tiles */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Tile label="Companies tracked" value={String(tracked.length)} sub={`of ${comps.length} portfolio companies`} />
-            <Tile label={`FY ${planYear} plan`} value={fmtMoney(fyPlanTotal)} sub={`${fyPlanCount} with a plan set`} />
+            <Tile
+              label={`FY ${planYear} plan`}
+              value={fmtMoney(fyPlanTotal)}
+              sub={
+                fyRevisedCount
+                  ? `${fyPlanCount} with a plan set · ${fyRevisedCount} revised`
+                  : `${fyPlanCount} with a plan set`
+              }
+            />
             <Tile
               label={`FY ${fiscalYear - 1} actual`}
               value={priorCount ? fmtMoney(priorTotal) : "—"}
@@ -234,9 +253,27 @@ export default function RevenueView({
                         <td className="px-4 py-2.5 text-right font-medium tabular-nums" style={{ color: c.latestActual != null ? NAVY : undefined }}>
                           {c.latestActual != null ? fmtMoney(c.latestActual) : <span className="text-slate-300">—</span>}
                         </td>
-                        <td className="px-4 py-2.5 text-right text-slate-500 tabular-nums">{fmtMoney(c.latestProjected)}</td>
+                        {/* The plan now in force. Where it was revised, the original
+                            is kept underneath rather than replaced — the point of
+                            splitting the columns was that a moved target should stay
+                            visible, not quietly become the only number on the page. */}
+                        <td className="px-4 py-2.5 text-right tabular-nums">
+                          <span className={c.latestRevised ? "text-slate-700 font-medium" : "text-slate-500"}>
+                            {fmtMoney(c.latestProjected)}
+                          </span>
+                          {c.latestRevised && (
+                            <span className="block text-[11px] text-slate-400 leading-tight">
+                              rev · orig {c.latestOriginal != null ? fmtMoney(c.latestOriginal) : "none on record"}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: varianceBandColor(c.variancePct) }}>
                           {c.varianceAbs != null ? fmtSignedPct(c.variancePct) : <span className="text-slate-300">—</span>}
+                          {c.originalVariancePct != null && (
+                            <span className="block text-[11px] text-slate-400 leading-tight" title="Against the original plan">
+                              {fmtSignedPct(c.originalVariancePct)} vs orig
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: varianceBandColor(c.yoyPct) }}>
                           {c.yoyPct != null ? fmtSignedPct(c.yoyPct) : <span className="text-slate-300">—</span>}
@@ -254,7 +291,16 @@ export default function RevenueView({
                         </td>
                         <td className="px-4 py-2.5 text-right text-slate-600 tabular-nums">
                           {c.fyProjected != null ? (
-                            <span title={c.fyProjectedBasis ?? undefined}>{fmtMoney(c.fyProjected)}</span>
+                            <>
+                              <span title={c.fyProjectedBasis ?? undefined}>{fmtMoney(c.fyProjected)}</span>
+                              {/* Only when the two bases actually differ — an
+                                  unchanged plan printed twice reads as a discrepancy. */}
+                              {c.fyRevised && c.fyOriginal !== c.fyProjected && (
+                                <span className="block text-[11px] text-slate-400 leading-tight">
+                                  rev · orig {c.fyOriginal != null ? fmtMoney(c.fyOriginal) : "incomplete"}
+                                </span>
+                              )}
+                            </>
                           ) : (
                             <span className="text-slate-300">—</span>
                           )}
@@ -338,6 +384,13 @@ export default function RevenueView({
             )}
           </div>
 
+          <p className="text-xs text-slate-400">
+            Plans here are the <strong className="font-medium text-slate-500">revised</strong> ones — the target now in
+            force. Where a period was restated the original is shown beneath it, tagged <em>rev</em>; everywhere else the
+            original is still the plan. Analytics measures projection reliability against the{" "}
+            <strong className="font-medium text-slate-500">original</strong> budget instead, so the two pages will
+            disagree on a restated period by design.
+          </p>
           <p className="text-xs text-slate-400">
             Click a company to open it and enter periods. A blank actual means the period hasn&apos;t been reported yet,
             not a shortfall. Annual totals only include companies whose year is fully reported, so a partial year is
