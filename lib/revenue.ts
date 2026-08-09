@@ -131,6 +131,31 @@ export function varianceBandColor(pct: number | null | undefined): string {
 /** Quarterly period types, the only cadence the chart draws. */
 export const QUARTER_TYPES = new Set(["Q1", "Q2", "Q3", "Q4"])
 
+/**
+ * Y-axis ticks for the revenue chart: zero plus rounded steps up the scale.
+ *
+ * Steps snap to 1 / 2 / 2.5 / 5 × a power of ten so the labels read as round
+ * money — $25K, $2.0M — rather than as arbitrary fractions of whatever the
+ * tallest bar happens to be. Without an axis the chart only shows which bar is
+ * biggest; a portfolio where one year is 200× another (iO Urology: $20K actuals
+ * beside a $4.3M plan) renders the small periods as invisible slivers, and
+ * there is no way to tell an invisible bar from an absent one.
+ *
+ * Never emits a tick above `max`, which already carries the chart's headroom —
+ * a label pinned to the ceiling would sit outside the plotted area.
+ */
+export function axisTicks(max: number, target = 4): number[] {
+  if (!isFinite(max) || max <= 0) return [0]
+  const raw = max / target
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)))
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? 10 * mag
+  const out: number[] = []
+  // toFixed guards the float drift that repeated += would otherwise accumulate
+  // into labels like $2,000,000.0000001.
+  for (let v = 0; v <= max; v += step) out.push(Number(v.toFixed(6)))
+  return out
+}
+
 export function fmtSignedPct(pct: number | null | undefined): string {
   if (pct == null || isNaN(Number(pct))) return "—"
   const n = Number(pct)

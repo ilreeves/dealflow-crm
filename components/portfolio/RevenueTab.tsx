@@ -27,6 +27,7 @@ import {
   sortRows,
   planValue,
   isRevised,
+  axisTicks,
   VARIANCE_BAND_PCT,
   SEVERE_MISS_PCT,
 } from "@/lib/revenue"
@@ -392,6 +393,13 @@ function annualPoints(rows: PortfolioRevenue[]): ChartPoint[] {
     .filter((pt) => pt.projected != null || pt.actual != null)
 }
 
+// Chart geometry, in rem. The plot band is h-20; above it sits the variance
+// readout (h-2.5) and a gap-1. The Y axis and its gridlines have to skip exactly
+// that much to line up with the bars, so the three are defined together — change
+// one without the others and the axis silently drifts off the bars.
+const PLOT_BAND_REM = 5
+const PLOT_TOP_OFFSET_REM = 0.625 + 0.25
+
 function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
   const [mode, setMode] = useState<"quarterly" | "annual">("quarterly")
   const quarterly = quarterPoints(rows)
@@ -431,10 +439,49 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
   // Headroom so the tallest plan tick never sits flush against the top edge.
   const max = Math.max(1, ...pts.flatMap((p) => [p.projected ?? 0, p.original ?? 0, p.actual ?? 0])) * 1.08
 
+  const ticks = axisTicks(max)
+
   return (
     <div className="px-4 pt-3 pb-4 border-b border-slate-100">
       <div className="flex items-center justify-end mb-1">{toggle}</div>
-      <div className="flex items-end gap-3 h-32 overflow-x-auto">
+      <div className="flex gap-1.5">
+        {/* Y axis. Mirrors a bar column's row structure — spacer, plot band,
+            caption, caption — so the ticks align with the bars by construction
+            rather than by a hand-tuned offset. */}
+        <div className="flex flex-col gap-1 shrink-0 w-12" aria-hidden="true">
+          <span className="h-2.5" />
+          <div className="relative h-20">
+            {ticks.map((t) => (
+              <span
+                key={t}
+                className="absolute right-0 translate-y-1/2 text-[9px] leading-none tabular-nums text-slate-400"
+                style={{ bottom: `${(t / max) * 100}%` }}
+              >
+                {fmtMoney(t)}
+              </span>
+            ))}
+          </div>
+          <span className="text-[10px] leading-none">&nbsp;</span>
+          <span className="h-2.5" />
+        </div>
+
+        <div className="relative flex-1 min-w-0">
+          {/* Gridlines are anchored to the viewport, not the scrolling content, so
+              they stay put while the bars scroll under them. */}
+          <div
+            className="absolute inset-x-0 pointer-events-none"
+            style={{ top: `${PLOT_TOP_OFFSET_REM}rem`, height: `${PLOT_BAND_REM}rem` }}
+          >
+            {ticks.map((t) => (
+              <div
+                key={t}
+                className={`absolute inset-x-0 border-t ${t === 0 ? "border-slate-200" : "border-slate-100"}`}
+                style={{ bottom: `${(t / max) * 100}%` }}
+              />
+            ))}
+          </div>
+
+          <div className="relative flex items-end gap-3 overflow-x-auto">
         {pts.map((pt) => {
           // Null is NOT zero on either side. A plan that was never recorded draws
           // no tick, and a period not yet reported draws a hollow stub — neither
@@ -495,6 +542,8 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
             </div>
           )
         })}
+          </div>
+        </div>
       </div>
       <div className="flex items-center gap-x-4 gap-y-1.5 mt-2 text-xs text-slate-400 flex-wrap">
         {/* Swatches are produced by varianceBandColor itself rather than local

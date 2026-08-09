@@ -15,6 +15,7 @@ import {
   isRevised,
   plannedPeriods,
   planYearFor,
+  axisTicks,
   latestActual,
   periodEnd,
 } from "./revenue"
@@ -212,6 +213,42 @@ describe("annualProjection", () => {
     const rows = [row({ period_type: "FY", fiscal_year: 2026, projected: 600, revised_projected: 450 })]
     expect(annualProjection(rows, 2026, "original")!.value).toBe(600)
     expect(annualProjection(rows, 2026, "revised")).toEqual({ value: 450, basis: "FY", revised: true })
+  })
+})
+
+describe("axisTicks", () => {
+  // The axis exists because the chart spans wildly different magnitudes. iO
+  // Urology's quarterly view runs $20K actuals against a $4.28M 2027 plan, so
+  // without labelled gridlines the 2026 bars are unreadable slivers.
+  it("gives round money across a 200x range", () => {
+    expect(axisTicks(4_281_000 * 1.08)).toEqual([0, 2_000_000, 4_000_000])
+    expect(axisTicks(76_098 * 1.08)).toEqual([0, 25_000, 50_000, 75_000])
+    expect(axisTicks(65_200_000 * 1.08)).toEqual([0, 20_000_000, 40_000_000, 60_000_000])
+  })
+
+  // A tick above the ceiling would render outside the plot band, since `max`
+  // already includes the headroom the chart leaves above the tallest bar.
+  it("never emits a tick above the ceiling", () => {
+    for (const m of [1, 999, 4_623_480, 1e9]) {
+      expect(Math.max(...axisTicks(m))).toBeLessThanOrEqual(m)
+    }
+  })
+
+  it("always starts at zero, so bar heights are read against a real baseline", () => {
+    for (const m of [1_000, 250_000, 12_577_000]) expect(axisTicks(m)[0]).toBe(0)
+  })
+
+  // Repeated += on a float accumulates drift; a label reading $2,000,000.0000001
+  // would be the visible symptom.
+  it("returns clean values, not float drift", () => {
+    for (const t of axisTicks(12_577_000)) expect(t).toBe(Number(t.toFixed(6)))
+  })
+
+  it("degrades safely rather than looping forever on junk input", () => {
+    expect(axisTicks(0)).toEqual([0])
+    expect(axisTicks(-5)).toEqual([0])
+    expect(axisTicks(NaN)).toEqual([0])
+    expect(axisTicks(Infinity)).toEqual([0])
   })
 })
 
