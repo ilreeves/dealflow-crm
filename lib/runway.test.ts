@@ -16,6 +16,8 @@ import {
   staleness,
   runwayBandColor,
   median,
+  isMismatchAcked,
+  MISMATCH_ACK_DRIFT,
   fmtMonths,
   sortCash,
   burnTrendPct,
@@ -48,6 +50,10 @@ function row(p: Partial<PortfolioCash> & { as_of: string }): PortfolioCash {
     runway_months: null,
     out_of_cash_date: null,
     committed_funding: null,
+    mismatch_ack_pct: null,
+    mismatch_ack_note: null,
+    mismatch_acked_at: null,
+    mismatch_acked_by: null,
     source: null,
     source_detail: null,
     notes: null,
@@ -544,5 +550,42 @@ describe("median", () => {
   it("drops non-finite values instead of returning NaN", () => {
     expect(median([1, NaN, 3])).toBe(2)
     expect(median([Infinity, 4, 6])).toBe(5)
+  })
+})
+
+describe("clearing a check flag", () => {
+  // An unreviewed gap always shows. Everything below is about when a REVIEWED
+  // one is allowed to stay quiet.
+  it("does nothing until a gap has actually been accepted", () => {
+    expect(isMismatchAcked({ mismatch_ack_pct: null }, { pct: 159 })).toBe(false)
+    expect(isMismatchAcked({ mismatch_ack_pct: 159 }, null)).toBe(false)
+  })
+
+  it("stays cleared while the gap is unchanged or smaller", () => {
+    // Smaller is strictly less concerning than what was already looked at.
+    expect(isMismatchAcked({ mismatch_ack_pct: 159 }, { pct: 159 })).toBe(true)
+    expect(isMismatchAcked({ mismatch_ack_pct: 159 }, { pct: 40 })).toBe(true)
+    expect(isMismatchAcked({ mismatch_ack_pct: -80 }, { pct: -20 })).toBe(true)
+  })
+
+  // The failure a boolean would cause: accept a 159% gap, someone later edits
+  // the figures into a 400% gap, and the flag never returns.
+  it("comes back once the gap grows past the drift allowance", () => {
+    const acked = { mismatch_ack_pct: 100 }
+    expect(isMismatchAcked(acked, { pct: 100 * (1 + MISMATCH_ACK_DRIFT) })).toBe(true)
+    expect(isMismatchAcked(acked, { pct: 100 * (1 + MISMATCH_ACK_DRIFT) + 0.1 })).toBe(false)
+    expect(isMismatchAcked(acked, { pct: 400 })).toBe(false)
+  })
+
+  // A flip is a different situation, not a bigger one — and the direction that
+  // flips TO shorter-than-stated is the one that actually costs money.
+  it("comes back when the gap changes direction", () => {
+    expect(isMismatchAcked({ mismatch_ack_pct: 60 }, { pct: -60 })).toBe(false)
+    expect(isMismatchAcked({ mismatch_ack_pct: -60 }, { pct: 60 })).toBe(false)
+  })
+
+  it("ignores a nonsense acknowledgement rather than suppressing forever", () => {
+    expect(isMismatchAcked({ mismatch_ack_pct: 0 }, { pct: 50 })).toBe(false)
+    expect(isMismatchAcked({ mismatch_ack_pct: NaN }, { pct: 50 })).toBe(false)
   })
 })

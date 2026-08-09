@@ -232,6 +232,41 @@ export function runwayMismatch(row: PortfolioCash): { stated: number; derived: n
 }
 
 /**
+ * How much an accepted gap may GROW before the check flag comes back.
+ *
+ * Clearing a flag records the percentage that was reviewed, not a boolean, so
+ * the acknowledgement can expire on its own terms. A boolean would stay stuck:
+ * someone accepts a 159% gap, the figures are later edited into a 400% gap, and
+ * the flag never returns — the exact silent-staleness failure the flag exists to
+ * prevent.
+ */
+export const MISMATCH_ACK_DRIFT = 0.25
+
+/**
+ * True when this gap has already been reviewed and accepted, and hasn't changed
+ * enough to be worth raising again.
+ *
+ * Two things bring the flag back: the gap growing by more than
+ * MISMATCH_ACK_DRIFT, or the gap CHANGING DIRECTION. A flip means the
+ * arithmetic went from more generous than the company's claim to shorter than
+ * it (or the reverse) — a different situation entirely, not a bigger version of
+ * the reviewed one, and the shorter direction is the one that matters.
+ *
+ * A gap that SHRINKS never re-flags: it is strictly less concerning than what
+ * was already looked at.
+ */
+export function isMismatchAcked(
+  row: Pick<PortfolioCash, "mismatch_ack_pct">,
+  mismatch: { pct: number } | null,
+): boolean {
+  if (!mismatch || row.mismatch_ack_pct == null) return false
+  const acked = Number(row.mismatch_ack_pct)
+  if (!isFinite(acked) || acked === 0) return false
+  if (Math.sign(mismatch.pct) !== Math.sign(acked)) return false
+  return Math.abs(mismatch.pct) <= Math.abs(acked) * (1 + MISMATCH_ACK_DRIFT)
+}
+
+/**
  * Urgency bands, in months of runway remaining (Isaiah's thresholds, 2026-08-07).
  * Read against how long a raise actually takes: under 3 months there is no time
  * left to run any process, 3–6 is acute, 6–12 means the raise should already be
@@ -450,8 +485,16 @@ export type CompanyRunway = {
   impliedCashToday: number | null
   staleMonths: number | null
   stale: boolean
-  /** Set when the stated runway and the arithmetic materially disagree. */
+  /**
+   * Set when the stated runway and the arithmetic materially disagree AND that
+   * gap hasn't been reviewed. Null once cleared — see `mismatchAck`, which keeps
+   * the reasoning rather than losing it.
+   */
   mismatchPct: number | null
+  /** The accepted gap, when one has been cleared. Drives the "reviewed" note. */
+  mismatchAck: { pct: number; note: string | null; at: string | null } | null
+  /** The portfolio_cash row the runway came from — what a flag-clear writes to. */
+  runwaySourceId: string | null
   proFormaMonths: number | null
   committedFunding: number | null
   burnTrendPct: number | null
@@ -508,6 +551,7 @@ export function buildCompanyRunway(
       // Staleness describes the CASH figure, which is what goes stale.
       const stale = last ? staleness(last, today) : null
       const mm = rwRow ? runwayMismatch(rwRow) : null
+      const mmAcked = rwRow ? isMismatchAcked(rwRow, mm) : false
       const trend = burnTrendPct(rs)
       // Only usable as a burn rate when cash actually fell — see cashMovementBurn.
       const mv = cashMovementBurn(rs)
@@ -530,7 +574,18 @@ export function buildCompanyRunway(
         impliedCashToday: last ? impliedCash(last, today) : null,
         staleMonths: stale?.months ?? null,
         stale: !!stale?.stale,
-        mismatchPct: mm?.pct ?? null,
+        // A reviewed gap drops off the list entirely — a badge nobody can clear
+        // becomes wallpaper, and then the one that matters stops being visible.
+        mismatchPct: mm && !mmAcked ? mm.pct : null,
+        mismatchAck:
+          mm && mmAcked && rwRow
+            ? {
+                pct: Number(rwRow.mismatch_ack_pct),
+                note: rwRow.mismatch_ack_note,
+                at: rwRow.mismatch_acked_at,
+              }
+            : null,
+        runwaySourceId: rwRow?.id ?? null,
         proFormaMonths: rwRow ? proFormaRunwayMonths(rwRow) : null,
         committedFunding: last?.committed_funding != null ? Number(last.committed_funding) : null,
         burnTrendPct: trend?.pct ?? null,

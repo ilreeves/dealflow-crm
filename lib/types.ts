@@ -360,6 +360,16 @@ export interface PortfolioCash {
   out_of_cash_date: string | null
   /** Committed but not yet in the bank — drives a pro-forma runway only. */
   committed_funding: number | null
+  /**
+   * The stated-vs-derived runway gap (%) reviewed and accepted, clearing the
+   * "check" flag. A percentage rather than a boolean so the flag returns if the
+   * gap later moves materially — a boolean would stay stuck once set.
+   */
+  mismatch_ack_pct: number | null
+  /** Why the gap is expected. The reasoning is the point of clearing it. */
+  mismatch_ack_note: string | null
+  mismatch_acked_at: string | null
+  mismatch_acked_by: string | null
   source: string | null
   /** Which deck, which slide — so a figure stays traceable. */
   source_detail: string | null

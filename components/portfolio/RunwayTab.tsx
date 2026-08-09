@@ -19,6 +19,8 @@ import {
   impliedCash,
   proFormaRunwayMonths,
   runwayMismatch,
+  isMismatchAcked,
+  MISMATCH_ACK_DRIFT,
   staleness,
   runwayBandColor,
   fmtMonths,
@@ -42,6 +44,11 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
   const [error, setError] = useState("")
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  // Clearing a check flag: `clearing` opens the reason field, `acking` guards
+  // the write so a double-click cannot record the gap twice.
+  const [clearing, setClearing] = useState(false)
+  const [ackNote, setAckNote] = useState("")
+  const [acking, setAcking] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -78,6 +85,44 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
   const implied = last ? impliedCash(last, today) : null
   const stale = last ? staleness(last, today) : null
   const mismatch = rwRow ? runwayMismatch(rwRow) : null
+  const mismatchAcked = rwRow ? isMismatchAcked(rwRow, mismatch) : false
+
+  // Accepting the gap stores the PERCENTAGE reviewed, not a flag, so the warning
+  // can come back on its own if the numbers move — see isMismatchAcked.
+  async function clearFlag() {
+    if (!rwRow || !mismatch) return
+    setAcking(true)
+    setError("")
+    const { data: u } = await supabase.auth.getUser()
+    const { error: e } = await supabase
+      .from("portfolio_cash")
+      .update({
+        mismatch_ack_pct: mismatch.pct,
+        mismatch_ack_note: ackNote.trim() || null,
+        mismatch_acked_at: new Date().toISOString(),
+        mismatch_acked_by: u.user?.id ?? null,
+        updated_by: u.user?.id ?? null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", rwRow.id)
+    setAcking(false)
+    if (e) { setError(saveHint(e.message)); return }
+    setClearing(false)
+    load()
+  }
+
+  async function restoreFlag() {
+    if (!rwRow) return
+    setAcking(true)
+    setError("")
+    const { error: e } = await supabase
+      .from("portfolio_cash")
+      .update({ mismatch_ack_pct: null, mismatch_ack_note: null, mismatch_acked_at: null, mismatch_acked_by: null })
+      .eq("id", rwRow.id)
+    setAcking(false)
+    if (e) { setError(saveHint(e.message)); return }
+    load()
+  }
   const proForma = rwRow ? proFormaRunwayMonths(rwRow) : null
   const trend = burnTrendPct(rows)
   const movement = cashMovementBurn(rows)
@@ -159,11 +204,50 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
               the runway above is an extrapolation, not a report.
             </p>
           )}
-          {mismatch && (
-            <p className="text-xs text-amber-800">
-              <span className="font-medium">Company said {fmtMonths(mismatch.stated)}, cash ÷ burn gives{" "}
-              {fmtMonths(mismatch.derived)}</span> — {mismatch.diff > 0 ? "the arithmetic is more generous" : "the arithmetic is shorter"}.
-              The stated figure is used. Often legitimate — burn planned to step down or up — but worth reading the note.
+          {mismatch && !mismatchAcked && (
+            <div className="text-xs text-amber-800">
+              <p>
+                <span className="font-medium">Company said {fmtMonths(mismatch.stated)}, cash ÷ burn gives{" "}
+                {fmtMonths(mismatch.derived)}</span> — {mismatch.diff > 0 ? "the arithmetic is more generous" : "the arithmetic is shorter"}.
+                The stated figure is used. Often legitimate — burn planned to step down or up — but worth reading the note.
+              </p>
+              {/* Clearing lives HERE rather than on the portfolio list, so the
+                  gap is dismissed with its explanation on screen rather than
+                  from a badge that says nothing about why it fired. */}
+              {clearing ? (
+                <div className="mt-2 flex items-start gap-2">
+                  <input
+                    autoFocus
+                    value={ackNote}
+                    onChange={(e) => setAckNote(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") clearFlag(); if (e.key === "Escape") setClearing(false) }}
+                    placeholder="Why is this expected? e.g. burn ramps with the Gen 2 launch"
+                    className="flex-1 px-2 py-1 text-xs bg-white border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                  />
+                  <button onClick={clearFlag} disabled={acking}
+                    className="px-2.5 py-1 text-xs font-medium text-white rounded-lg disabled:opacity-40 shrink-0" style={{ backgroundColor: NAVY }}>
+                    {acking ? "Clearing…" : "Clear flag"}
+                  </button>
+                  <button onClick={() => setClearing(false)} className="px-2 py-1 text-xs text-amber-800 hover:underline shrink-0">
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => { setAckNote(""); setClearing(true) }} className="mt-1 text-xs font-medium underline hover:no-underline">
+                  Clear this flag
+                </button>
+              )}
+            </div>
+          )}
+          {mismatch && mismatchAcked && (
+            <p className="text-xs text-amber-800/70">
+              <span className="font-medium">Gap reviewed and cleared</span>
+              {rwRow?.mismatch_acked_at ? ` ${exactDate(rwRow.mismatch_acked_at.slice(0, 10))}` : ""}
+              {rwRow?.mismatch_ack_note ? ` — ${rwRow.mismatch_ack_note}` : ""}.{" "}
+              It returns on its own if the gap grows by more than {Math.round(MISMATCH_ACK_DRIFT * 100)}% or changes direction.{" "}
+              <button onClick={restoreFlag} disabled={acking} className="font-medium underline hover:no-underline disabled:opacity-40">
+                Undo
+              </button>
             </p>
           )}
           {/* The cross-check on burn, mirroring stated-vs-derived on runway.
