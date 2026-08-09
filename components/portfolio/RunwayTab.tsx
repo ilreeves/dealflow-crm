@@ -49,6 +49,7 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
   const [clearing, setClearing] = useState(false)
   const [ackNote, setAckNote] = useState("")
   const [acking, setAcking] = useState(false)
+  const [ackError, setAckError] = useState("")
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -92,7 +93,7 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
   async function clearFlag() {
     if (!rwRow || !mismatch) return
     setAcking(true)
-    setError("")
+    setAckError("")
     const { data: u } = await supabase.auth.getUser()
     const { error: e } = await supabase
       .from("portfolio_cash")
@@ -106,7 +107,7 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
       })
       .eq("id", rwRow.id)
     setAcking(false)
-    if (e) { setError(saveHint(e.message)); return }
+    if (e) { setAckError(saveHint(e.message)); return }
     setClearing(false)
     load()
   }
@@ -114,13 +115,13 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
   async function restoreFlag() {
     if (!rwRow) return
     setAcking(true)
-    setError("")
+    setAckError("")
     const { error: e } = await supabase
       .from("portfolio_cash")
       .update({ mismatch_ack_pct: null, mismatch_ack_note: null, mismatch_acked_at: null, mismatch_acked_by: null })
       .eq("id", rwRow.id)
     setAcking(false)
-    if (e) { setError(saveHint(e.message)); return }
+    if (e) { setAckError(saveHint(e.message)); return }
     load()
   }
   const proForma = rwRow ? proFormaRunwayMonths(rwRow) : null
@@ -237,6 +238,9 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
                   Clear this flag
                 </button>
               )}
+              {/* Reported HERE, not at the foot of the tab: a failure shown far
+                  from the button it belongs to reads as the button doing nothing. */}
+              {ackError && <p className="mt-1.5 text-xs text-red-700 bg-red-50 px-2 py-1.5 rounded-lg">{ackError}</p>}
             </div>
           )}
           {mismatch && mismatchAcked && (
@@ -248,6 +252,7 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
               <button onClick={restoreFlag} disabled={acking} className="font-medium underline hover:no-underline disabled:opacity-40">
                 Undo
               </button>
+              {ackError && <span className="block mt-1.5 text-xs text-red-700 bg-red-50 px-2 py-1.5 rounded-lg">{ackError}</span>}
             </p>
           )}
           {/* The cross-check on burn, mirroring stated-vs-derived on runway.
