@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { ChevronRight, ChevronDown } from "lucide-react"
 import { PortfolioCompany } from "@/lib/types"
-import { CompanyRunway, RUNWAY_BANDS, RUNWAY_COLORS, isActive, runwayBandColor, fmtMonths } from "@/lib/runway"
+import { CompanyRunway, RUNWAY_BANDS, RUNWAY_COLORS, isActive, runwayBandColor, fmtMonths, median } from "@/lib/runway"
 import { fmtMoney, exactDate } from "@/lib/rounds"
 import PortfolioCompanyDetail from "@/components/portfolio/PortfolioCompanyDetail"
 
@@ -45,11 +45,18 @@ export default function RunwayView({
 
   const activeCount = comps.filter((c) => isActive(c.status)).length
   const withCash = live.filter((r) => r.cashOnHand != null)
-  const totalCash = withCash.reduce((s, r) => s + (r.cashOnHand ?? 0), 0)
-  const burning = live.filter((r) => r.monthlyBurn != null && r.monthlyBurn > 0)
-  const totalBurn = burning.reduce((s, r) => s + (r.monthlyBurn ?? 0), 0)
-  // Oldest balance in the total, so the aggregate carries its own health warning.
+  // Oldest balance on the book — the single most useful warning about how much
+  // any of this can be trusted.
   const oldest = withCash.reduce<string | null>((o, r) => (!o || (r.asOf && r.asOf < o) ? r.asOf : o), null)
+  // Half the book has less than this. Deliberately NOT a total: cash and burn
+  // can't be summed across companies (different dates, and one company's cash
+  // can't fund another's burn), and the old totals covered different subsets of
+  // companies, so dividing one by the other — the obvious thing to do with two
+  // adjacent tiles — gave a portfolio runway that meant nothing.
+  const medianMonths = median(live.map((r) => r.monthsLeft))
+  const withRunway = live.filter((r) => r.monthsLeft != null)
+  const staleRows = live.filter((r) => r.stale)
+  const flagged = live.filter((r) => r.mismatchPct != null)
   const urgent = live.filter((r) => r.monthsLeft != null && r.monthsLeft < RUNWAY_BANDS.caution)
   const critical = live.filter((r) => r.monthsLeft != null && r.monthsLeft < RUNWAY_BANDS.critical)
   const lapsed = live.filter((r) => r.monthsLeft != null && r.monthsLeft <= 0)
@@ -80,17 +87,31 @@ export default function RunwayView({
               value={`${live.length} / ${activeCount}`}
               sub={noData.length ? `${noData.length} with no cash data` : "all active companies covered"}
             />
+            {/* Median, not a total — see the comment on `medianMonths`. Coloured
+                through runwayBandColor like every other verdict on the page, so
+                the tile can never disagree with the rows beneath it. */}
             <Tile
-              label="Cash on hand"
-              value={withCash.length ? fmtMoney(totalCash) : "—"}
-              // Balances measured on different dates, so this is a sum of
-              // as-reported figures, not a portfolio balance at one instant.
-              sub={oldest ? `${withCash.length} reporting · oldest ${exactDate(oldest)}` : "nothing reported"}
+              label="Median runway"
+              value={medianMonths != null ? `${medianMonths.toFixed(1)} mo` : "—"}
+              color={medianMonths != null ? runwayBandColor(medianMonths) : undefined}
+              sub={
+                withRunway.length
+                  ? `half of ${withRunway.length} have less`
+                  : "no runway figures yet"
+              }
             />
+            {/* Staleness is the honest data-health measure. The `check` flag is
+                NOT counted as a fault — several are legitimate (a burn forecast
+                to ramp makes cash ÷ burn disagree with a stated date on purpose)
+                — so it's reported alongside rather than added in. */}
             <Tile
-              label="Monthly burn"
-              value={burning.length ? `${fmtMoney(totalBurn)}/mo` : "—"}
-              sub={burning.length ? `across ${burning.length} companies` : "nothing reported"}
+              label="Stale balances"
+              value={live.length ? String(staleRows.length) : "—"}
+              sub={
+                oldest
+                  ? `oldest ${exactDate(oldest)}${flagged.length ? ` · ${flagged.length} flagged` : ""}`
+                  : "nothing reported"
+              }
             />
             <Tile
               label={`Under ${RUNWAY_BANDS.caution} months`}

@@ -251,6 +251,28 @@ export const RUNWAY_BANDS = { critical: 3, acute: 6, caution: 12 } as const
  * are close, so colour must never be the only thing carrying the verdict. Every
  * surface using this also prints the month count or the date.
  */
+/**
+ * Median of the values present, ignoring nulls. Null when nothing qualifies.
+ *
+ * The portfolio headline has to be a median, never a sum or a mean. Cash and
+ * burn cannot be added across companies — you can't spend one company's balance
+ * on another's costs, and the balances are measured on dates up to a year apart,
+ * so a total reads as a portfolio position at an instant that never existed. A
+ * mean is nearly as bad here: one 33-month outlier drags it far above where most
+ * of the book actually sits. The median says "half the companies have less than
+ * this", which is the only aggregate on this page that survives contact with the
+ * data.
+ *
+ * Lapsed companies carry negative months and are deliberately INCLUDED — pulling
+ * them out would flatter the figure exactly when the book is at its worst.
+ */
+export function median(values: (number | null | undefined)[]): number | null {
+  const xs = values.filter((v): v is number => v != null && isFinite(v)).sort((a, b) => a - b)
+  if (!xs.length) return null
+  const mid = Math.floor(xs.length / 2)
+  return xs.length % 2 ? xs[mid] : (xs[mid - 1] + xs[mid]) / 2
+}
+
 export function runwayBandColor(months: number | null | undefined): string {
   if (months == null || isNaN(Number(months))) return RUNWAY_COLORS.navy
   const n = Number(months)

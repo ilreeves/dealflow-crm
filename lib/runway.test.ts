@@ -15,6 +15,7 @@ import {
   runwayMismatch,
   staleness,
   runwayBandColor,
+  median,
   fmtMonths,
   sortCash,
   burnTrendPct,
@@ -504,5 +505,44 @@ describe("presentation", () => {
     expect(fmtMonths(0)).toBe("out")
     expect(fmtMonths(9.44)).toBe("9.4 mo")
     expect(fmtMonths(null)).toBe("—")
+  })
+})
+
+describe("median", () => {
+  it("takes the middle value, and averages the middle two on an even count", () => {
+    expect(median([1, 5, 3])).toBe(3)
+    expect(median([1, 2, 3, 4])).toBe(2.5)
+  })
+
+  it("ignores nulls rather than counting them as zero", () => {
+    // A company with no runway figure must not drag the portfolio median down —
+    // "not measured" is not "out of money".
+    expect(median([10, null, 20, undefined])).toBe(15)
+    expect(median([null, undefined])).toBeNull()
+    expect(median([])).toBeNull()
+  })
+
+  it("sorts numerically, not lexicographically", () => {
+    // The default Array.prototype.sort would order these 1, 10, 2 and return 10.
+    expect(median([1, 10, 2])).toBe(2)
+  })
+
+  // The whole reason the tile is a median: one long-runway company must not
+  // drag the headline away from where most of the book actually sits.
+  it("resists an outlier that would distort a mean", () => {
+    const book = [1, 2.7, 5.4, 5.8, 6.7, 7.7, 8.7, 9.2, 11.6, 12.7, 17.8, 32.9]
+    const mean = book.reduce((a, b) => a + b, 0) / book.length
+    expect(median(book)).toBe(8.2)
+    expect(mean).toBeGreaterThan(10)
+  })
+
+  it("keeps lapsed companies in — excluding them would flatter the book", () => {
+    expect(median([-3, 1, 2])).toBe(1)
+    expect(median([-6, -2])).toBe(-4)
+  })
+
+  it("drops non-finite values instead of returning NaN", () => {
+    expect(median([1, NaN, 3])).toBe(2)
+    expect(median([Infinity, 4, 6])).toBe(5)
   })
 })
