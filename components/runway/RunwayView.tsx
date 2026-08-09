@@ -7,6 +7,7 @@ import { PortfolioCompany } from "@/lib/types"
 import { CompanyRunway, RUNWAY_BANDS, RUNWAY_COLORS, isActive, runwayBandColor, fmtMonths, median } from "@/lib/runway"
 import { fmtMoney, exactDate } from "@/lib/rounds"
 import PortfolioCompanyDetail from "@/components/portfolio/PortfolioCompanyDetail"
+import { useServerState } from "@/lib/useServerState"
 
 // Only navy is used directly, for the cash figure. Every verdict colour comes
 // from runwayBandColor so the tiles and the rows can't diverge.
@@ -34,7 +35,9 @@ export default function RunwayView({
   // no setter cannot do anything except go stale.
   const rows = initial
   const [openId, setOpenId] = useState<string | null>(null)
-  const [comps, setComps] = useState(companies)
+  // Resets when the server sends new data, unlike `rows` above which needs no
+  // state at all because nothing here mutates it locally.
+  const [comps, setComps] = useServerState(companies)
   const [showWoundDown, setShowWoundDown] = useState(false)
   // Collapsed by default — see the group header in the table below.
   const [showNoData, setShowNoData] = useState(false)

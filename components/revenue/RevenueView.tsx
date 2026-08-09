@@ -7,6 +7,7 @@ import { PortfolioCompany } from "@/lib/types"
 import { CompanyRevenue, fmtSignedPct, varianceBandColor, REVENUE_COLORS, VARIANCE_BAND_PCT, SEVERE_MISS_PCT } from "@/lib/revenue"
 import { fmtMoney } from "@/lib/rounds"
 import { createClient } from "@/lib/supabase/client"
+import { useServerState } from "@/lib/useServerState"
 import PortfolioCompanyDetail from "@/components/portfolio/PortfolioCompanyDetail"
 
 const NAVY = "#023a51"  // growth + variance colours now come from varianceBandColor
@@ -23,20 +24,11 @@ export default function RevenueView({
 }) {
   const router = useRouter()
   const supabase = createClient()
-  const [rows, setRows] = useState(initial)
-  // Server data wins whenever a new set arrives. `useState(initial)` snapshots
-  // the prop at mount and ignores every later one, so the router.refresh() fired
-  // when the company modal closes did nothing on screen — enter a period, close
-  // the modal, and the table still showed the figures from page load. Same bug
-  // fixed on the Runway page. React's documented way to reset state on a changed
-  // prop is to do it during render, comparing against the last one seen.
-  const [lastInitial, setLastInitial] = useState(initial)
-  if (initial !== lastInitial) {
-    setLastInitial(initial)
-    setRows(initial)
-  }
+  // Both reset when the server sends new data — see useServerState for why a
+  // plain useState here silently ignored every router.refresh().
+  const [rows, setRows] = useServerState(initial)
   const [openId, setOpenId] = useState<string | null>(null)
-  const [comps, setComps] = useState(companies)
+  const [comps, setComps] = useServerState(companies)
   const [adding, setAdding] = useState(false)
   const [pick, setPick] = useState("")
   const [busy, setBusy] = useState(false)
