@@ -26,7 +26,13 @@ export default function RunwayView({
   companies: PortfolioCompany[]
 }) {
   const router = useRouter()
-  const [rows] = useState(initial)
+  // The server is the source of truth here — nothing on this page mutates the
+  // rows locally. It used to be `useState(initial)`, which snapshots the prop at
+  // mount and IGNORES every later one, so the router.refresh() fired when the
+  // company modal closes changed nothing on screen: a flag cleared inside the
+  // modal kept its badge in the table until a full page reload. A useState with
+  // no setter cannot do anything except go stale.
+  const rows = initial
   const [openId, setOpenId] = useState<string | null>(null)
   const [comps, setComps] = useState(companies)
   const [showWoundDown, setShowWoundDown] = useState(false)

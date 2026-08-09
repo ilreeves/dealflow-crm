@@ -24,6 +24,17 @@ export default function RevenueView({
   const router = useRouter()
   const supabase = createClient()
   const [rows, setRows] = useState(initial)
+  // Server data wins whenever a new set arrives. `useState(initial)` snapshots
+  // the prop at mount and ignores every later one, so the router.refresh() fired
+  // when the company modal closes did nothing on screen — enter a period, close
+  // the modal, and the table still showed the figures from page load. Same bug
+  // fixed on the Runway page. React's documented way to reset state on a changed
+  // prop is to do it during render, comparing against the last one seen.
+  const [lastInitial, setLastInitial] = useState(initial)
+  if (initial !== lastInitial) {
+    setLastInitial(initial)
+    setRows(initial)
+  }
   const [openId, setOpenId] = useState<string | null>(null)
   const [comps, setComps] = useState(companies)
   const [adding, setAdding] = useState(false)
