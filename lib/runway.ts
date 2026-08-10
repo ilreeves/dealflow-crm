@@ -405,14 +405,46 @@ export const MIN_MOVEMENT_MONTHS = 0.5
 export const MOVEMENT_CONFLICT_RATIO = 0.7
 
 /**
+ * Bases that describe a PLAN rather than something that already happened.
+ *
+ * Kept as a set rather than a string check so adding another forward-looking
+ * basis to BURN_BASES is one edit in one place.
+ */
+const PLANNED_BURN_BASES = new Set<string>(["Planned average — budget"])
+
+/**
+ * True when a row's burn is a budgeted run rate, not a measured one.
+ *
+ * ⚠️ THIS IS A GUARD, NOT A LABEL. A planned burn is deliberately allowed to
+ * disagree with what the bank balance actually did — that IS the reason for
+ * recording it, on a company whose spend is ramping. Every comparison that
+ * assumes both sides are actuals has to opt out, or it reports the plan/actual
+ * gap as a data problem.
+ */
+export function isPlannedBurn(basis: string | null | undefined): boolean {
+  return basis != null && PLANNED_BURN_BASES.has(basis)
+}
+
+/**
  * True when the cash-movement burn is implausibly low against the reported
  * burn, which means capital came in between the two observations.
  *
  * Needs BOTH figures — with only one there is nothing to compare, and the
  * movement figure alone gives no hint that it's been flattered.
+ *
+ * ⚠️ Returns false for a PLANNED burn however wide the gap. Aurenar budgets
+ * $275k/mo against ~$149k actually going out of the door, so the movement sits
+ * far below the reported figure by design; firing here would assert "capital
+ * came in" on a company that simply hasn't spent to plan yet. The signal only
+ * means anything when both sides are measurements.
  */
-export function movementUnderstatesBurn(reported: number | null, movement: number | null): boolean {
+export function movementUnderstatesBurn(
+  reported: number | null,
+  movement: number | null,
+  basis?: string | null,
+): boolean {
   if (reported == null || movement == null || reported <= 0) return false
+  if (isPlannedBurn(basis)) return false
   return movement < reported * MOVEMENT_CONFLICT_RATIO
 }
 

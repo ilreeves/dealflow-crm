@@ -27,6 +27,7 @@ import {
   burnTrendPct,
   cashMovementBurn,
   movementUnderstatesBurn,
+  isPlannedBurn,
   todayISO,
 } from "@/lib/runway"
 import Field from "@/components/shared/Field"
@@ -132,6 +133,7 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
   const understated = movementUnderstatesBurn(
     last?.monthly_burn != null ? Number(last.monthly_burn) : null,
     movement && !movement.cashRose ? movement.perMonth : null,
+    last?.burn_basis,
   )
   const notBurning = !!last && last.monthly_burn != null && Number(last.monthly_burn) <= 0
 
@@ -168,7 +170,10 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
             r
               ? r.basis === "stated"
                 ? `company-stated, at ${exactDate(rwRow!.as_of)}`
-                : `cash ÷ burn, at ${exactDate(rwRow!.as_of)}`
+                // Name the plan when one is driving the arithmetic — a figure
+                // divided by a budget is not the same claim as one divided by
+                // what actually went out of the door.
+                : `cash ÷ ${isPlannedBurn(rwRow?.burn_basis) ? "planned " : ""}burn, at ${exactDate(rwRow!.as_of)}`
               : undefined
           }
           accent={r ? runwayBandColor(r.months) : undefined}

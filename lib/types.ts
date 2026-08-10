@@ -335,6 +335,12 @@ export const BURN_BASES = [
   'Net burn — 3-mo average',
   'Net burn — single month',
   'Operating cash outflow',
+  // The only FORWARD-LOOKING basis. Every other value above is something that
+  // already happened; this one is the company's own budgeted run rate, for the
+  // case where a flat actual badly misstates the runway because spend is planned
+  // to ramp. Aurenar is why it exists — see isPlannedBurn() in lib/runway.ts,
+  // which keeps it out of the comparisons that only make sense between actuals.
+  'Planned average — budget',
 ] as const
 
 export const CASH_SOURCES = [

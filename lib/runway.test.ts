@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 import type { PortfolioCash } from "./types"
+import { BURN_BASES } from "./types"
 import {
   DAYS_PER_MONTH,
   monthsBetween,
@@ -23,6 +24,7 @@ import {
   burnTrendPct,
   cashMovementBurn,
   movementUnderstatesBurn,
+  isPlannedBurn,
   latestCash,
   latestRunwaySource,
   buildCompanyRunway,
@@ -351,6 +353,27 @@ describe("cash-movement burn — the only cross-company comparable figure", () =
     expect(movementUnderstatesBurn(null, 300_000)).toBe(false)
     expect(movementUnderstatesBurn(1_000_000, null)).toBe(false)
     expect(movementUnderstatesBurn(0, 300_000)).toBe(false)
+  })
+
+  it("never flags a PLANNED burn, however far the movement sits below it", () => {
+    // Aurenar budgets $275,472/mo against ~$149k actually going out. The gap is
+    // the plan/actual variance, not financing — asserting "capital came in"
+    // there would be flatly wrong. Same numbers WITHOUT the planned basis must
+    // still fire, or the guard is just swallowing the signal.
+    expect(movementUnderstatesBurn(275_472.5, 148_701.6, "Planned average — budget")).toBe(false)
+    expect(movementUnderstatesBurn(275_472.5, 148_701.6, "Net burn")).toBe(true)
+    expect(movementUnderstatesBurn(275_472.5, 148_701.6)).toBe(true)
+  })
+
+  it("knows which bases are plans", () => {
+    expect(isPlannedBurn("Planned average — budget")).toBe(true)
+    expect(isPlannedBurn("Net burn")).toBe(false)
+    expect(isPlannedBurn("Operating cash outflow")).toBe(false)
+    expect(isPlannedBurn(null)).toBe(false)
+    expect(isPlannedBurn(undefined)).toBe(false)
+    // Every planned basis must be a real option in the editor's dropdown, or a
+    // row can carry a basis nobody can select or reproduce.
+    expect(BURN_BASES).toContain("Planned average — budget")
   })
 
   it("surfaces the flag on the page row", () => {
