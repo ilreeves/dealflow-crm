@@ -201,8 +201,8 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
           {stale?.stale && (
             <p className="text-xs text-amber-800">
               <span className="font-medium">Cash figure is {stale.months.toFixed(1)} months old</span> — measured{" "}
-              {exactDate(last!.as_of)}. Anything over {STALE_MONTHS} months means a board cycle went unrecorded, so
-              the runway above is an extrapolation, not a report.
+              {exactDate(last!.as_of)}. Anything over {STALE_MONTHS} months means two board cycles went unrecorded,
+              so the runway above is an extrapolation, not a report.
             </p>
           )}
           {mismatch && !mismatchAcked && (
@@ -453,6 +453,39 @@ function CashRow({ row, onEdit, onDelete }: { row: PortfolioCash; onEdit: () => 
 }
 
 // ─── cash balance over time ───────────────────────────────────────────────────
+// Plot geometry in px. The axis labels, the gridlines and the bars all key off
+// these two constants, so the three can't drift apart: the axis column is padded
+// down by CAP_H (+ the 4px flex gap) to clear the runway caption above each bar,
+// and every band is PLOT_H tall.
+const CAP_H = 10
+const PLOT_H = 80
+
+/**
+ * Round tick values for the cash axis, at or below `max`.
+ *
+ * `max` keeps its 8% headroom rather than being rounded up to the top tick, so
+ * the bars stay tall and a series still reads as a depletion. That means the top
+ * gridline sits below the top of the plot, which is the deliberate trade: a
+ * rounded-up scale would squash a $10.5M series into 70% of the height.
+ */
+function cashTicks(max: number): number[] {
+  // Aim for ~5 intervals, then snap the step onto a 1/2/2.5/5 ladder so the
+  // labels read as money a person would say out loud.
+  const target = max / 5
+  const mag = Math.pow(10, Math.floor(Math.log10(target)))
+  const n = target / mag
+  const step = (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag
+
+  const ticks: number[] = []
+  for (let t = 0; t <= max; t += step) ticks.push(t)
+  return ticks
+}
+
+/** Axis labels drop fmtMoney's trailing ".0" — "$10M" reads better than "$10.0M". */
+function fmtAxisTick(n: number): string {
+  return fmtMoney(n).replace(/\.0(?=[KMB]$)/, "")
+}
+
 // Oldest → newest left to right, so the depletion reads the way a chart should
 // even though the list below it is newest-first. Each bar is coloured by that
 // observation's OWN runway, so a series can visibly go from green to orange as
@@ -463,10 +496,43 @@ function CashBars({ rows }: { rows: PortfolioCash[] }) {
 
   // Headroom so the tallest bar isn't flush against the top edge.
   const max = Math.max(1, ...pts.map((r) => Number(r.cash_on_hand))) * 1.08
+  const ticks = cashTicks(max)
 
   return (
     <div className="px-4 pt-3 pb-4 border-b border-slate-100">
-      <div className="flex items-end gap-3 h-32 overflow-x-auto">
+      <div className="flex gap-2">
+        {/* Y axis. Bar heights were previously readable only against each other —
+            without a scale, a 13-month series looked identical whether it ran
+            $40M to $8M or $4M to $800K. Ticks are round numbers below the top of
+            the scale rather than a rounded-up max, so the bars keep their height. */}
+        <div className="shrink-0 w-11" style={{ paddingTop: CAP_H + 4 }} aria-hidden>
+          <div className="relative" style={{ height: PLOT_H }}>
+            {ticks.map((t) => (
+              <span
+                key={t}
+                className="absolute right-0 translate-y-1/2 text-[9px] leading-none tabular-nums text-slate-400"
+                style={{ bottom: `${(t / max) * 100}%` }}
+              >
+                {fmtAxisTick(t)}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="relative flex-1 min-w-0">
+          {/* Gridlines sit behind the bars and share the tick geometry exactly —
+              same top offset, same height — so a bar can be read off the axis. */}
+          <div className="pointer-events-none absolute inset-x-0" style={{ top: CAP_H + 4, height: PLOT_H }}>
+            {ticks.map((t) => (
+              <div
+                key={t}
+                className="absolute inset-x-0 border-t border-slate-100"
+                style={{ bottom: `${(t / max) * 100}%` }}
+              />
+            ))}
+          </div>
+
+          <div className="flex items-start gap-3 overflow-x-auto">
         {pts.map((row) => {
           const r = runwayMonths(row)
           const fill = runwayBandColor(r?.months)
@@ -484,10 +550,13 @@ function CashBars({ rows }: { rows: PortfolioCash[] }) {
             <div key={row.id} className="flex flex-col items-center gap-1 shrink-0 min-w-[3.5rem]">
               {/* The runway length in text as well as colour — colour alone can't
                   carry the verdict for protan viewers. */}
-              <span className="text-[9px] leading-none tabular-nums h-2.5" style={{ color: r ? fill : "transparent" }}>
+              <span
+                className="text-[9px] leading-none tabular-nums"
+                style={{ color: r ? fill : "transparent", height: CAP_H }}
+              >
                 {r ? fmtMonths(r.months) : "—"}
               </span>
-              <div className="relative w-9 h-20" title={tip}>
+              <div className="relative w-9" style={{ height: PLOT_H }} title={tip}>
                 <div
                   className="absolute inset-x-0 bottom-0 rounded-t"
                   style={{ height: `${Math.max(2, (Number(row.cash_on_hand) / max) * 100)}%`, backgroundColor: fill }}
@@ -502,6 +571,8 @@ function CashBars({ rows }: { rows: PortfolioCash[] }) {
             </div>
           )
         })}
+          </div>
+        </div>
       </div>
       <div className="flex items-center gap-x-4 gap-y-1.5 mt-2 text-xs text-slate-400 flex-wrap">
         <span className="flex items-center gap-1.5">

@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { ChevronRight, ChevronDown } from "lucide-react"
 import { PortfolioCompany } from "@/lib/types"
-import { CompanyRunway, RUNWAY_BANDS, RUNWAY_COLORS, isActive, runwayBandColor, fmtMonths, median } from "@/lib/runway"
+import { CompanyRunway, RUNWAY_BANDS, RUNWAY_COLORS, STALE_MONTHS, isActive, runwayBandColor, fmtMonths, median } from "@/lib/runway"
 import { fmtMoney, exactDate } from "@/lib/rounds"
 import PortfolioCompanyDetail from "@/components/portfolio/PortfolioCompanyDetail"
 import { useServerState } from "@/lib/useServerState"
@@ -12,6 +12,17 @@ import { useServerState } from "@/lib/useServerState"
 // Only navy is used directly, for the cash figure. Every verdict colour comes
 // from runwayBandColor so the tiles and the rows can't diverge.
 const { navy: NAVY } = RUNWAY_COLORS
+
+// The legend swatches are sampled from runwayBandColor at a month value inside
+// each band rather than read off RUNWAY_COLORS, for the same reason the rows are:
+// if the band rule ever changes, a legend built from the raw palette would go on
+// describing the old one. Ordered most urgent first, matching the table.
+const LEGEND = [
+  { color: runwayBandColor(0), label: `under ${RUNWAY_BANDS.critical} mo or lapsed` },
+  { color: runwayBandColor(RUNWAY_BANDS.critical), label: `${RUNWAY_BANDS.critical}–${RUNWAY_BANDS.acute} mo` },
+  { color: runwayBandColor(RUNWAY_BANDS.acute), label: `${RUNWAY_BANDS.acute}–${RUNWAY_BANDS.caution} mo` },
+  { color: runwayBandColor(RUNWAY_BANDS.caution), label: `${RUNWAY_BANDS.caution}+ mo` },
+]
 
 // Runway across the portfolio: cash on hand, monthly burn, and when each company
 // runs out.
@@ -143,6 +154,28 @@ export default function RunwayView({
                 By urgency
               </p>
               <p className="text-xs text-slate-400">click a company to enter or edit snapshots</p>
+            </div>
+
+            {/* Colour legend. The table paints Runway / Out of cash / Left today
+                by band, and that verdict was previously undocumented anywhere on
+                this page — the same swatches already sit under the per-company
+                chart, so this makes the two surfaces say the same thing. Bands
+                come from RUNWAY_BANDS, never hardcoded, so moving a threshold
+                moves the legend with it. */}
+            <div className="flex items-center gap-x-4 gap-y-1.5 px-4 py-2 border-b border-slate-100 text-xs text-slate-400 flex-wrap">
+              {LEGEND.map(({ color, label }) => (
+                <span key={label} className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: color }} />
+                  {label}
+                </span>
+              ))}
+              <span className="flex items-center gap-1.5">
+                <span className="text-[11px] px-1.5 py-0.5 rounded-md" style={{ backgroundColor: "#faece7", color: "#993c1d" }}>
+                  check
+                </span>
+                stated and calculated runway disagree
+              </span>
+              <span style={{ color: "#993c1d" }}>stale = balance over {STALE_MONTHS} months old</span>
             </div>
 
             {live.length === 0 && noData.length === 0 ? (

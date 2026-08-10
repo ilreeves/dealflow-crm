@@ -183,14 +183,16 @@ export function proFormaRunwayMonths(row: PortfolioCash): number | null {
 }
 
 /** A cash figure older than this many months no longer describes the present. */
-export const STALE_MONTHS = 4
+export const STALE_MONTHS = 6
 
 /**
  * How old the observation is, and whether that's old enough to distrust.
  *
- * Four months is one board cycle plus slack: a company reporting quarterly
- * should always have something newer, so crossing this line means a deck was
- * missed rather than that the company is simply between meetings.
+ * Six months is two board cycles (Isaiah, 2026-08-10 — raised from four). Four
+ * was one cycle plus slack, on the theory that a quarterly reporter should
+ * always have something newer; in practice decks land 3–6 weeks after quarter
+ * close and several companies report semi-annually, so four flagged rows that
+ * were merely between meetings. Crossing six means a deck was genuinely missed.
  */
 export function staleness(row: PortfolioCash, today = todayISO()): { months: number; stale: boolean } {
   const months = monthsBetween(row.as_of, today)

@@ -188,10 +188,13 @@ describe("aging a report forward to today", () => {
     expect(impliedCash(feb, "2026-08-01")!).toBeCloseTo(4_500_000 - 500_000 * monthsBetween("2026-02-01", "2026-08-01"), 6)
   })
 
-  it("flags an observation older than one board cycle plus slack", () => {
-    expect(staleness(feb, "2026-08-07").stale).toBe(true)
+  it("flags an observation older than two board cycles", () => {
+    // Six months, raised from four on 2026-08-10: a semi-annual reporter that is
+    // merely between meetings must not read as a missed deck.
+    expect(STALE_MONTHS).toBe(6)
+    expect(staleness(feb, "2026-08-07").stale).toBe(true)          // ~6.2 months
+    expect(staleness(row({ as_of: "2026-03-31" }), "2026-08-07").stale).toBe(false)  // ~4.2, fine now
     expect(staleness(row({ as_of: "2026-07-01" }), "2026-08-07").stale).toBe(false)
-    expect(STALE_MONTHS).toBe(4)
   })
 })
 
