@@ -150,6 +150,15 @@ describe("stated wins, derived is retained", () => {
     expect(statedRunwayMonths(r)).toBeCloseTo(monthsBetween("2026-06-30", "2027-03-31"), 6)
     expect(runwayMonths(r)!.basis).toBe("stated")
   })
+
+  it("prefers the month count when a row somehow carries both", () => {
+    // The editor now writes one unit and nulls the other, so this state can't be
+    // reached through the UI — but a REST write from the scheduled task still
+    // can, and silently averaging two contradictory claims would be worse than
+    // picking one. Pinned so the precedence is a decision, not an accident.
+    const r = row({ as_of: "2026-06-30", runway_months: 9, out_of_cash_date: "2027-06-30" })
+    expect(statedRunwayMonths(r)).toBe(9)
+  })
 })
 
 describe("zero-cash date is the single source of truth", () => {

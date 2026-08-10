@@ -621,6 +621,21 @@ function CashEditor({
   })
   function set<K extends keyof typeof f>(k: K, v: (typeof f)[K]) { setF((p) => ({ ...p, [k]: v })) }
 
+  // ── the stated runway, as ONE claim entered in one of two units ──────────
+  // `runway_months` and `out_of_cash_date` are the same statement — a deck
+  // saying "cash into Q2 2027" and one saying "11 months" mean the same thing,
+  // and statedRunwayMonths() already accepts either. Two boxes side by side
+  // read as two separate facts, and nothing stopped both being filled with
+  // contradictory values (months silently won). One control, one unit.
+  //
+  // Date is the default because it's what a deck usually gives and what the
+  // table displays. Months is kept for the case that motivated the column:
+  // Dimension Bio's "12+ months of runway", a duration with no date attached —
+  // pinning that to a specific day would assert a precision nobody stated.
+  const [statedUnit, setStatedUnit] = useState<"date" | "months">(
+    initial?.runway_months != null ? "months" : "date",
+  )
+
   // Live preview of what will be stored, so a $000s figure entered by mistake is
   // obvious before saving rather than after it reaches the portfolio page.
   const preview = (() => {
@@ -661,8 +676,12 @@ function CashEditor({
       cash_on_hand: parseNum(f.cash_on_hand),
       monthly_burn: parseNum(f.monthly_burn),
       burn_basis: f.burn_basis || null,
-      runway_months: parseNum(f.runway_months),
-      out_of_cash_date: f.out_of_cash_date || null,
+      // Only the selected unit is persisted, and the other is explicitly nulled
+      // rather than left alone — otherwise switching a saved row from months to a
+      // date would leave the old months behind, and statedRunwayMonths() prefers
+      // months, so the date you just typed would be silently ignored.
+      runway_months: statedUnit === "months" ? parseNum(f.runway_months) : null,
+      out_of_cash_date: statedUnit === "date" ? f.out_of_cash_date || null : null,
       committed_funding: parseNum(f.committed_funding),
       source: f.source || null,
       source_detail: f.source_detail || null,
@@ -699,12 +718,48 @@ function CashEditor({
         </Field>
       </div>
       <div className="grid grid-cols-3 gap-3">
-        <Field label="Runway the company stated (months)">
-          <input placeholder="blank if not stated" value={f.runway_months} onChange={(e) => set("runway_months", e.target.value)} className={inputCls} />
-        </Field>
-        <Field label="Out-of-cash date they stated">
-          <input type="date" value={f.out_of_cash_date} onChange={(e) => set("out_of_cash_date", e.target.value)} className={inputCls} />
-        </Field>
+        <div className="col-span-2">
+          {/* Toggle sits next to its label, not pushed to the far edge of the
+              two-column span — at that distance it reads as belonging to the
+              field beside it. */}
+          <div className="flex items-center gap-2 mb-1">
+            <label className="block text-xs text-slate-500">Runway the company stated</label>
+            {/* Switching unit clears the other column, so the two can never both
+                hold a value and disagree. */}
+            <select
+              value={statedUnit}
+              onChange={(e) => {
+                const u = e.target.value as "date" | "months"
+                setStatedUnit(u)
+                setF((p) => ({ ...p, runway_months: "", out_of_cash_date: "" }))
+              }}
+              className="text-xs text-slate-500 bg-transparent border border-slate-200 rounded-md px-1.5 py-0.5"
+            >
+              <option value="date">as a date</option>
+              <option value="months">as months</option>
+            </select>
+          </div>
+          {statedUnit === "date" ? (
+            <input
+              type="date"
+              value={f.out_of_cash_date}
+              onChange={(e) => set("out_of_cash_date", e.target.value)}
+              className={inputCls}
+            />
+          ) : (
+            <input
+              placeholder="blank if not stated"
+              value={f.runway_months}
+              onChange={(e) => set("runway_months", e.target.value)}
+              className={inputCls}
+            />
+          )}
+          <p className="text-[11px] text-slate-400 mt-1">
+            {statedUnit === "date"
+              ? "The out-of-cash date the deck gives. Blank if it doesn't state one."
+              : "Counted from the balance date. For a deck that gives a duration, not a date."}
+          </p>
+        </div>
         <Field label="Committed, not yet funded">
           <input placeholder="$ blank if none" value={f.committed_funding} onChange={(e) => set("committed_funding", e.target.value)} className={inputCls} />
         </Field>
@@ -733,7 +788,9 @@ function CashEditor({
       {preview != null && (
         <p className="text-xs text-slate-500">
           Cash ÷ burn = <span className="tabular-nums" style={{ color: runwayBandColor(preview) }}>{fmtMonths(preview)}</span>
-          {f.runway_months.trim() ? " — compared against the stated figure once saved." : ". Enter dollars, not thousands."}
+          {(statedUnit === "months" ? f.runway_months.trim() : f.out_of_cash_date)
+            ? " — compared against the stated figure once saved."
+            : ". Enter dollars, not thousands."}
         </p>
       )}
       {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
