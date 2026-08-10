@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { ChevronRight, ChevronDown } from "lucide-react"
 import { PortfolioCompany } from "@/lib/types"
-import { CompanyRunway, RUNWAY_BANDS, RUNWAY_COLORS, STALE_MONTHS, isActive, runwayBandColor, fmtMonths, median } from "@/lib/runway"
+import { CompanyRunway, RUNWAY_BANDS, RUNWAY_COLORS, isActive, runwayBandColor, fmtMonths, median } from "@/lib/runway"
 import { fmtMoney, exactDate } from "@/lib/rounds"
 import PortfolioCompanyDetail from "@/components/portfolio/PortfolioCompanyDetail"
 import { useServerState } from "@/lib/useServerState"
@@ -156,28 +156,6 @@ export default function RunwayView({
               <p className="text-xs text-slate-400">click a company to enter or edit snapshots</p>
             </div>
 
-            {/* Colour legend. The table paints Runway / Out of cash / Left today
-                by band, and that verdict was previously undocumented anywhere on
-                this page — the same swatches already sit under the per-company
-                chart, so this makes the two surfaces say the same thing. Bands
-                come from RUNWAY_BANDS, never hardcoded, so moving a threshold
-                moves the legend with it. */}
-            <div className="flex items-center gap-x-4 gap-y-1.5 px-4 py-2 border-b border-slate-100 text-xs text-slate-400 flex-wrap">
-              {LEGEND.map(({ color, label }) => (
-                <span key={label} className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: color }} />
-                  {label}
-                </span>
-              ))}
-              <span className="flex items-center gap-1.5">
-                <span className="text-[11px] px-1.5 py-0.5 rounded-md" style={{ backgroundColor: "#faece7", color: "#993c1d" }}>
-                  check
-                </span>
-                stated and calculated runway disagree
-              </span>
-              <span style={{ color: "#993c1d" }}>stale = balance over {STALE_MONTHS} months old</span>
-            </div>
-
             {live.length === 0 && noData.length === 0 ? (
               <div className="px-4 py-12 text-center">
                 <p className="text-sm text-slate-500">No active portfolio companies.</p>
@@ -267,6 +245,23 @@ export default function RunwayView({
                 )}
               </div>
             )}
+
+            {/* Colour legend, as a footer to the table it describes. Bands come
+                from RUNWAY_BANDS via runwayBandColor, never hardcoded, so moving
+                a threshold moves the legend with it. Deliberately colour ONLY:
+                the `check` and `stale` markers each carry their own explanation
+                where they appear — hover text on the row, a full paragraph on
+                the company's tab — so restating them here was noise competing
+                with the thing that genuinely isn't self-evident, which is what
+                the colours mean. */}
+            <div className="flex items-center gap-x-4 gap-y-1.5 px-4 py-2.5 border-t border-slate-100 text-xs text-slate-400 flex-wrap">
+              {LEGEND.map(({ color, label }) => (
+                <span key={label} className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: color }} />
+                  {label}
+                </span>
+              ))}
+            </div>
           </div>
 
           <p className="text-xs text-slate-400">
