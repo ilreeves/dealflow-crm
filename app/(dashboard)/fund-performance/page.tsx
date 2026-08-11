@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
-import { PortfolioFundraiseRound, PortfolioPosition, PortfolioValuationMark } from "@/lib/types"
+import { PortfolioFundraiseRound, PortfolioPosition } from "@/lib/types"
 import FundPerformanceView, { FundRow, TopPosition, RiskFlag, CompanyInFund } from "@/components/fund/FundPerformanceView"
 import ValuationHistory, { FundSeries } from "@/components/fund/ValuationHistory"
 import NotesExposure, { NotePosition } from "@/components/fund/NotesExposure"

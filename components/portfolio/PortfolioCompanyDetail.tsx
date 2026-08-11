@@ -36,11 +36,18 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
   const [showEdit, setShowEdit] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const supabase = createClient()
 
   async function handleDelete() {
     setDeleting(true)
-    await supabase.from('portfolio_companies').delete().eq('id', company.id)
+    setDeleteError('')
+    const { error } = await supabase.from('portfolio_companies').delete().eq('id', company.id)
+    if (error) {
+      setDeleting(false)
+      setDeleteError(`Couldn't delete ${company.name}: ${error.message}`)
+      return
+    }
     onDeleted(company.id)
     onClose()
   }
@@ -145,6 +152,9 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
             <p className="text-sm text-slate-500 mb-6">
               This will permanently delete <strong>{company.name}</strong> and all associated data.
             </p>
+            {deleteError && (
+              <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg mb-4">{deleteError}</p>
+            )}
             <div className="flex justify-end gap-2">
               <button onClick={() => setConfirmDelete(false)} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition">
                 Cancel
@@ -286,7 +296,7 @@ function CatalystsTab({ companyName }: { companyName: string }) {
     supabase.from('catalysts').select('*').eq('company_name', companyName)
       .order('catalyst_date', { ascending: true })
       .then(({ data }) => { setCatalysts((data as Catalyst[]) ?? []); setLoading(false) })
-  }, [companyName])
+  }, [companyName, supabase])
 
   async function handleAdd() {
     if (!form.title.trim()) return

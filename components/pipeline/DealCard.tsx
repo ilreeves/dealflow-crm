@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, memo } from 'react'
-import { Deal, STAGE_COLORS } from '@/lib/types'
+import { Deal } from '@/lib/types'
 import { formatDate } from '@/lib/utils'
 import { Building2, User, DollarSign, FlaskConical } from 'lucide-react'
 import DealDetailModal from '@/components/deals/DealDetailModal'

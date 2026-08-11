@@ -65,10 +65,6 @@ export interface Deal {
   drug_names: string | null
   ct_sponsor_name: string | null
   indication: string | null
-  non_con_deck_path: string | null
-  non_con_deck_name: string | null
-  non_con_deck_token: string | null
-  non_con_deck_shared_at: string | null
   custom_fields: Record<string, unknown>
   stage_entered_at: string | null
   pass_reason: string | null
@@ -205,10 +201,6 @@ export interface PortfolioCompany {
   drug_names: string | null
   ct_sponsor_name: string | null
   indication: string | null
-  non_con_deck_path: string | null
-  non_con_deck_name: string | null
-  non_con_deck_token: string | null
-  non_con_deck_shared_at: string | null
   /**
    * Opt-in to revenue tracking. Most companies are pre-revenue, so the Revenue
    * tab only appears once a company is added to the roster on the Revenue page.
@@ -491,7 +483,6 @@ export interface InvestorContact {
   updated_at: string
 }
 
-// One non-confidential deck (per raise) attached to a deal or portfolio company
 // A manually-added known competitor for a deal or portfolio company
 export interface CompanyCompetitor {
   id: string
@@ -504,6 +495,7 @@ export interface CompanyCompetitor {
   created_at: string
 }
 
+// One non-confidential deck (per raise) attached to a deal or portfolio company
 export interface CompanyDeck {
   id: string
   entity_type: string

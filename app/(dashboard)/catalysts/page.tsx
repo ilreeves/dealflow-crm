@@ -2,6 +2,11 @@ import { createClient } from '@/lib/supabase/server'
 import { Catalyst } from '@/lib/types'
 import CatalystCalendar from '@/components/catalysts/CatalystCalendar'
 
+// The reminder windows below are computed from the request-time clock; static
+// rendering would freeze them at build time. cookies() currently forces
+// dynamic rendering implicitly — make the requirement explicit.
+export const dynamic = 'force-dynamic'
+
 export default async function CatalystsPage() {
   const supabase = await createClient()
 

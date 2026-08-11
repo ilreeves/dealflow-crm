@@ -193,9 +193,14 @@ export function ytdActual(
   for (const set of [["Q1", "Q2", "Q3", "Q4"], ["H1", "H2"]]) {
     const hits = set.filter((p) => inYear.some((r) => r.period_type === p))
     if (hits.length) {
+      // "Q1–Q3" promises all three periods are in the sum. When one is missing
+      // in the middle (Q1 and Q3 reported, Q2 not yet), spell the sum out
+      // instead — the range label would silently overstate the coverage.
+      const idx = hits.map((p) => set.indexOf(p))
+      const contiguous = idx[idx.length - 1] - idx[0] === idx.length - 1
       return {
         value: inYear.filter((r) => hits.includes(r.period_type)).reduce((s, r) => s + Number(r.actual), 0),
-        coverage: hits.length > 1 ? `${hits[0]}–${hits[hits.length - 1]}` : hits[0],
+        coverage: hits.length === 1 ? hits[0] : contiguous ? `${hits[0]}–${hits[hits.length - 1]}` : hits.join(" + "),
       }
     }
   }
@@ -211,8 +216,11 @@ export function ytdActual(
  */
 export function planYearFor(rows: PortfolioRevenue[], fallback: number, basis: PlanBasis = "original"): number {
   const years = Array.from(new Set(rows.map((r) => r.fiscal_year))).sort((a, b) => b - a)
-  const hasAnnualPlan = (y: number) =>
-    rows.some((r) => r.fiscal_year === y && r.period_type === "FY" && planValue(r, basis) != null)
+  // Same definition of "has an annual plan" as the chart: an FY row OR all
+  // four quarters planned. Requiring an FY row here made a quarterly-only
+  // planner never qualify, so its plan year fell back to the calendar year
+  // and the progress column went blank despite a complete plan on file.
+  const hasAnnualPlan = (y: number) => annualProjection(rows, y, basis) != null
   for (const y of years) {
     if (hasAnnualPlan(y) && ytdActual(rows, y)) return y
   }
@@ -311,6 +319,7 @@ export function buildCompanyRevenue(
       const ytd = ytdActual(rs, planYear)
       const pctOfPlan = fyProj && fyProj.value !== 0 && ytd ? (ytd.value / fyProj.value) * 100 : null
       const prior = annualActual(rs, fiscalYear - 1)
+      const seqPct = last ? sequentialGrowth(rs, last) : null
       return {
         id: c.id,
         name: c.name,
@@ -333,11 +342,11 @@ export function buildCompanyRevenue(
         fyRevised: !!fyProj?.revised,
         priorYearActual: prior?.value ?? null,
         yoyPct: last ? yoyGrowth(rs, last) : null,
-        seqPct: last ? sequentialGrowth(rs, last) : null,
+        seqPct,
         seqBasis: (() => {
-          if (!last) return null
+          if (!last || seqPct == null) return null
           const prev = PRIOR_PERIOD[last.period_type]
-          if (!prev || sequentialGrowth(rs, last) == null) return null
+          if (!prev) return null
           return `${periodLabel(last)} vs ${prev.type} ${last.fiscal_year + prev.yearOffset}`
         })(),
         planYear,
@@ -422,11 +431,10 @@ export function annualActual(
  * the annual chart. The FY row if one exists, otherwise the sum of the quarters
  * but ONLY when all four are planned.
  *
- * Deliberately stricter than currentYearProjection below, which sums whatever
- * parts it finds so the stat card can still headline a number. Summing two
- * planned quarters and drawing it as the annual plan would understate the year
- * and make the bar read as a miss the company never had — so an incomplete
- * plan returns null here and the bar simply carries no tick.
+ * Summing an INCOMPLETE set of planned quarters and drawing it as the annual
+ * plan would understate the year and make the bar read as a miss the company
+ * never had — so a partial plan returns null here and the bar simply carries
+ * no tick.
  */
 export function annualProjection(
   rows: PortfolioRevenue[],

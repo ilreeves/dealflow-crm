@@ -44,21 +44,31 @@ function toISODate(d: Date): string {
 
 /** Months from `from` to `to`. Negative when `to` is earlier. */
 export function monthsBetween(from: string, to: string): number {
-  return (parseDate(to).getTime() - parseDate(from).getTime()) / MS_PER_DAY / DAYS_PER_MONTH
+  const f = parseDate(from)
+  const t = parseDate(to)
+  // Count calendar days via UTC so a DST transition inside the interval
+  // doesn't add or subtract an hour and skew the month count.
+  const days =
+    (Date.UTC(t.getFullYear(), t.getMonth(), t.getDate()) -
+      Date.UTC(f.getFullYear(), f.getMonth(), f.getDate())) / MS_PER_DAY
+  return days / DAYS_PER_MONTH
 }
 
 /**
  * `date` plus a fractional number of months, as yyyy-mm-dd.
  *
- * Rounded to the NEAREST day, and formatted from local components rather than
- * via toISOString — which, for a date parsed at local midnight, returns the
- * PREVIOUS day at any positive UTC offset. That would silently shift every
- * derived out-of-cash date back a day for anyone running the app outside the
- * Americas.
+ * Rounded to the NEAREST day, stepped in calendar days (not fixed 24h blocks,
+ * which land an hour short across a DST change and report the previous day),
+ * and formatted from local components rather than via toISOString — which,
+ * for a date parsed at local midnight, returns the PREVIOUS day at any
+ * positive UTC offset. That would silently shift every derived out-of-cash
+ * date back a day for anyone running the app outside the Americas.
  */
 export function addMonths(date: string, months: number): string {
   const days = Math.round(months * DAYS_PER_MONTH)
-  return toISODate(new Date(parseDate(date).getTime() + days * MS_PER_DAY))
+  const d = parseDate(date)
+  d.setDate(d.getDate() + days)
+  return toISODate(d)
 }
 
 /** Today as yyyy-mm-dd, in local time. */
@@ -631,6 +641,7 @@ export function buildCompanyRunway(
         movementUnderstated: movementUnderstatesBurn(
           last?.monthly_burn != null ? Number(last.monthly_burn) : null,
           usableMv?.perMonth ?? null,
+          last?.burn_basis ?? null,
         ),
       }
     })

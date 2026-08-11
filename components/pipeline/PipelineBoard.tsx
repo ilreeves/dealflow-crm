@@ -51,7 +51,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
           .then(({ data }) => setActorName(data?.full_name || user.email || null))
       }
     })
-  }, [])
+  }, [supabase])
 
   const effectiveView = isMobile ? 'list' : view
   // Invested deals graduate to Portfolio — keep the stage in data, but drop it from the pipeline view
@@ -92,8 +92,12 @@ export default function PipelineBoard({ initialDeals }: Props) {
     await logActivity(dealId, deal.name, 'Stage changed', details, actorName)
 
     if (newStage === 'Invested') {
-      await addDealToPortfolio(supabase, { ...deal, stage: newStage })
-      await logActivity(dealId, deal.name, 'Added to portfolio', 'Auto-added on move to Invested', actorName)
+      const { error: mirrorErr } = await addDealToPortfolio(supabase, { ...deal, stage: newStage })
+      if (mirrorErr) {
+        setMoveError(`${deal.name} moved to Invested, but couldn't be added to the portfolio: ${mirrorErr.message}`)
+      } else {
+        await logActivity(dealId, deal.name, 'Added to portfolio', 'Auto-added on move to Invested', actorName)
+      }
     }
 
     if (passReason) {

@@ -80,7 +80,7 @@ export default function PdfViewer({ file, onClose }: Props) {
       }
       docRef.current = null
     }
-  }, [file.storage_path])
+  }, [file.storage_path, supabase.storage])
 
   // Render the current page whenever it changes
   useEffect(() => {
@@ -123,10 +123,7 @@ export default function PdfViewer({ file, onClose }: Props) {
   }, [page, loading, numPages])
 
   const goTo = useCallback((n: number) => {
-    setPage((p) => {
-      const next = Math.min(Math.max(n, 1), numPages || 1)
-      return next
-    })
+    setPage(Math.min(Math.max(n, 1), numPages || 1))
   }, [numPages])
 
   // Keyboard navigation

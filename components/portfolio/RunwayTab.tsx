@@ -162,7 +162,12 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
   const near = burnTimeline(rows, forecast, chartWindowStart(today), nearTermEnd(today))
   // Open windowed only when the full curve is long enough to be worth trimming.
   // Today that is Francis alone (23 points); nobody else exceeds 13.
-  const [span, setSpan] = useState<"near" | "all">(full.length > 14 ? "near" : "all")
+  // Derived, not a useState initializer: on the first render the rows haven't
+  // loaded yet (full.length === 0), so an initializer would lock in "all" for
+  // every company and the windowed default would never apply. null = "the user
+  // hasn't chosen; use the data's default once it exists".
+  const [spanChoice, setSpanChoice] = useState<"near" | "all" | null>(null)
+  const span = spanChoice ?? (full.length > 14 ? "near" : "all")
   const timeline = span === "near" ? near : full
   const need = peakFundingNeed(curve)
   const breakeven = forecastBreakeven(curve)
@@ -363,7 +368,7 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
                 {([["near", `Next ${NEAR_TERM_MONTHS / 12} yrs`], ["all", "All"]] as const).map(([v, label]) => (
                   <button
                     key={v}
-                    onClick={() => setSpan(v)}
+                    onClick={() => setSpanChoice(v)}
                     aria-pressed={span === v}
                     className={`px-2 py-0.5 text-[11px] rounded-md transition ${
                       span === v ? "bg-white text-slate-700 shadow-sm font-medium" : "text-slate-500 hover:text-slate-700"

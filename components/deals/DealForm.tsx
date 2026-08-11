@@ -138,7 +138,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
       .select('*')
       .order('sort_order')
       .then(({ data }) => setCustomFieldDefs((data as CustomFieldDefinition[]) ?? []))
-  }, [])
+  }, [supabase])
 
   useEffect(() => {
     fetchListOptions().then(setLists)
@@ -152,7 +152,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
         .sort((a, b) => a.localeCompare(b))
       setSourceOptions(vals)
     })
-  }, [])
+  }, [supabase])
 
   function setField(key: string, value: unknown) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -245,7 +245,12 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
       await logActivity(saved.id, saved.name, 'Stage changed', details)
     }
     if (saved.stage === 'Invested' && (!deal || deal.stage !== 'Invested')) {
-      await addDealToPortfolio(supabase, saved)
+      const { error: mirrorErr } = await addDealToPortfolio(supabase, saved)
+      if (mirrorErr) {
+        setError(`Saved, but couldn't add ${saved.name} to the portfolio: ${mirrorErr.message}`)
+        setLoading(false)
+        return
+      }
       await logActivity(saved.id, saved.name, 'Added to portfolio', 'Auto-added on move to Invested')
     }
     if (passReasonRequired && passReason.trim()) {

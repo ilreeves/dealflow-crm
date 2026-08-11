@@ -30,8 +30,7 @@ export function numToStr(n: number | null | undefined): string {
   return n == null ? "" : String(n)
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function termStr(terms: any, key: string): string {
+export function termStr(terms: Record<string, unknown> | null | undefined, key: string): string {
   const v = terms?.[key]
   return v == null ? "" : String(v)
 }
@@ -39,11 +38,15 @@ export function termStr(terms: any, key: string): string {
 export function fmtMoney(n: number | null | undefined): string {
   if (n == null || isNaN(Number(n))) return "—"
   const x = Number(n)
+  // Sign goes OUTSIDE the currency symbol: "-$4.5M", never "$-4.5M".
+  const sign = x < 0 ? "-" : ""
   const abs = Math.abs(x)
-  if (abs >= 1e9) return `$${(x / 1e9).toFixed(2)}B`
-  if (abs >= 1e6) return `$${(x / 1e6).toFixed(1)}M`
-  if (abs >= 1e3) return `$${(x / 1e3).toFixed(0)}K`
-  return `$${x.toLocaleString()}`
+  // Unit thresholds sit at the point where the smaller unit would round up to
+  // 1000 of itself — otherwise 999,950 renders as "$1000K" instead of "$1.0M".
+  if (abs >= 999.95e6) return `${sign}$${(abs / 1e9).toFixed(2)}B`
+  if (abs >= 999.5e3) return `${sign}$${(abs / 1e6).toFixed(1)}M`
+  if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(0)}K`
+  return `${sign}$${abs.toLocaleString()}`
 }
 
 export function fmtPct(n: number | null | undefined): string {
@@ -103,7 +106,10 @@ export const SECURITY_COLOR: Record<string, string> = {
 export function valueColor(value: number | null | undefined, cost: number | null | undefined): string {
   if (value == null) return "#64748b"
   if (Number(value) === 0) return "#dc2626"
-  const c = Number(cost) || 0
+  // No cost basis on file means we can't say "up" or "down" — stay neutral.
+  // (An actual $0 cost — e.g. Knopp — is a real basis and still paints.)
+  if (cost == null || isNaN(Number(cost))) return "#64748b"
+  const c = Number(cost)
   if (Number(value) > c) return "#5ba200"
   if (Number(value) < c) return "#e98925"
   return "#023a51"

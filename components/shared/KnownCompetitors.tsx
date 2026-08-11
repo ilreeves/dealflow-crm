@@ -50,7 +50,7 @@ export default function KnownCompetitors({ entityType, entityId }: Props) {
         setLoading(false)
       })
     return () => { active = false }
-  }, [entityType, entityId])
+  }, [entityType, entityId, supabase])
 
   async function add() {
     const name = form.name.trim()

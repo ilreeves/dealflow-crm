@@ -1,8 +1,7 @@
 import { createBrowserClient } from "@supabase/ssr"
+import { requireSupabaseEnv } from "./env"
 
 export function createClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://localhost",
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "placeholder"
-  )
+  const { url, anonKey } = requireSupabaseEnv()
+  return createBrowserClient(url, anonKey)
 }

@@ -1,18 +1,22 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
+import { requireSupabaseEnv } from "@/lib/supabase/env"
 
 export async function proxy(request: NextRequest) {
-  // Public, unauthenticated deck share links (name/email gate handled in-page)
+  // Public, unauthenticated deck share links (name/email gate handled in-page).
+  // Exact segment match — a bare startsWith("/deck") would also exempt any
+  // future /deck-something route from auth.
   const { pathname } = request.nextUrl
-  if (pathname.startsWith("/deck") || pathname.startsWith("/api/deck")) {
+  if (pathname === "/deck" || pathname.startsWith("/deck/") || pathname.startsWith("/api/deck/")) {
     return NextResponse.next({ request })
   }
 
   let supabaseResponse = NextResponse.next({ request })
 
+  const { url: supabaseUrl, anonKey } = requireSupabaseEnv()
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://localhost",
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "placeholder",
+    supabaseUrl,
+    anonKey,
     {
       cookies: {
         getAll() {
@@ -37,17 +41,26 @@ export async function proxy(request: NextRequest) {
   // caught here instantly — the layout's getUser() still catches it on hard loads.
   const { data: claimsData } = await supabase.auth.getClaims()
   const user = claimsData?.claims ?? null
-  const isAuthRoute = request.nextUrl.pathname.startsWith("/login") ||
+  // Routes reachable without a session. /reset-password must ALSO stay
+  // reachable with one: the recovery email signs the user in, and bouncing
+  // them to "/" would discard the ?code= before the password can be changed.
+  // /auth/callback must be reachable logged-out or the code exchange it
+  // exists to perform can never run — the redirect target is validated in
+  // the route itself.
+  const isPublicRoute = request.nextUrl.pathname.startsWith("/login") ||
     request.nextUrl.pathname.startsWith("/forgot-password") ||
-    request.nextUrl.pathname.startsWith("/reset-password")
+    request.nextUrl.pathname.startsWith("/reset-password") ||
+    request.nextUrl.pathname.startsWith("/auth/callback")
+  const isAuthEntryRoute = request.nextUrl.pathname.startsWith("/login") ||
+    request.nextUrl.pathname.startsWith("/forgot-password")
 
-  if (!user && !isAuthRoute) {
+  if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
     return NextResponse.redirect(url)
   }
 
-  if (user && isAuthRoute) {
+  if (user && isAuthEntryRoute) {
     const url = request.nextUrl.clone()
     url.pathname = "/"
     return NextResponse.redirect(url)

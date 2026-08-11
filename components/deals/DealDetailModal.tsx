@@ -49,7 +49,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
           .then(({ data }) => setActorName(data?.full_name || user.email || null))
       }
     })
-  }, [])
+  }, [supabase])
 
   async function handleStageChange(newStage: string, passReason?: string) {
     if (newStage === 'Passed' && deal.stage !== 'Passed' && !passReason) {
@@ -88,8 +88,12 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
     const details = passReason ? `${prevStage} → ${newStage}: ${passReason}` : `${prevStage} → ${newStage}`
     await logActivity(deal.id, deal.name, 'Stage changed', details, actorName)
     if (newStage === 'Invested') {
-      await addDealToPortfolio(supabase, data as Deal)
-      await logActivity(deal.id, deal.name, 'Added to portfolio', 'Auto-added on move to Invested', actorName)
+      const { error: mirrorErr } = await addDealToPortfolio(supabase, data as Deal)
+      if (mirrorErr) {
+        setStageError(`Moved to Invested, but couldn't add to the portfolio: ${mirrorErr.message}`)
+      } else {
+        await logActivity(deal.id, deal.name, 'Added to portfolio', 'Auto-added on move to Invested', actorName)
+      }
     }
     if (passReason) {
       const { data: { user } } = await supabase.auth.getUser()
@@ -104,7 +108,12 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
 
   async function handleDelete() {
     setDeleting(true)
-    await supabase.from('deals').delete().eq('id', deal.id)
+    const { error } = await supabase.from('deals').delete().eq('id', deal.id)
+    if (error) {
+      setDeleting(false)
+      setStageError(`Couldn't delete ${deal.name}: ${error.message}`)
+      return
+    }
     onDeleted(deal.id)
     onClose()
   }

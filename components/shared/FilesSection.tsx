@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Upload, FileText, Download, Trash2, File, Loader2, Eye } from 'lucide-react'
+import { Upload, FileText, Download, Trash2, Loader2, Eye } from 'lucide-react'
 import { StoredFile, CompanyDeck } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { formatBytes, formatDate } from '@/lib/utils'
@@ -25,10 +25,6 @@ interface Props {
 /** Which table holds the rows, and under which column, for each side. */
 const TABLE = { deal: 'deal_files', portfolio: 'portfolio_files' } as const
 const FK = { deal: 'deal_id', portfolio: 'company_id' } as const
-
-function fileIcon(mimeType: string | null) {
-  return <File className="w-4 h-4 text-slate-400" />
-}
 
 function isPdf(f: StoredFile) {
   return f.mime_type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')

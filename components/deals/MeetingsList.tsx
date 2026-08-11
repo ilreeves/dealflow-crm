@@ -116,7 +116,7 @@ function MeetingNotes({ meetingId }: { meetingId: string }) {
     supabase.from('meeting_notes').select('*').eq('meeting_id', meetingId)
       .order('created_at', { ascending: false })
       .then(({ data }) => { setNotes((data as MeetingNote[]) ?? []); setLoading(false) })
-  }, [meetingId])
+  }, [meetingId, supabase])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -198,7 +198,7 @@ function MeetingFiles({ meetingId }: { meetingId: string }) {
     supabase.from('meeting_files').select('*').eq('meeting_id', meetingId)
       .order('created_at', { ascending: false })
       .then(({ data }) => { setFiles((data as MeetingFile[]) ?? []); setLoading(false) })
-  }, [meetingId])
+  }, [meetingId, supabase])
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? [])
@@ -372,7 +372,7 @@ export default function MeetingsList({ dealId }: Props) {
     supabase.from('deal_meetings').select('*').eq('deal_id', dealId)
       .order('meeting_date', { ascending: false })
       .then(({ data }) => { setMeetings((data as DealMeeting[]) ?? []); setLoading(false) })
-  }, [dealId])
+  }, [dealId, supabase])
 
   return (
     <div className="space-y-4">

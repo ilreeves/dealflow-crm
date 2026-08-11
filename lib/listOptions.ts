@@ -22,8 +22,10 @@ export async function fetchListOptions(): Promise<Record<ListKey, string[]>> {
   const supabase = createClient()
   const { data } = await supabase.from('list_options').select('list_key,value,sort_order').order('sort_order')
   const out: Record<ListKey, string[]> = { series: [], clinical_stage: [], fund: [], spv_fund: [] }
-  for (const row of (data ?? []) as { list_key: ListKey; value: string }[]) {
-    if (out[row.list_key]) out[row.list_key].push(row.value)
+  for (const row of (data ?? []) as { list_key: ListKey; value: string | null }[]) {
+    // The DB doesn't guarantee a non-null value; a null here would surface as
+    // a blank <option> in every dropdown that consumes these lists.
+    if (row.value != null && out[row.list_key]) out[row.list_key].push(row.value)
   }
   for (const k of LIST_KEYS) if (!out[k].length) out[k] = FALLBACK_LISTS[k]
   return out

@@ -32,7 +32,7 @@ export default function PortfolioDeckAlerts({ onOpen }: { onOpen?: (companyId: s
         setItems(exps)
       })
     return () => { active = false }
-  }, [])
+  }, [supabase])
 
   if (items.length === 0) return null
 

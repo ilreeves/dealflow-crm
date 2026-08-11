@@ -1,4 +1,4 @@
-import { fmtMoney, monthYear, exactDate } from "@/lib/rounds"
+import { fmtMoney, exactDate } from "@/lib/rounds"
 
 export type NotePosition = {
   company: string
@@ -103,7 +103,8 @@ export default function NotesExposure({ notes }: { notes: NotePosition[] }) {
 
       <p className="text-xs text-slate-400 mt-2">
         Accrued interest is <span style={{ color: GREEN }}>{fmtMoney(accrued)}</span> on {fmtMoney(principal)} of principal
-        {wRate != null ? ` at a ${wRate.toFixed(1)}% weighted coupon` : ""} — {((value / principal - 1) * 100).toFixed(1)}% above cost.
+        {wRate != null ? ` at a ${wRate.toFixed(1)}% weighted coupon` : ""}
+        {principal > 0 ? ` — ${((value / principal - 1) * 100).toFixed(1)}% above cost.` : "."}
       </p>
     </div>
   )

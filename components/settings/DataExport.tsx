@@ -29,10 +29,18 @@ function download(name: string, csv: string) {
 export default function DataExport() {
   const supabase = createClient()
   const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState('')
 
   async function run(key: string, table: string, filename: string, select = '*') {
     setBusy(key)
-    const { data } = await supabase.from(table).select(select)
+    setError('')
+    const { data, error: qErr } = await supabase.from(table).select(select)
+    if (qErr) {
+      // Never download an empty CSV that looks like a valid backup.
+      setError(`Export failed: ${qErr.message}`)
+      setBusy(null)
+      return
+    }
     // Cast via unknown: a runtime-built select string leaves supabase-js unable
     // to infer a row shape, so it widens to its error union.
     let rows = (data as unknown as Record<string, unknown>[]) ?? []
@@ -41,7 +49,8 @@ export default function DataExport() {
     rows = rows.map((r) => {
       const embedded = r.portfolio_companies as { name?: string } | null | undefined
       if (embedded === undefined) return r
-      const { portfolio_companies: _ignored, ...rest } = r
+      const rest = { ...r }
+      delete rest.portfolio_companies
       return { company: embedded?.name ?? '', ...rest }
     })
     download(filename, toCSV(rows))
@@ -61,6 +70,9 @@ export default function DataExport() {
         <h2 className="text-sm font-semibold text-slate-900">Data Export</h2>
         <p className="text-xs text-slate-500 mt-0.5">Download a CSV snapshot for backups or analysis in Excel</p>
       </div>
+      {error && (
+        <p className="text-sm text-red-600 bg-red-50 px-5 py-2">{error}</p>
+      )}
       <div className="px-5 py-4 flex flex-wrap gap-2">
         {exports.map((e) => (
           <button key={e.key} onClick={() => run(e.key, e.table, e.file, e.select)} disabled={busy !== null}

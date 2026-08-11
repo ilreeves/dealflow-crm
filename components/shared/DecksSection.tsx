@@ -38,7 +38,7 @@ export default function DecksSection({ entityType, entityId, entityName, buildEm
     supabase.from('company_decks').select('*').eq('entity_type', entityType).eq('entity_id', entityId)
       .order('sort_order', { ascending: true }).order('created_at', { ascending: true })
       .then(({ data }) => { setDecks((data as CompanyDeck[]) ?? []); setLoading(false) })
-  }, [entityType, entityId])
+  }, [entityType, entityId, supabase])
 
   // Fundraising rounds a deck can be tied to, so the label follows the round.
   useEffect(() => {
@@ -47,7 +47,7 @@ export default function DecksSection({ entityType, entityId, entityName, buildEm
     supabase.from(table).select('id,round_name').eq(fk, entityId)
       .order('date', { ascending: false, nullsFirst: false })
       .then(({ data }) => setRounds((data as RoundOption[]) ?? []))
-  }, [entityType, entityId])
+  }, [entityType, entityId, supabase])
 
   async function addDeck(file: File) {
     setUploadingNew(true)

@@ -6,6 +6,12 @@ import CollapsibleSection from '@/components/analytics/CollapsibleSection'
 // while the Revenue page painted the same figure navy; lib/revenue owns the rule.
 import { varianceBandColor, VARIANCE_BAND_PCT, SEVERE_MISS_PCT } from '@/lib/revenue'
 
+// This page reads the clock at request time (stage-age and catalyst-window
+// math below); static rendering would freeze that clock at build time. Today
+// cookies() happens to force dynamic rendering implicitly — state the
+// requirement explicitly rather than relying on the side effect.
+export const dynamic = 'force-dynamic'
+
 export default async function AnalyticsPage() {
   const supabase = await createClient()
   const [{ data }, { data: activityData }, { data: catalystData }, { data: portfolioData }, { data: legacyData }, { data: listData }, { data: revenueData }] = await Promise.all([

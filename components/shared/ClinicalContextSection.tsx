@@ -54,7 +54,7 @@ export default function ClinicalContextSection({ entityType, entityId, name, dru
         setLoaded(true)
       })
     return () => { active = false }
-  }, [entityType, entityId])
+  }, [entityType, entityId, supabase])
 
   async function run() {
     setRunning(true)
