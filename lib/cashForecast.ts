@@ -140,6 +140,14 @@ export function chartWindowStart(today: string): string {
   return today.slice(0, 4) + "-01-01"
 }
 
+/**
+ * Reported balances that survive the window regardless of date.
+ *
+ * Two, because two is what it takes to draw a line: one point is a dot, and the
+ * chart renders nothing below this count. See the guard in burnTimeline.
+ */
+export const MIN_REPORTED_POINTS = 2
+
 /** How far forward the near-term runway view reaches. */
 export const NEAR_TERM_MONTHS = 24
 
@@ -177,19 +185,29 @@ export function burnTimeline(
   until?: string,
 ): BurnPoint[] {
   const withFigures = actuals.filter((r) => r.cash_on_hand != null || r.monthly_burn != null)
-  // ⚠️ THE NEWEST REPORTED BALANCE ALWAYS SURVIVES THE WINDOW. Stimdia is why:
-  // its only balance is 12/31/2025, so a straight "current year" cut left a
-  // chart that was 100% projection with nothing solid to anchor it — and a
-  // company whose last balance is stale is precisely the one where seeing how
-  // old that anchor is matters most. The window trims history, never the anchor.
-  const anchor = withFigures.reduce<string | null>(
-    (a, r) => (r.cash_on_hand != null && (a == null || r.as_of > a) ? r.as_of : a), null)
+  // ⚠️ THE WINDOW MUST NEVER STARVE THE CHART. It trims old history; it does not
+  // get to decide there is nothing to draw. Two failures, both real:
+  //   Stimdia — its only balance is 12/31/2025, so a straight "current year" cut
+  //     left a chart that was 100% projection with nothing to anchor it, and a
+  //     company whose last balance is stale is exactly the one where seeing how
+  //     old that anchor is matters most.
+  //   Aurenar — two balances, Dec-2025 and Jun-2026. Keeping only the newest
+  //     left ONE point, and a chart needs two to be a chart, so the whole thing
+  //     silently disappeared. Isaiah noticed it was missing; the code did not.
+  // So the newest MIN_REPORTED_POINTS balances always survive, whatever their date.
+  const keep = new Set(
+    withFigures
+      .filter((r) => r.cash_on_hand != null)
+      .map((r) => r.as_of)
+      .sort()
+      .slice(-MIN_REPORTED_POINTS),
+  )
 
   const reported: BurnPoint[] = withFigures
     // Only the REPORTED side is windowed. A forecast that starts before the
     // window would leave the curve beginning mid-air, and every projected point
     // is by definition about what happens next.
-    .filter((r) => since == null || r.as_of >= since || r.as_of === anchor)
+    .filter((r) => since == null || r.as_of >= since || keep.has(r.as_of))
     .map((r) => ({
       date: r.as_of,
       cash: r.cash_on_hand == null ? null : Number(r.cash_on_hand),

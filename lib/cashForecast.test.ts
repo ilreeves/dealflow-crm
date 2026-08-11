@@ -13,6 +13,7 @@ import {
   forecastContradictsFlatBurn,
   chartWindowStart,
   nearTermEnd,
+  MIN_REPORTED_POINTS,
   FORECAST_MATCH_DAYS,
 } from "./cashForecast"
 
@@ -171,20 +172,32 @@ describe("reported history and projection on one timeline", () => {
     expect(burnTimeline([], FRANCIS)).toHaveLength(FRANCIS.length)
   })
 
-  it("windows out previous years but NEVER the newest balance", () => {
+  it("windows out previous years but never the newest balances", () => {
     // Stimdia is the case: its only reported balance is 12/31/2025, so a plain
     // "current year" cut left a chart that was entirely projection with nothing
     // to anchor it. A stale anchor is the one you most need to see.
     const old = [
+      a({ as_of: "2023-06-30", cash_on_hand: 12_000_000 }),
       a({ as_of: "2024-06-30", cash_on_hand: 9_000_000 }),
       a({ as_of: "2025-12-31", cash_on_hand: 1_554_080 }),
     ]
     const t = burnTimeline(old, FRANCIS, "2026-01-01")
     const rep = t.filter((p) => !p.projected)
-    expect(rep).toHaveLength(1)
-    expect(rep[0].date).toBe("2025-12-31")   // anchor kept
-    // ...and the genuinely old one is gone.
-    expect(t.some((p) => p.date === "2024-06-30")).toBe(false)
+    expect(rep.map((p) => p.date)).toEqual(["2024-06-30", "2025-12-31"])
+    // Older than the two the chart needs, and out of window — dropped.
+    expect(t.some((p) => p.date === "2023-06-30")).toBe(false)
+  })
+
+  it("keeps two balances through the window, so a sparse chart still draws", () => {
+    // Aurenar: balances at 12/31/2025 and 6/30/2026 only. Keeping just the
+    // newest left one point, and a chart needs two — the whole chart vanished.
+    const aurenar = [
+      a({ as_of: "2025-12-31", cash_on_hand: 2_565_172 }),
+      a({ as_of: "2026-06-30", cash_on_hand: 5_734_827 }),
+    ]
+    const rep = burnTimeline(aurenar, [], "2026-01-01").filter((p) => !p.projected)
+    expect(rep).toHaveLength(MIN_REPORTED_POINTS)
+    expect(rep.map((p) => p.date)).toEqual(["2025-12-31", "2026-06-30"])
   })
 
   it("drops prior-year history when a current-year balance exists", () => {
@@ -192,8 +205,12 @@ describe("reported history and projection on one timeline", () => {
       a({ as_of: "2025-12-31", cash_on_hand: 17_135_463 }),
       a({ as_of: "2026-03-31", cash_on_hand: 11_877_609 }),
     ]
-    const dates = burnTimeline(mixed, FRANCIS, "2026-01-01").filter((p) => !p.projected).map((p) => p.date)
-    expect(dates).toEqual(["2026-03-31"])
+    // Both survive here only because MIN_REPORTED_POINTS is 2; a third, older
+    // balance would be the one dropped.
+    const older = [a({ as_of: "2024-06-30", cash_on_hand: 30_000_000 }), ...mixed]
+    const dates = burnTimeline(older, FRANCIS, "2026-01-01").filter((p) => !p.projected).map((p) => p.date)
+    expect(dates).toEqual(["2025-12-31", "2026-03-31"])
+    expect(dates).not.toContain("2024-06-30")
   })
 
   it("window start is 1 January of the given year", () => {
