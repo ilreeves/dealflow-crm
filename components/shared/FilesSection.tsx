@@ -2,59 +2,96 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Upload, FileText, Download, Trash2, File, Loader2, Eye } from 'lucide-react'
-import { DealFile } from '@/lib/types'
+import { StoredFile, CompanyDeck } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { formatBytes, formatDate } from '@/lib/utils'
-import PdfViewer from './PdfViewer'
+import PdfViewer from '@/components/deals/PdfViewer'
 
+// Documents for a deal or a portfolio company, in one component because the two
+// are the same list with a different foreign key.
+//
+// ⚠️ NON-CON DECKS ARE LISTED HERE BUT NOT STORED HERE. Isaiah asked for an
+// uploaded deck to show up in the company's files, and the obvious way — write
+// a files row pointing at the deck's storage object — is the wrong one: a deck
+// carries a public share token an outside investor may be holding, so a second
+// row would create a second delete path and let this list silently 404 a live
+// link. Decks are read from company_decks instead, shown with a badge, and
+// deliberately have no delete button. One file, one owner, one delete.
 interface Props {
-  dealId: string
+  entityType: 'deal' | 'portfolio'
+  entityId: string
 }
+
+/** Which table holds the rows, and under which column, for each side. */
+const TABLE = { deal: 'deal_files', portfolio: 'portfolio_files' } as const
+const FK = { deal: 'deal_id', portfolio: 'company_id' } as const
 
 function fileIcon(mimeType: string | null) {
   return <File className="w-4 h-4 text-slate-400" />
 }
 
-function isPdf(f: DealFile) {
+function isPdf(f: StoredFile) {
   return f.mime_type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')
 }
 
 // Timestamped so two uploads of the same filename never collide. Lives at module
 // scope: a clock read inside the component body reads as an impure render to the
 // React compiler, even though this only ever runs from an upload handler.
-function storagePath(dealId: string, fileName: string) {
-  return `${dealId}/${Date.now()}-${fileName}`
+//
+// The portfolio prefix matches the one DecksSection already uses, so a company's
+// objects stay together under one path whichever feature put them there.
+function storagePath(entityType: Props['entityType'], entityId: string, fileName: string) {
+  const prefix = entityType === 'deal' ? entityId : `portfolio/${entityId}`
+  return `${prefix}/${Date.now()}-${fileName}`
 }
 
-export default function FileManager({ dealId }: Props) {
-  const [files, setFiles] = useState<DealFile[]>([])
+export default function FilesSection({ entityType, entityId }: Props) {
+  const [files, setFiles] = useState<StoredFile[]>([])
+  const [decks, setDecks] = useState<StoredFile[]>([])
   const [uploading, setUploading] = useState(false)
-  const [loadedDealId, setLoadedDealId] = useState<string | null>(null)
+  const [loadedId, setLoadedId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [isDragging, setIsDragging] = useState(false)
-  const [viewing, setViewing] = useState<DealFile | null>(null)
+  const [viewing, setViewing] = useState<StoredFile | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
   // Derived, not stored — a setLoading(true) inside the effect would force an extra
   // render pass on every mount. Switching deals reads as loading until its rows land.
-  const loading = loadedDealId !== dealId
+  const loading = loadedId !== entityId
 
   useEffect(() => {
     let cancelled = false
-    supabase
-      .from('deal_files')
-      .select('*')
-      .eq('deal_id', dealId)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (cancelled) return
-        setFiles((data as DealFile[]) ?? [])
-        setLoadedDealId(dealId)
-      })
+    Promise.all([
+      supabase.from(TABLE[entityType]).select('*').eq(FK[entityType], entityId)
+        .order('created_at', { ascending: false }),
+      // Decks are the same entity's documents, just owned by another table.
+      supabase.from('company_decks').select('*')
+        .eq('entity_type', entityType).eq('entity_id', entityId)
+        .order('sort_order', { ascending: true }),
+    ]).then(([f, d]) => {
+      if (cancelled) return
+      setFiles((f.data as StoredFile[]) ?? [])
+      setDecks(
+        ((d.data as CompanyDeck[]) ?? []).map((deck) => ({
+          id: `deck-${deck.id}`,
+          name: deck.file_name,
+          storage_path: deck.storage_path,
+          size: null,               // company_decks doesn't record it
+          mime_type: null,
+          created_at: deck.created_at,
+          deckLabel: deck.label,
+        })),
+      )
+      setLoadedId(entityId)
+    })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dealId])
+  }, [entityType, entityId])
+
+  // Decks first — they're the document someone is most often looking for, and
+  // the one that gets shared outside the firm.
+  const shown = [...decks, ...files]
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     await uploadFiles(Array.from(e.target.files ?? []))
@@ -68,7 +105,7 @@ export default function FileManager({ dealId }: Props) {
     setError('')
 
     for (const file of selectedFiles) {
-      const path = storagePath(dealId, file.name)
+      const path = storagePath(entityType, entityId, file.name)
       const { error: uploadError } = await supabase.storage
         .from('deal-files')
         .upload(path, file)
@@ -79,9 +116,9 @@ export default function FileManager({ dealId }: Props) {
       }
 
       const { data: fileRecord, error: insertError } = await supabase
-        .from('deal_files')
+        .from(TABLE[entityType])
         .insert({
-          deal_id: dealId,
+          [FK[entityType]]: entityId,
           name: file.name,
           storage_path: path,
           size: file.size,
@@ -97,13 +134,13 @@ export default function FileManager({ dealId }: Props) {
         continue
       }
 
-      setFiles((prev) => [fileRecord as DealFile, ...prev])
+      setFiles((prev) => [fileRecord as StoredFile, ...prev])
     }
 
     setUploading(false)
   }
 
-  async function handleDownload(file: DealFile) {
+  async function handleDownload(file: StoredFile) {
     const { data } = await supabase.storage
       .from('deal-files')
       .createSignedUrl(file.storage_path, 60)
@@ -116,11 +153,14 @@ export default function FileManager({ dealId }: Props) {
     }
   }
 
-  async function handleDelete(file: DealFile) {
+  async function handleDelete(file: StoredFile) {
     setError('')
+    // Guarded as well as hidden in the UI: a deck's object is owned by
+    // company_decks and removing it here would break its public share link.
+    if (file.deckLabel) return
     // Delete the row first; only remove the file once the row is gone, so a
     // failed delete never leaves a live record pointing at a missing file.
-    const { error: delError } = await supabase.from('deal_files').delete().eq('id', file.id)
+    const { error: delError } = await supabase.from(TABLE[entityType]).delete().eq('id', file.id)
     if (delError) { setError(`Failed to delete ${file.name}: ${delError.message}`); return }
     await supabase.storage.from('deal-files').remove([file.storage_path])
     setFiles((prev) => prev.filter((f) => f.id !== file.id))
@@ -172,11 +212,11 @@ export default function FileManager({ dealId }: Props) {
         <div className="flex items-center justify-center py-8 text-slate-400">
           <Loader2 className="w-5 h-5 animate-spin" />
         </div>
-      ) : files.length === 0 ? (
+      ) : shown.length === 0 ? (
         <p className="text-center text-sm text-slate-400 py-6">No files uploaded yet</p>
       ) : (
         <div className="space-y-1.5">
-          {files.map((file) => {
+          {shown.map((file) => {
             const pdf = isPdf(file)
             return (
             <div
@@ -197,7 +237,12 @@ export default function FileManager({ dealId }: Props) {
                   <p className="text-sm font-medium text-slate-700 truncate">{file.name}</p>
                 )}
                 <p className="text-xs text-slate-400">
-                  {file.size ? formatBytes(file.size) : ''}{file.size && ' · '}
+                  {/* Says where a deck is managed, so its missing delete button
+                      reads as deliberate rather than broken. */}
+                  {file.deckLabel && (
+                    <span className="text-slate-500">Non-con deck · {file.deckLabel} · manage in Overview · </span>
+                  )}
+                  {file.size ? formatBytes(file.size) : ''}{file.size ? ' · ' : ''}
                   {formatDate(file.created_at)}
                 </p>
               </div>
@@ -218,13 +263,15 @@ export default function FileManager({ dealId }: Props) {
                 >
                   <Download className="w-3.5 h-3.5" />
                 </button>
-                <button
-                  onClick={() => handleDelete(file)}
-                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                  title="Delete"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {!file.deckLabel && (
+                  <button
+                    onClick={() => handleDelete(file)}
+                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                    title="Delete"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
             )

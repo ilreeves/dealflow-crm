@@ -99,6 +99,38 @@ export interface DealFile {
   created_at: string
 }
 
+/** A portfolio company's documents. Mirrors DealFile; see migration_portfolio_files.sql. */
+export interface PortfolioFile {
+  id: string
+  company_id: string
+  name: string
+  storage_path: string
+  size: number | null
+  mime_type: string | null
+  uploaded_by: string | null
+  created_at: string
+}
+
+/**
+ * The shape the files UI actually renders — a deal file, a portfolio file, or a
+ * non-con deck listed alongside them.
+ *
+ * `deck` entries are read from company_decks and are NOT rows in a files table.
+ * They carry no delete affordance here: a deck holds a public share token an
+ * outside investor may be using, and a second delete path would let the files
+ * list silently 404 a live link.
+ */
+export interface StoredFile {
+  id: string
+  name: string
+  storage_path: string
+  size: number | null
+  mime_type: string | null
+  created_at: string
+  /** Set when this row came from company_decks — carries the deck's label. */
+  deckLabel?: string
+}
+
 export interface DealNote {
   id: string
   deal_id: string

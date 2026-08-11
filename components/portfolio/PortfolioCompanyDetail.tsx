@@ -14,11 +14,12 @@ import RunwayTab from './RunwayTab'
 import { isActive } from '@/lib/runway'
 import { useLatestRound } from '@/lib/useLatestRound'
 import InvestorIntrosTab from '@/components/shared/InvestorIntrosTab'
+import FilesSection from '@/components/shared/FilesSection'
 import DecksSection from '@/components/shared/DecksSection'
 import ClinicalContextSection from '@/components/shared/ClinicalContextSection'
 import KnownCompetitors from '@/components/shared/KnownCompetitors'
 
-type Tab = 'overview' | 'fundraising' | 'rounds' | 'revenue' | 'runway' | 'intros' | 'catalysts'
+type Tab = 'overview' | 'fundraising' | 'rounds' | 'revenue' | 'runway' | 'intros' | 'catalysts' | 'files'
 
 interface Props {
   company: PortfolioCompany
@@ -69,6 +70,11 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
     ...(showRunway ? [{ key: 'runway' as Tab, label: 'Runway' }] : []),
     { key: 'intros', label: 'Investor Intros' },
     { key: 'catalysts', label: 'Catalysts' },
+    // Portfolio companies had no document storage at all until August 2026,
+    // which meant a company lost the ability to hold a file at exactly the
+    // point it starts producing the most of them. Unconditional: unlike Revenue
+    // and Runway there is no roster or status that makes documents not apply.
+    { key: 'files', label: 'Files' },
   ]
 
   return (
@@ -123,6 +129,7 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
             {tab === 'runway' && <RunwayTab companyId={company.id} />}
             {tab === 'intros' && <InvestorIntrosTab table="portfolio_investor_intros" fkColumn="company_id" entityId={company.id} />}
             {tab === 'catalysts' && <CatalystsTab companyName={company.name} />}
+            {tab === 'files' && <FilesSection entityType="portfolio" entityId={company.id} />}
           </div>
         </div>
       </div>

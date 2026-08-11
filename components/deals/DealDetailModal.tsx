@@ -10,7 +10,7 @@ import { logActivity } from '@/lib/activity'
 import { addDealToPortfolio } from '@/lib/portfolio'
 import PassReasonModal from './PassReasonModal'
 import InvestModal from './InvestModal'
-import FileManager from './FileManager'
+import FilesSection from '@/components/shared/FilesSection'
 import NotesList from './NotesList'
 import MeetingsList from './MeetingsList'
 import InvestorIntrosTab from '@/components/shared/InvestorIntrosTab'
@@ -247,7 +247,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
             {tab === 'fundraising' && <DealFundraisingTab dealId={deal.id} />}
             {tab === 'meetings' && <MeetingsList dealId={deal.id} />}
             {tab === 'intros' && <InvestorIntrosTab table="deal_investor_intros" fkColumn="deal_id" entityId={deal.id} />}
-            {tab === 'files' && <FileManager dealId={deal.id} />}
+            {tab === 'files' && <FilesSection entityType="deal" entityId={deal.id} />}
             {tab === 'notes' && <NotesList dealId={deal.id} />}
           </div>
         </div>

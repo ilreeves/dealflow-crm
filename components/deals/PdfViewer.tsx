@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState, useCallback } from "react"
 import { X, ChevronLeft, ChevronRight, Download, ExternalLink, Maximize2, Loader2 } from "lucide-react"
-import { DealFile } from "@/lib/types"
+import { StoredFile } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
 
 interface Props {
-  file: DealFile
+  file: StoredFile
   onClose: () => void
 }
 
