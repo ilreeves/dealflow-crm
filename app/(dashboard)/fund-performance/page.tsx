@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
+import { rowsOrThrow } from "@/lib/supabase/unwrap"
+import { latestValuation, positionValue, LatestValuation } from "@/lib/portfolio"
 import { PortfolioFundraiseRound, PortfolioPosition } from "@/lib/types"
 import FundPerformanceView, { FundRow, TopPosition, RiskFlag, CompanyInFund } from "@/components/fund/FundPerformanceView"
 import ValuationHistory, { FundSeries } from "@/components/fund/ValuationHistory"
@@ -10,7 +12,7 @@ type CompRow = { id: string; name: string }
 
 export default async function FundPerformancePage() {
   const supabase = await createClient()
-  const [{ data: companies }, { data: rounds }, { data: positions }, { data: funds }, { data: valMarks }, { data: snapshots }] = await Promise.all([
+  const [companiesRes, roundsRes, positionsRes, fundsRes, valMarksRes, snapshotsRes] = await Promise.all([
     supabase.from("portfolio_companies").select("id,name"),
     supabase.from("portfolio_fundraise_rounds").select("id,company_id,round_name,date,post_money,security_type,status,terms"),
     supabase.from("portfolio_positions").select("*"),
@@ -19,10 +21,10 @@ export default async function FundPerformancePage() {
     supabase.from("fund_snapshots").select("as_of_date,fund,invested,value").order("as_of_date"),
   ])
 
-  const comps = (companies as CompRow[]) ?? []
-  const rs = (rounds as PortfolioFundraiseRound[]) ?? []
-  const ps = (positions as PortfolioPosition[]) ?? []
-  const fundRows = (funds as { value: string; list_key: string }[]) ?? []
+  const comps = rowsOrThrow(companiesRes, "portfolio companies") as CompRow[]
+  const rs = rowsOrThrow(roundsRes, "fundraise rounds") as PortfolioFundraiseRound[]
+  const ps = rowsOrThrow(positionsRes, "positions") as PortfolioPosition[]
+  const fundRows = rowsOrThrow(fundsRes, "fund lists") as { value: string; list_key: string }[]
   const fundOrder = fundRows.filter((f) => f.list_key === "fund").map((f) => f.value)
   // Vehicles to roll up under "SPVs & Sidecars". Managed in Settings → SPV /
   // Sidecar Vehicles, so a new commingled fund needs no code change.
@@ -31,26 +33,30 @@ export default async function FundPerformancePage() {
   const nameById: Record<string, string> = {}
   for (const c of comps) nameById[c.id] = c.name
 
-  // effective current valuation per company = most recent by date among round post-moneys and manual marks
-  const marks = (valMarks as { company_id: string; as_of_date: string | null; valuation: number | null }[]) ?? []
-  const latestVal: Record<string, { value: number; date: string }> = {}
+  // Valuation resolution lives in lib/portfolio.ts — the SAME functions the
+  // company Ownership tab uses, so the two surfaces can't disagree. Rounds and
+  // marks are bucketed by company first (the old per-company scan over every
+  // round and mark was quadratic).
+  const marks = rowsOrThrow(valMarksRes, "valuation marks") as { company_id: string; as_of_date: string | null; valuation: number | null }[]
+  const roundsByCompany = new Map<string, PortfolioFundraiseRound[]>()
+  for (const r of rs) {
+    const list = roundsByCompany.get(r.company_id) ?? []
+    list.push(r)
+    roundsByCompany.set(r.company_id, list)
+  }
+  const marksByCompany = new Map<string, typeof marks>()
+  for (const m of marks) {
+    const list = marksByCompany.get(m.company_id) ?? []
+    list.push(m)
+    marksByCompany.set(m.company_id, list)
+  }
+  const latestVal: Record<string, LatestValuation> = {}
   for (const c of comps) {
-    const cand: { value: number; date: string }[] = []
-    for (const r of rs) if (r.company_id === c.id && r.post_money != null) cand.push({ value: Number(r.post_money), date: r.date ?? "" })
-    for (const m of marks) if (m.company_id === c.id && m.valuation != null) cand.push({ value: Number(m.valuation), date: m.as_of_date ?? "" })
-    cand.sort((a, b) => (b.date || "").localeCompare(a.date || ""))
-    if (cand.length) latestVal[c.id] = cand[0]
+    const lv = latestValuation(roundsByCompany.get(c.id) ?? [], marksByCompany.get(c.id) ?? [])
+    if (lv) latestVal[c.id] = lv
   }
 
-  const posValue = (p: PortfolioPosition): number | null => {
-    const cands: { v: number; d: string }[] = []
-    if (p.fair_value != null) cands.push({ v: Number(p.fair_value), d: p.fair_value_date || "" })
-    const lv = latestVal[p.company_id]
-    if (lv && p.ownership_pct != null) cands.push({ v: (Number(p.ownership_pct) / 100) * lv.value, d: lv.date || "" })
-    if (!cands.length) return null
-    cands.sort((a, b) => (b.d || "").localeCompare(a.d || ""))
-    return cands[0].v
-  }
+  const posValue = (p: PortfolioPosition): number | null => positionValue(p, latestVal[p.company_id] ?? null)
 
   // ── by fund → company ──
   const fundMap = new Map<string, Map<string, CompanyInFund>>()
@@ -157,7 +163,7 @@ export default async function FundPerformancePage() {
 
   // ── semi-annual valuation history (from the audited fund valuation files) ──
   type Snap = { as_of_date: string; fund: string; invested: number | null; value: number | null }
-  const snapRows = (snapshots as Snap[]) ?? []
+  const snapRows = rowsOrThrow(snapshotsRes, "fund snapshots") as Snap[]
   const snapMap = new Map<string, Map<string, { invested: number; value: number }>>()
   for (const s of snapRows) {
     if (!snapMap.has(s.fund)) snapMap.set(s.fund, new Map())

@@ -3,7 +3,10 @@
 import { useState, useEffect } from 'react'
 import { X, Pencil, Trash2, Plus, Globe, Mail, Building2, DollarSign, Loader2, Link, MapPin, Tag } from 'lucide-react'
 import { PortfolioCompany, Catalyst } from '@/lib/types'
+import { PERIODS, STATUS_COLORS, isClosed, periodEnd } from '@/lib/catalysts'
+import { buildDeckEmail } from '@/lib/deck'
 import { logCatalystActivity } from '@/lib/activity'
+import { gatherEntityCleanup, finishEntityCleanup } from '@/lib/cleanup'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
 import PortfolioCompanyForm from './PortfolioCompanyForm'
@@ -42,12 +45,17 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
   async function handleDelete() {
     setDeleting(true)
     setDeleteError('')
+    // Snapshot storage paths BEFORE the delete — the cascade destroys the rows
+    // that point at them.
+    const paths = await gatherEntityCleanup(supabase, 'portfolio', company.id)
     const { error } = await supabase.from('portfolio_companies').delete().eq('id', company.id)
     if (error) {
       setDeleting(false)
       setDeleteError(`Couldn't delete ${company.name}: ${error.message}`)
       return
     }
+    // Kills any public share links and removes the orphaned storage objects.
+    await finishEntityCleanup(supabase, 'portfolio', company.id, paths)
     onDeleted(company.id)
     onClose()
   }
@@ -188,6 +196,7 @@ function OverviewTab({ company }: { company: PortfolioCompany }) {
     { icon: Building2, label: 'Sector', value: company.sector },
     { icon: Tag, label: 'Series', value: company.series },
     { icon: Tag, label: 'Clinical Stage', value: company.clinical_stage },
+    { icon: Tag, label: 'Indication', value: company.indication },
     { icon: MapPin, label: 'Location', value: [company.city, company.state, company.country].filter(Boolean).join(', ') || null },
     { icon: DollarSign, label: 'Current Valuation', value: latest?.valuation ?? company.current_valuation, hint: latest?.valuation ? latest.roundName : undefined },
     { icon: DollarSign, label: 'Current Fundraising Need', value: latest?.fundraise ?? company.current_fundraise, hint: latest?.fundraise ? latest.roundName : undefined },
@@ -200,31 +209,16 @@ function OverviewTab({ company }: { company: PortfolioCompany }) {
         entityType="portfolio"
         entityId={company.id}
         entityName={company.name}
-        buildEmail={(deckUrl, label) => {
-          const named = label && label.toLowerCase() !== 'deck'
-          const details = [
-            company.sector ? `Sector: ${company.sector}` : null,
-            company.series ? `Series: ${company.series}` : null,
-            company.clinical_stage ? `Clinical stage: ${company.clinical_stage}` : null,
-            // Prefer the latest fundraising round; fall back to the free-text fields.
-            (latest?.raiseSummary ?? company.current_fundraise) ? `Current raise: ${latest?.raiseSummary ?? company.current_fundraise}` : null,
-            (latest?.valuation ?? company.current_valuation) ? `Valuation: ${latest?.valuation ?? company.current_valuation}` : null,
-            company.website ? `Website: ${company.website}` : null,
-          ].filter(Boolean) as string[]
-          const body = [
-            'Hi,',
-            '',
-            `I wanted to share the ${named ? label + ' ' : ''}non-confidential deck for ${company.name}.`,
-            '',
-            ...details,
-            '',
-            `View the deck here: ${deckUrl}`,
-            '(link active for 4 weeks)',
-            '',
-            'Best,',
-          ].filter((line, i, arr) => !(line === '' && arr[i - 1] === '')).join('\n')
-          return { subject: named ? `${company.name} — ${label} deck` : `${company.name} — non-confidential overview`, body }
-        }}
+        buildEmail={(deckUrl, label) => buildDeckEmail({
+          name: company.name,
+          sector: company.sector,
+          series: company.series,
+          clinicalStage: company.clinical_stage,
+          // Prefer the latest fundraising round; fall back to the free-text fields.
+          currentRaise: latest?.raiseSummary ?? company.current_fundraise,
+          valuation: latest?.valuation ?? company.current_valuation,
+          website: company.website,
+        }, deckUrl, label)}
       />
       <ClinicalContextSection entityType="portfolio" entityId={company.id} name={company.name} drugNames={company.drug_names} ctSponsorName={company.ct_sponsor_name} />
       <KnownCompetitors entityType="portfolio" entityId={company.id} />
@@ -265,23 +259,6 @@ function OverviewTab({ company }: { company: PortfolioCompany }) {
 }
 
 // ─── Catalysts Tab ────────────────────────────────────────────────────────────
-const CATALYST_PERIODS = ['1Q', '2Q', '3Q', '4Q', '1H', '2H', 'FY'] as const
-
-const CATALYST_PERIOD_END: Record<string, string> = {
-  '1Q': '03-31', '2Q': '06-30', '3Q': '09-30', '4Q': '12-31',
-  '1H': '06-30', '2H': '12-31', 'FY': '12-31',
-}
-
-const CATALYST_STATUS_COLORS: Record<string, string> = {
-  'Pending':    'bg-yellow-100 text-yellow-800',
-  'On Track':   'bg-emerald-100 text-emerald-700',
-  'Done':       'bg-green-100 text-green-700',
-  'Delayed':    'bg-orange-100 text-orange-700',
-  'On Hold':    'bg-slate-200 text-slate-600',
-  'Failed':     'bg-red-100 text-red-700',
-  'Terminated': 'bg-red-100 text-red-700',
-}
-
 function CatalystsTab({ companyName }: { companyName: string }) {
   const [catalysts, setCatalysts] = useState<Catalyst[]>([])
   const [loading, setLoading] = useState(true)
@@ -293,9 +270,15 @@ function CatalystsTab({ companyName }: { companyName: string }) {
   const supabase = createClient()
 
   useEffect(() => {
+    let active = true
     supabase.from('catalysts').select('*').eq('company_name', companyName)
       .order('catalyst_date', { ascending: true })
-      .then(({ data }) => { setCatalysts((data as Catalyst[]) ?? []); setLoading(false) })
+      .then(({ data }) => {
+        if (!active) return // tab switched away mid-flight
+        setCatalysts((data as Catalyst[]) ?? [])
+        setLoading(false)
+      })
+    return () => { active = false }
   }, [companyName, supabase])
 
   async function handleAdd() {
@@ -304,7 +287,7 @@ function CatalystsTab({ companyName }: { companyName: string }) {
     if (!year || year < 2000 || year > 2100) return
     setSaving(true)
     setError('')
-    const dateEnd = `${year}-${CATALYST_PERIOD_END[form.period]}`
+    const dateEnd = periodEnd(form.period, year)
     const { data, error: insErr } = await supabase.from('catalysts').insert({
       company_name: companyName,
       title: form.title.trim(),
@@ -365,7 +348,7 @@ function CatalystsTab({ companyName }: { companyName: string }) {
                 onChange={(e) => setForm((p) => ({ ...p, period: e.target.value }))}
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
               >
-                {CATALYST_PERIODS.map((p) => (
+                {PERIODS.map((p) => (
                   <option key={p} value={p}>{p === 'FY' ? 'Full Year' : p}</option>
                 ))}
               </select>
@@ -418,7 +401,7 @@ function CatalystsTab({ companyName }: { companyName: string }) {
             const isPast = cat.catalyst_date < today
             return (
               <div key={cat.id} className={`border rounded-xl px-4 py-3 group ${
-                isPast && ['Done', 'Failed', 'Terminated'].includes(status) ? 'border-slate-100 bg-slate-50 opacity-70' : 'border-slate-200 bg-white'
+                isPast && isClosed(status) ? 'border-slate-100 bg-slate-50 opacity-70' : 'border-slate-200 bg-white'
               }`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
@@ -429,7 +412,7 @@ function CatalystsTab({ companyName }: { companyName: string }) {
                           : cat.period ?? cat.catalyst_date}
                       </span>
                       <span className="text-sm font-medium text-slate-800">{cat.title}</span>
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${CATALYST_STATUS_COLORS[status] ?? 'bg-slate-100 text-slate-600'}`}>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[status] ?? 'bg-slate-100 text-slate-600'}`}>
                         {status}
                       </span>
                     </div>

@@ -9,11 +9,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
+  // maybeSingle: a user without a profile row is a real (if odd) state — log
+  // it rather than treating it like the .single() error it isn't.
+  const { data: profile, error: profileErr } = await supabase
     .from('profiles')
     .select('full_name')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
+  if (profileErr) console.error('profile load failed:', profileErr.message)
+  else if (!profile) console.error(`no profiles row for user ${user.id}`)
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">

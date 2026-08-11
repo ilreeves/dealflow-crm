@@ -299,7 +299,7 @@ export const REVENUE_PERIODS = ['Q1', 'Q2', 'Q3', 'Q4', 'H1', 'H2', 'FY'] as con
 export type RevenuePeriod = typeof REVENUE_PERIODS[number]
 
 // Last day of each period, used to derive a sortable period_end from
-// period_type + fiscal_year. Mirrors CATALYST_PERIOD_END.
+// period_type + fiscal_year. Mirrors periodEnd() in lib/catalysts.ts.
 export const REVENUE_PERIOD_END: Record<RevenuePeriod, string> = {
   'Q1': '03-31', 'Q2': '06-30', 'Q3': '09-30', 'Q4': '12-31',
   'H1': '06-30', 'H2': '12-31', 'FY': '12-31',

@@ -1,5 +1,27 @@
 # Code review — 2026-08-11
 
+> **Backlog sweep, same day (PM):** nearly everything in the Backlog section
+> below was addressed in a follow-up change set. Done: deck-route rate
+> limiting + view dedupe + 10-min URLs + parent check (1), share-link/storage
+> cleanup on delete and catalyst relink on rename (2, 3), every unchecked
+> mutation (4), error boundaries on all dashboard pages (5), pipeline column
+> narrowing + modal refetch (6), gantt drag via transform (9), shared
+> useActorName (10), most of (11), note-accrual validation per the 10% simple
+> Actual/365 convention (12), Check Size input (13), indication display (14),
+> search-while-on-page (15), shared valuation resolution in lib/portfolio (16),
+> forecastAccuracy kept but fixed (scenario filter + defensive sort) rather
+> than deleted (17), all of (18), and a second migration `migration_cleanup_2.sql`
+> for (19) + form submit wiring (20).
+>
+> **Deliberately NOT done, with reasons:** revenue/runway/analytics history
+> fetches stay unbounded (7, 8) — date-bounding risks making a company whose
+> latest report is older than the cutoff vanish, which the staleness surfacing
+> exists to prevent, and row counts are small; fund-performance does NOT adopt
+> analytics' legacy-exclusion set (16, second half) — excluding Legacy/Exited
+> positions would change reported AUM, a product decision; `useLatestRound`
+> still doesn't refetch after a round edit (11) — needs a small event bus,
+> not worth it yet; `deck_views` retention (19) left as a policy decision.
+
 Full review of the CRM (~18k lines) across four areas: business logic (`lib/`),
 components, app routes/auth, and the database layer. This file records what was
 **fixed** in the accompanying change set and what remains as a **backlog**,

@@ -4,27 +4,14 @@ import { useEffect, useState } from 'react'
 import { Users, Plus, Trash2, Loader2, ExternalLink, ChevronRight, ChevronDown, FlaskConical, BookOpen, RefreshCw } from 'lucide-react'
 import { CompanyCompetitor } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
+import { Trial, Pub, statusColor, prettyPhase } from '@/lib/enrichment'
 
 interface Props {
   entityType: 'deal' | 'portfolio'
   entityId: string
 }
 
-interface Trial { nctId: string; title: string; status: string; phases: string[]; conditions: string[]; sponsor: string }
-interface Pub { pmid: string; title: string; journal: string; year: string; firstAuthor: string; url: string }
 type Updates = { loading: boolean; loaded: boolean; error: string; trials: Trial[]; pubs: Pub[] }
-
-function statusColor(status: string): string {
-  const s = status.toUpperCase()
-  if (s.includes('RECRUIT') || s === 'ACTIVE_NOT_RECRUITING' || s === 'ENROLLING_BY_INVITATION') return 'bg-green-100 text-green-700'
-  if (s === 'COMPLETED') return 'bg-blue-100 text-blue-700'
-  if (s.includes('TERMINATED') || s.includes('WITHDRAWN') || s.includes('SUSPENDED')) return 'bg-red-100 text-red-700'
-  return 'bg-slate-100 text-slate-600'
-}
-
-function prettyPhase(phases: string[]): string {
-  return phases.length ? phases.map((p) => p.replace('PHASE', 'Phase ').replace('NA', 'N/A')).join('/') : ''
-}
 
 // Manually-curated competitors — complements the auto ClinicalTrials.gov
 // landscape by capturing ones the team knows (incl. stealth/preclinical).

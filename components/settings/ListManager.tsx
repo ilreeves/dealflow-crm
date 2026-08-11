@@ -11,6 +11,7 @@ export default function ListManager({ listKey, title, description }: { listKey: 
   const [loading, setLoading] = useState(true)
   const [newVal, setNewVal] = useState('')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
   const supabase = createClient()
 
   useEffect(() => {
@@ -23,24 +24,41 @@ export default function ListManager({ listKey, title, description }: { listKey: 
     const v = newVal.trim()
     if (!v || opts.some((o) => o.value.toLowerCase() === v.toLowerCase())) { setNewVal(''); return }
     setSaving(true)
+    setError('')
     const sort = opts.length ? Math.max(...opts.map((o) => o.sort_order)) + 1 : 0
-    const { data } = await supabase.from('list_options').insert({ list_key: listKey, value: v, sort_order: sort }).select().single()
-    if (data) setOpts((prev) => [...prev, data as Opt])
-    setNewVal(''); setSaving(false)
+    const { data, error: e } = await supabase.from('list_options').insert({ list_key: listKey, value: v, sort_order: sort }).select().single()
+    if (e) setError("Couldn't add option: " + e.message)
+    else if (data) { setOpts((prev) => [...prev, data as Opt]); setNewVal('') }
+    setSaving(false)
   }
 
   async function remove(id: string) {
-    setOpts((prev) => prev.filter((o) => o.id !== id))
-    await supabase.from('list_options').delete().eq('id', id)
+    const prev = opts
+    setOpts((p) => p.filter((o) => o.id !== id))
+    setError('')
+    const { error: e } = await supabase.from('list_options').delete().eq('id', id)
+    if (e) { setError("Couldn't delete option: " + e.message); setOpts(prev) }
   }
 
   async function move(idx: number, dir: -1 | 1) {
     const j = idx + dir
     if (j < 0 || j >= opts.length) return
+    const a = opts[idx], b = opts[j]
+    const prev = opts
+    // Swap the two rows' sort_order values instead of renumbering the whole list —
+    // two writes per click, and the local copies must carry the swapped values so
+    // a follow-up move works from the real DB state.
     const next = [...opts]
-    ;[next[idx], next[j]] = [next[j], next[idx]]
+    next[idx] = { ...b, sort_order: a.sort_order }
+    next[j] = { ...a, sort_order: b.sort_order }
     setOpts(next)
-    await Promise.all(next.map((o, i) => supabase.from('list_options').update({ sort_order: i }).eq('id', o.id)))
+    setError('')
+    const [r1, r2] = await Promise.all([
+      supabase.from('list_options').update({ sort_order: b.sort_order }).eq('id', a.id),
+      supabase.from('list_options').update({ sort_order: a.sort_order }).eq('id', b.id),
+    ])
+    const e = r1.error ?? r2.error
+    if (e) { setError("Couldn't reorder: " + e.message); setOpts(prev) }
   }
 
   return (
@@ -65,6 +83,7 @@ export default function ListManager({ listKey, title, description }: { listKey: 
           ))}
         </div>
       )}
+      {error && <p className="px-5 py-2 text-xs text-red-600 bg-red-50 border-t border-slate-100">{error}</p>}
       <div className="flex items-center gap-2 px-5 py-3 border-t border-slate-100 bg-slate-50">
         <input
           value={newVal}

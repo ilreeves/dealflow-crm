@@ -9,6 +9,8 @@ import { fmtMoney } from "@/lib/rounds"
 import { createClient } from "@/lib/supabase/client"
 import { useServerState } from "@/lib/useServerState"
 import PortfolioCompanyDetail from "@/components/portfolio/PortfolioCompanyDetail"
+import Tile from "@/components/shared/Tile"
+import Th from "@/components/shared/Th"
 
 const NAVY = "#023a51"  // growth + variance colours now come from varianceBandColor
 
@@ -441,24 +443,6 @@ export default function RevenueView({
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function Th({ children, right }: { children: React.ReactNode; right?: boolean }) {
-  return (
-    <th className={`${right ? "text-right" : "text-left"} px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide whitespace-nowrap`}>
-      {children}
-    </th>
-  )
-}
-
-function Tile({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className="text-xl font-semibold mt-0.5 tabular-nums" style={{ color: color ?? "#0f172a" }}>{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
     </div>
   )
 }

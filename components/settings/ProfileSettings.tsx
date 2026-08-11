@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Loader2, Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -11,6 +11,8 @@ export default function ProfileSettings() {
   const [name, setName] = useState('')
   const [savingName, setSavingName] = useState(false)
   const [nameSaved, setNameSaved] = useState(false)
+  const [nameError, setNameError] = useState('')
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [pw, setPw] = useState('')
   const [pw2, setPw2] = useState('')
   const [savingPw, setSavingPw] = useState(false)
@@ -27,11 +29,17 @@ export default function ProfileSettings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // The "Saved" flash resets on a timer that can outlive the component — clear it on unmount.
+  useEffect(() => () => { if (savedTimer.current) clearTimeout(savedTimer.current) }, [])
+
   async function saveName() {
-    setSavingName(true); setNameSaved(false)
-    await supabase.from('profiles').update({ full_name: name.trim() || null }).eq('id', userId)
-    setSavingName(false); setNameSaved(true)
-    setTimeout(() => setNameSaved(false), 2000)
+    setSavingName(true); setNameSaved(false); setNameError('')
+    const { error } = await supabase.from('profiles').update({ full_name: name.trim() || null }).eq('id', userId)
+    setSavingName(false)
+    if (error) { setNameError(error.message); return }
+    setNameSaved(true)
+    if (savedTimer.current) clearTimeout(savedTimer.current)
+    savedTimer.current = setTimeout(() => setNameSaved(false), 2000)
   }
 
   async function savePassword() {
@@ -62,6 +70,7 @@ export default function ProfileSettings() {
               {nameSaved ? 'Saved' : 'Save'}
             </button>
           </div>
+          {nameError && <p className="text-xs text-red-600 mt-1">{nameError}</p>}
         </div>
         <div className="pt-3 border-t border-slate-100">
           <label className="block text-xs font-medium text-slate-600 mb-1">Change password</label>

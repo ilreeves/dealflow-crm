@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Plus, Trash2, Loader2, CalendarDays, Pencil, LayoutList, BarChartHorizontal, Check, X, Bell, ChevronDown } from 'lucide-react'
 import { Catalyst } from '@/lib/types'
+import { PERIODS, STATUSES, STATUS_COLORS, CLOSED_STATUSES, periodEnd } from '@/lib/catalysts'
 import { createClient } from '@/lib/supabase/client'
 import CatalystGantt from './CatalystGantt'
 import CatalystEditModal from './CatalystEditModal'
@@ -23,33 +24,6 @@ function shiftDays(dateStr: string, days: number): string {
   const d = new Date(dateStr + 'T00:00:00Z')
   d.setUTCDate(d.getUTCDate() + days)
   return d.toISOString().slice(0, 10)
-}
-
-const PERIODS = ['1Q', '2Q', '3Q', '4Q', '1H', '2H', 'FY'] as const
-
-const STATUSES = ['Pending', 'On Track', 'Done', 'Delayed', 'On Hold', 'Failed', 'Terminated'] as const
-const STATUS_COLORS: Record<string, string> = {
-  'Pending':    'bg-yellow-100 text-yellow-800',
-  'On Track':   'bg-emerald-100 text-emerald-700',
-  'Done':       'bg-green-100 text-green-700',
-  'Delayed':    'bg-orange-100 text-orange-700',
-  'On Hold':    'bg-slate-200 text-slate-600',
-  'Failed':     'bg-red-100 text-red-700',
-  'Terminated': 'bg-red-100 text-red-700',
-}
-const CLOSED_STATUSES = ['Done', 'Failed', 'Terminated']
-
-// End date of each period, for sorting and past-detection
-function periodEndDate(period: string, year: number): string {
-  switch (period) {
-    case '1Q': return `${year}-03-31`
-    case '2Q': return `${year}-06-30`
-    case '3Q': return `${year}-09-30`
-    case '4Q': return `${year}-12-31`
-    case '1H': return `${year}-06-30`
-    case '2H': return `${year}-12-31`
-    default:   return `${year}-12-31`
-  }
 }
 
 function periodLabel(c: Catalyst): string {
@@ -73,12 +47,22 @@ export default function CatalystCalendar({ today, initialCatalysts, companyNames
   async function dismissReminder(c: Catalyst) {
     const sig = reminderSig(c)
     setDismissed((prev) => new Set(prev).add(sig))
-    await supabase.from('dismissed_reminders').upsert({ signature: sig }, { onConflict: 'signature', ignoreDuplicates: true })
+    const { error: e } = await supabase.from('dismissed_reminders').upsert({ signature: sig }, { onConflict: 'signature', ignoreDuplicates: true })
+    if (e) {
+      // Revert — otherwise the reminder vanishes locally but stays live for everyone else.
+      setDismissed((prev) => { const n = new Set(prev); n.delete(sig); return n })
+      setActionError(`Couldn't dismiss reminder: ${e.message}`)
+    }
   }
   async function clearAllReminders(items: Catalyst[]) {
     const sigs = items.map(reminderSig)
     setDismissed((prev) => { const n = new Set(prev); sigs.forEach((s) => n.add(s)); return n })
-    if (sigs.length) await supabase.from('dismissed_reminders').upsert(sigs.map((s) => ({ signature: s })), { onConflict: 'signature', ignoreDuplicates: true })
+    if (!sigs.length) return
+    const { error: e } = await supabase.from('dismissed_reminders').upsert(sigs.map((s) => ({ signature: s })), { onConflict: 'signature', ignoreDuplicates: true })
+    if (e) {
+      setDismissed((prev) => { const n = new Set(prev); sigs.forEach((s) => n.delete(s)); return n })
+      setActionError(`Couldn't clear reminders: ${e.message}`)
+    }
   }
   const [showForm, setShowForm] = useState(false)
   const currentYear = new Date().getFullYear()
@@ -87,6 +71,9 @@ export default function CatalystCalendar({ today, initialCatalysts, companyNames
   const [view, setView] = useState<'list' | 'gantt'>('gantt')
   const [editingNote, setEditingNote] = useState<{ id: string; text: string } | null>(null)
   const [error, setError] = useState('')
+  // Failed writes from row actions (status, notes, delete, gantt drags) — kept
+  // separate from `error`, which belongs to the Add form.
+  const [actionError, setActionError] = useState('')
   const [newCompany, setNewCompany] = useState(false)
   const supabase = createClient()
 
@@ -107,9 +94,9 @@ export default function CatalystCalendar({ today, initialCatalysts, companyNames
     const { data, error: insErr } = await supabase.from('catalysts').insert({
       company_name: form.company_name.trim(),
       title: form.title.trim(),
-      catalyst_date: periodEndDate(form.period, year),
+      catalyst_date: periodEnd(form.period, year),
       period: `${form.period} ${year}`,
-      original_date: periodEndDate(form.period, year),
+      original_date: periodEnd(form.period, year),
       original_period: `${form.period} ${year}`,
       status: form.status,
       notes: form.notes.trim() || null,
@@ -128,43 +115,64 @@ export default function CatalystCalendar({ today, initialCatalysts, companyNames
   }
 
   async function toggleLegacy(name: string, makeLegacy: boolean) {
+    setActionError('')
     if (makeLegacy) {
       setLegacy((prev) => [...prev, name])
-      await supabase.from('legacy_companies').insert({ company_name: name })
+      const { error: e } = await supabase.from('legacy_companies').insert({ company_name: name })
+      if (e) {
+        setLegacy((prev) => prev.filter((n) => n !== name))
+        setActionError(`Couldn't move ${name} to legacy: ${e.message}`)
+      }
     } else {
       setLegacy((prev) => prev.filter((n) => n !== name))
-      await supabase.from('legacy_companies').delete().eq('company_name', name)
+      const { error: e } = await supabase.from('legacy_companies').delete().eq('company_name', name)
+      if (e) {
+        setLegacy((prev) => [...prev, name])
+        setActionError(`Couldn't restore ${name}: ${e.message}`)
+      }
     }
   }
 
   async function handleDelete(id: string) {
     const cat = catalysts.find((c) => c.id === id)
-    await supabase.from('catalysts').delete().eq('id', id)
+    setActionError('')
+    const { error: e } = await supabase.from('catalysts').delete().eq('id', id)
+    if (e) {
+      setActionError(`Couldn't delete catalyst: ${e.message}`)
+      return
+    }
     setCatalysts((prev) => prev.filter((c) => c.id !== id))
     if (cat) await logCatalystActivity(cat.company_name, cat.title, 'Catalyst deleted', cat.period)
   }
 
   async function handleStatusChange(id: string, status: string) {
     const prev = catalysts.find((c) => c.id === id)
-    const { data } = await supabase.from('catalysts').update({ status }).eq('id', id).select().single()
-    if (data) {
-      setCatalysts((prevList) => prevList.map((c) => c.id === id ? data as Catalyst : c))
-      if (prev && prev.status !== status) {
-        await logCatalystActivity(prev.company_name, prev.title, 'Status changed', `${prev.status ?? 'Pending'} \u2192 ${status}`)
-      }
+    setActionError('')
+    const { data, error: e } = await supabase.from('catalysts').update({ status }).eq('id', id).select().single()
+    if (e || !data) {
+      setActionError(`Couldn't update status: ${e?.message ?? 'update failed'}`)
+      return
+    }
+    setCatalysts((prevList) => prevList.map((c) => c.id === id ? data as Catalyst : c))
+    if (prev && prev.status !== status) {
+      await logCatalystActivity(prev.company_name, prev.title, 'Status changed', `${prev.status ?? 'Pending'} \u2192 ${status}`)
     }
   }
 
   async function handleNoteSave() {
     if (!editingNote) return
-    const { data } = await supabase.from('catalysts')
+    setActionError('')
+    const { data, error: e } = await supabase.from('catalysts')
       .update({ notes: editingNote.text.trim() || null })
       .eq('id', editingNote.id).select().single()
-    if (data) {
-      setCatalysts((prev) => prev.map((c) => c.id === editingNote.id ? data as Catalyst : c))
-      const cat = data as Catalyst
-      await logCatalystActivity(cat.company_name, cat.title, 'Note updated')
+    if (e || !data) {
+      // Editor stays open so the typed note isn't lost on retry.
+      setActionError(`Couldn't save note: ${e?.message ?? 'update failed'}`)
+      return
     }
+    setCatalysts((prev) => prev.map((c) => c.id === editingNote.id ? data as Catalyst : c))
+    const cat = data as Catalyst
+    await logCatalystActivity(cat.company_name, cat.title, 'Note updated')
     setEditingNote(null)
   }
 
@@ -229,6 +237,14 @@ export default function CatalystCalendar({ today, initialCatalysts, companyNames
       </div>
 
       <div className={`flex-1 overflow-y-auto px-4 md:px-6 py-6 ${view === 'list' ? 'max-w-3xl' : ''}`}>
+        {actionError && (
+          <div className="mb-4 max-w-3xl flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <span className="flex-1">{actionError}</span>
+            <button onClick={() => setActionError('')} title="Dismiss" className="shrink-0 p-0.5 text-red-400 hover:text-red-700 transition">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
         {/* Reminder bar is pinned (sticky) to the top of this scroll area. Collapsed
             it is only a summary row, and letting it scroll away made it look as
             though it had disappeared. */}
@@ -385,7 +401,7 @@ export default function CatalystCalendar({ today, initialCatalysts, companyNames
             <p className="text-sm text-slate-400">No catalysts yet — add data readouts, FDA decisions, fundraise closes, and other key timing.</p>
           </div>
         ) : view === 'gantt' ? (
-          <CatalystGantt catalysts={catalysts} onUpdated={(updated) => setCatalysts((prev) => prev.map((x) => x.id === updated.id ? updated : x))} onDeleted={handleDelete} legacyCompanies={legacy} onToggleLegacy={toggleLegacy} />
+          <CatalystGantt catalysts={catalysts} onUpdated={(updated) => setCatalysts((prev) => prev.map((x) => x.id === updated.id ? updated : x))} onDeleted={handleDelete} onError={setActionError} legacyCompanies={legacy} onToggleLegacy={toggleLegacy} />
         ) : (
           groups.map(({ key, items }) => (
             <div key={key} className="mb-8">

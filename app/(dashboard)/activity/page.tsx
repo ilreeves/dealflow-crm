@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { rowsOrThrow } from '@/lib/supabase/unwrap'
 import { DealActivity, CatalystActivity } from '@/lib/types'
 import { formatDate } from '@/lib/utils'
 import { ArrowRight, Plus, CalendarDays, Trash2, Pencil, CheckCircle2, Clock } from 'lucide-react'
@@ -36,13 +37,13 @@ function catalystIcon(action: string) {
 
 export default async function ActivityPage() {
   const supabase = await createClient()
-  const [{ data: dealData }, { data: catalystData }] = await Promise.all([
+  const [dealRes, catalystRes] = await Promise.all([
     supabase.from('deal_activity').select('*').order('created_at', { ascending: false }).limit(100),
     supabase.from('catalyst_activity').select('*').order('created_at', { ascending: false }).limit(100),
   ])
 
-  const dealActivities = (dealData as DealActivity[]) ?? []
-  const catalystActivities = (catalystData as CatalystActivity[]) ?? []
+  const dealActivities = rowsOrThrow(dealRes, 'deal activity') as DealActivity[]
+  const catalystActivities = rowsOrThrow(catalystRes, 'catalyst activity') as CatalystActivity[]
 
   return (
     <div className="flex flex-col h-full">

@@ -7,6 +7,51 @@ import { createClient } from '@/lib/supabase/client'
 export const LIST_KEYS = ['series', 'clinical_stage', 'fund', 'spv_fund'] as const
 export type ListKey = typeof LIST_KEYS[number]
 
+// Sector options for the deal and portfolio-company forms — the ABMS specialty
+// list (with the ABIM subspecialties expanded), not a DB-backed list.
+export const ABMS_SPECIALTIES = [
+  'Allergy & Immunology',
+  'Anesthesiology',
+  'Colon & Rectal Surgery',
+  'Dermatology',
+  'Emergency Medicine',
+  'Family Medicine',
+  'Internal Medicine (General)',
+  // ABIM subspecialties
+  'IM - Advanced Heart Failure & Transplant Cardiology',
+  'IM - Cardiovascular Disease',
+  'IM - Clinical Cardiac Electrophysiology',
+  'IM - Critical Care Medicine',
+  'IM - Endocrinology, Diabetes & Metabolism',
+  'IM - Gastroenterology',
+  'IM - Geriatric Medicine',
+  'IM - Hematology',
+  'IM - Infectious Disease',
+  'IM - Interventional Cardiology',
+  'IM - Medical Oncology',
+  'IM - Nephrology',
+  'IM - Pulmonary Disease',
+  'IM - Rheumatology',
+  'IM - Sleep Medicine',
+  'Medical Genetics and Genomics',
+  'Neurological Surgery',
+  'Nuclear Medicine',
+  'Obstetrics & Gynecology',
+  'Ophthalmology',
+  'Orthopaedic Surgery',
+  'Otolaryngology - Head and Neck Surgery',
+  'Pathology',
+  'Pediatrics',
+  'Physical Medicine & Rehabilitation',
+  'Plastic Surgery',
+  'Preventive Medicine',
+  'Psychiatry & Neurology',
+  'Radiology',
+  'Surgery',
+  'Thoracic Surgery',
+  'Urology',
+]
+
 // Fallbacks used if the list_options table is empty or unavailable.
 export const FALLBACK_LISTS: Record<ListKey, string[]> = {
   series: ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'A', 'B', 'C', 'D+', 'Crossover', 'Public'],

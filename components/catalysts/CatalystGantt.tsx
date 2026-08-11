@@ -1,8 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { ChevronDown, Archive, RotateCcw } from 'lucide-react'
 import { Catalyst } from '@/lib/types'
+import { STATUSES, STATUS_BAR, CLOSED_STATUSES, periodEnd } from '@/lib/catalysts'
 import { createClient } from '@/lib/supabase/client'
 import { logCatalystActivity } from '@/lib/activity'
 
@@ -10,27 +11,10 @@ interface Props {
   catalysts: Catalyst[]
   onUpdated: (c: Catalyst) => void
   onDeleted: (id: string) => void
+  /** Failed writes surface here — otherwise a dragged bar snapping back looks like a UI bug. */
+  onError?: (msg: string) => void
   legacyCompanies: string[]
   onToggleLegacy: (name: string, makeLegacy: boolean) => void
-}
-
-const STATUSES = ['Pending', 'On Track', 'Done', 'Delayed', 'On Hold', 'Failed', 'Terminated'] as const
-
-const STATUS_BAR: Record<string, string> = {
-  'Pending':    'bg-yellow-400',
-  'On Track':   'bg-emerald-500',
-  'Done':       'bg-green-500',
-  'Delayed':    'bg-orange-500',
-  'On Hold':    'bg-slate-400',
-  'Failed':     'bg-red-500',
-  'Terminated': 'bg-red-700',
-}
-
-const CLOSED_STATUSES = ['Done', 'Failed', 'Terminated']
-
-const PERIOD_END: Record<string, string> = {
-  '1Q': '03-31', '2Q': '06-30', '3Q': '09-30', '4Q': '12-31',
-  '1H': '06-30', '2H': '12-31', 'FY': '12-31',
 }
 
 function periodSpan(c: Catalyst): { year: number; startQ: number; span: number } {
@@ -64,13 +48,20 @@ function dateQuarterPos(dateStr: string, minYear: number): number {
 const QUARTER_W = 48
 const LABEL_W = 260
 
-export default function CatalystGantt({ catalysts, onUpdated, onDeleted, legacyCompanies, onToggleLegacy }: Props) {
-  const [collapsed, setCollapsed] = useState<Set<string>>(
-    () => new Set(catalysts.map((c) => c.company_name))
-  )
+export default function CatalystGantt({ catalysts, onUpdated, onDeleted, onError, legacyCompanies, onToggleLegacy }: Props) {
+  // Inverted set: companies default to COLLAPSED, including ones added after
+  // mount — seeding a collapsed-set from the initial catalysts left any
+  // later-added company expanded while everything else was folded.
+  const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set())
+  const isCollapsed = (name: string) => !expandedCompanies.has(name)
   const [editingTitle, setEditingTitle] = useState<{ id: string; text: string } | null>(null)
   const [barMenu, setBarMenu] = useState<{ id: string; status: string; date: string } | null>(null)
-  const [drag, setDrag] = useState<{ id: string; startX: number; dx: number; moved: boolean } | null>(null)
+  // Drag position lives in a ref and is applied as a direct style.transform on
+  // the grabbed bar — routing every pointermove through setState re-rendered
+  // the entire chart (every company, row, and gridline) dozens of times a
+  // second. State only tracks WHICH bar is grabbed, for the ring styling.
+  const dragRef = useRef<{ id: string; startX: number; dx: number; moved: boolean; el: HTMLElement } | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
   const supabase = createClient()
 
   // Must sit above the empty-state early return below — a hook may not be called conditionally.
@@ -89,7 +80,7 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, legacyC
   }, [catalysts])
 
   function toggleCompany(name: string) {
-    setCollapsed((prev) => {
+    setExpandedCompanies((prev) => {
       const next = new Set(prev)
       if (next.has(name)) { next.delete(name) } else { next.add(name) }
       return next
@@ -100,8 +91,10 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, legacyC
     if (!editingTitle) return
     const text = editingTitle.text.trim()
     if (text) {
-      const { data } = await supabase.from('catalysts').update({ title: text }).eq('id', editingTitle.id).select().single()
-      if (data) {
+      const { data, error } = await supabase.from('catalysts').update({ title: text }).eq('id', editingTitle.id).select().single()
+      if (error || !data) {
+        onError?.(`Couldn't rename catalyst: ${error?.message ?? 'update failed'}`)
+      } else {
         onUpdated(data as Catalyst)
         const cat = data as Catalyst
         await logCatalystActivity(cat.company_name, text, 'Title edited')
@@ -113,18 +106,21 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, legacyC
   async function applyBarMenu() {
     if (!barMenu) return
     const prev = catalysts.find((c) => c.id === barMenu.id)
-    const { data } = await supabase.from('catalysts')
+    const { data, error } = await supabase.from('catalysts')
       .update({ status: barMenu.status, resolved_date: barMenu.date || null })
       .eq('id', barMenu.id).select().single()
-    if (data) {
-      onUpdated(data as Catalyst)
-      const cat = data as Catalyst
-      if (prev && prev.status !== barMenu.status) {
-        await logCatalystActivity(cat.company_name, cat.title, 'Status changed', `${prev.status ?? 'Pending'} \u2192 ${barMenu.status}`)
-      }
-      if (barMenu.date && prev?.resolved_date !== barMenu.date) {
-        await logCatalystActivity(cat.company_name, cat.title, 'Resolved', `Actual date: ${barMenu.date}`)
-      }
+    if (error || !data) {
+      // Menu stays open so the chosen status/date survives a retry.
+      onError?.(`Couldn't update catalyst: ${error?.message ?? 'update failed'}`)
+      return
+    }
+    onUpdated(data as Catalyst)
+    const cat = data as Catalyst
+    if (prev && prev.status !== barMenu.status) {
+      await logCatalystActivity(cat.company_name, cat.title, 'Status changed', `${prev.status ?? 'Pending'} \u2192 ${barMenu.status}`)
+    }
+    if (barMenu.date && prev?.resolved_date !== barMenu.date) {
+      await logCatalystActivity(cat.company_name, cat.title, 'Resolved', `Actual date: ${barMenu.date}`)
     }
     setBarMenu(null)
   }
@@ -139,7 +135,7 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, legacyC
     const newYear = minYr + Math.floor(g / 4)
     const qIdx = g % 4
     const prefix = span === 4 ? 'FY' : span === 2 ? (qIdx === 0 ? '1H' : '2H') : ['1Q', '2Q', '3Q', '4Q'][qIdx]
-    const newEnd = `${newYear}-${PERIOD_END[prefix]}`
+    const newEnd = periodEnd(prefix, newYear)
     if (newEnd === cat.catalyst_date && cat.period?.startsWith(prefix)) return
 
     const status = cat.status ?? 'Pending'
@@ -147,12 +143,15 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, legacyC
     const patch: Record<string, string> = { catalyst_date: newEnd, period: `${prefix} ${newYear}` }
     if (movedLater && !CLOSED_STATUSES.includes(status)) patch.status = 'Delayed'
 
-    const { data } = await supabase.from('catalysts').update(patch).eq('id', cat.id).select().single()
-    if (data) {
-      onUpdated(data as Catalyst)
-      const action = movedLater ? 'Rescheduled (delayed)' : 'Rescheduled (pulled in)'
-      await logCatalystActivity(cat.company_name, cat.title, action, `${cat.period ?? cat.catalyst_date} \u2192 ${prefix} ${newYear}`)
+    const { data, error } = await supabase.from('catalysts').update(patch).eq('id', cat.id).select().single()
+    if (error || !data) {
+      // The bar has already snapped back visually \u2014 say why, or it reads as a UI bug.
+      onError?.(`Couldn't reschedule: ${error?.message ?? 'update failed'}`)
+      return
     }
+    onUpdated(data as Catalyst)
+    const action = movedLater ? 'Rescheduled (delayed)' : 'Rescheduled (pulled in)'
+    await logCatalystActivity(cat.company_name, cat.title, action, `${cat.period ?? cat.catalyst_date} \u2192 ${prefix} ${newYear}`)
   }
 
   if (catalysts.length === 0) {
@@ -209,8 +208,7 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, legacyC
         />
       )
     }
-    const isDragging = drag?.id === c.id
-    const snappedDx = isDragging ? Math.round(drag.dx / QUARTER_W) * QUARTER_W : 0
+    const isDragging = draggingId === c.id
     return (
       <div
         title={`${tip}\nDrag to reschedule`}
@@ -218,17 +216,23 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, legacyC
           e.stopPropagation()
           e.preventDefault()
           ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-          setDrag({ id: c.id, startX: e.clientX, dx: 0, moved: false })
+          dragRef.current = { id: c.id, startX: e.clientX, dx: 0, moved: false, el: e.currentTarget as HTMLElement }
+          setDraggingId(c.id)
         }}
         onPointerMove={(e) => {
-          if (drag?.id !== c.id) return
-          const dx = e.clientX - drag.startX
-          setDrag({ ...drag, dx, moved: drag.moved || Math.abs(dx) > 5 })
+          const d = dragRef.current
+          if (d?.id !== c.id) return
+          d.dx = e.clientX - d.startX
+          d.moved = d.moved || Math.abs(d.dx) > 5
+          // Snap live to quarter columns, straight on the element — no render.
+          d.el.style.transform = `translateX(${Math.round(d.dx / QUARTER_W) * QUARTER_W}px)`
         }}
         onPointerUp={() => {
-          if (drag?.id !== c.id) return
-          const d = drag
-          setDrag(null)
+          const d = dragRef.current
+          if (d?.id !== c.id) return
+          dragRef.current = null
+          d.el.style.transform = ''
+          setDraggingId(null)
           if (!d.moved) {
             setBarMenu({ id: c.id, status, date: '' })
             return
@@ -238,7 +242,7 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, legacyC
         className={`absolute rounded ${color} top-1 h-5 opacity-90 hover:opacity-100 hover:ring-2 hover:ring-slate-300 touch-none ${
           isDragging ? 'cursor-grabbing ring-2 ring-slate-400 opacity-100 z-10' : 'cursor-grab'
         }`}
-        style={{ left: offset * QUARTER_W + 2 + snappedDx, width: span * QUARTER_W - 4 }}
+        style={{ left: offset * QUARTER_W + 2, width: span * QUARTER_W - 4 }}
       />
     )
   }
@@ -251,9 +255,9 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, legacyC
                 <button
                   onClick={() => toggleCompany(name)}
                   className="flex-1 min-w-0 px-3 py-1.5 flex items-center gap-1.5 text-left hover:bg-slate-100 transition"
-                  title={collapsed.has(name) ? 'Show catalysts' : 'Hide catalysts'}
+                  title={isCollapsed(name) ? 'Show catalysts' : 'Hide catalysts'}
                 >
-                  <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${collapsed.has(name) ? '-rotate-90' : ''}`} />
+                  <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isCollapsed(name) ? '-rotate-90' : ''}`} />
                   <span className={`text-xs font-bold uppercase tracking-wide truncate ${isLegacy ? 'text-slate-400' : 'text-slate-700'}`}>{name}</span>
                   <span className="text-xs text-slate-400 font-medium ml-auto">{items.length}</span>
                 </button>
@@ -267,10 +271,10 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, legacyC
               </div>
               <div className="flex-1 h-7 relative">
                 <GridLines totalQuarters={totalQuarters} nowQ={nowQ} />
-                {collapsed.has(name) && !isLegacy && items.map((c) => renderBar(c, true))}
+                {isCollapsed(name) && !isLegacy && items.map((c) => renderBar(c, true))}
               </div>
             </div>
-            {!collapsed.has(name) && items.map((c) => {
+            {!isCollapsed(name) && items.map((c) => {
               return (
                 <div key={c.id} className="flex items-center border-b border-slate-50 hover:bg-slate-50/50 group">
                   {editingTitle?.id === c.id ? (

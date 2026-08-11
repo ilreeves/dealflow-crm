@@ -2,6 +2,9 @@
 
 import { useState } from "react"
 import { ChevronDown, ChevronRight, AlertTriangle, Clock } from "lucide-react"
+// The sign-aware fmtMoney here used to be this file's local fix; it is now the
+// shared implementation in lib/rounds.
+import { fmtMoney, fmtPct, valueColor } from "@/lib/rounds"
 
 export type CompanyInFund = { name: string; invested: number; value: number | null; ownership: number }
 export type FundRow = { fund: string; invested: number; value: number; moic: number | null; companies: CompanyInFund[] }
@@ -11,28 +14,8 @@ export type Totals = { invested: number; value: number; moic: number | null; gai
 
 const FUND_COLORS = ["#023a51", "#5ba200", "#e98925", "#7f77dd", "#1d9e75", "#94a3b8"]
 
-function fmtMoney(n: number | null | undefined): string {
-  if (n == null || isNaN(Number(n))) return "—"
-  const x = Number(n)
-  const abs = Math.abs(x)
-  if (abs >= 1e9) return `${x < 0 ? "-" : ""}$${(Math.abs(x) / 1e9).toFixed(2)}B`
-  if (abs >= 1e6) return `${x < 0 ? "-" : ""}$${(Math.abs(x) / 1e6).toFixed(1)}M`
-  if (abs >= 1e3) return `${x < 0 ? "-" : ""}$${(Math.abs(x) / 1e3).toFixed(0)}K`
-  return `$${x.toLocaleString()}`
-}
-function fmtPct(n: number | null | undefined): string {
-  if (n == null || isNaN(Number(n))) return "—"
-  return `${Number(n).toFixed(1)}%`
-}
 function fmtMoic(n: number | null | undefined): string {
   return n == null ? "—" : `${Number(n).toFixed(2)}×`
-}
-function valueColor(value: number | null, cost: number): string {
-  if (value == null) return "#64748b"   // unknown
-  if (value === 0) return "#dc2626"      // written to zero — red
-  if (value > cost) return "#5ba200"     // up — brand green
-  if (value < cost) return "#e98925"     // down — brand orange
-  return "#023a51"                        // flat — brand navy
 }
 function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("")

@@ -4,9 +4,7 @@ import { useEffect, useState } from 'react'
 import { FlaskConical, BookOpen, Loader2, RefreshCw, ExternalLink, Sparkles } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
-
-interface Trial { nctId: string; title: string; status: string; phases: string[]; conditions: string[]; sponsor: string }
-interface Pub { pmid: string; title: string; journal: string; year: string; firstAuthor: string; url: string }
+import { Trial, Pub, statusColor, prettyPhase } from '@/lib/enrichment'
 
 interface Props {
   entityType: 'deal' | 'portfolio'
@@ -14,20 +12,6 @@ interface Props {
   name: string
   drugNames?: string | null
   ctSponsorName?: string | null
-}
-
-// Colour the trial status roughly by how active it is.
-function statusColor(status: string): string {
-  const s = status.toUpperCase()
-  if (s.includes('RECRUIT') || s === 'ACTIVE_NOT_RECRUITING' || s === 'ENROLLING_BY_INVITATION') return 'bg-green-100 text-green-700'
-  if (s === 'COMPLETED') return 'bg-blue-100 text-blue-700'
-  if (s.includes('TERMINATED') || s.includes('WITHDRAWN') || s.includes('SUSPENDED')) return 'bg-red-100 text-red-700'
-  return 'bg-slate-100 text-slate-600'
-}
-
-function prettyPhase(phases: string[]): string {
-  if (!phases.length) return ''
-  return phases.map((p) => p.replace('PHASE', 'Phase ').replace('NA', 'N/A')).join('/')
 }
 
 export default function ClinicalContextSection({ entityType, entityId, name, drugNames, ctSponsorName }: Props) {

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { rowsOrThrow } from '@/lib/supabase/unwrap'
 import { Catalyst } from '@/lib/types'
 import CatalystCalendar from '@/components/catalysts/CatalystCalendar'
 
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic'
 export default async function CatalystsPage() {
   const supabase = await createClient()
 
-  const [{ data: catalysts }, { data: deals }, { data: portfolio }, { data: legacy }, { data: dismissed }] = await Promise.all([
+  const [catalystsRes, dealsRes, portfolioRes, legacyRes, dismissedRes] = await Promise.all([
     supabase.from('catalysts').select('*').order('catalyst_date', { ascending: true }),
     supabase.from('deals').select('name').neq('stage', 'Passed'),
     supabase.from('portfolio_companies').select('name'),
@@ -19,8 +20,8 @@ export default async function CatalystsPage() {
   ])
 
   const companyNames = Array.from(new Set([
-    ...((deals as { name: string }[]) ?? []).map((d) => d.name),
-    ...((portfolio as { name: string }[]) ?? []).map((p) => p.name),
+    ...(rowsOrThrow(dealsRes, 'deals') as { name: string }[]).map((d) => d.name),
+    ...(rowsOrThrow(portfolioRes, 'portfolio companies') as { name: string }[]).map((p) => p.name),
   ])).sort()
 
   // The reminder bar's overdue / due-soon windows are measured from today. The clock
@@ -36,10 +37,10 @@ export default async function CatalystsPage() {
   return (
     <CatalystCalendar
       today={today}
-      initialCatalysts={(catalysts as Catalyst[]) ?? []}
+      initialCatalysts={rowsOrThrow(catalystsRes, 'catalysts') as Catalyst[]}
       companyNames={companyNames}
-      initialLegacy={((legacy as { company_name: string }[]) ?? []).map((l) => l.company_name)}
-      initialDismissed={((dismissed as { signature: string }[]) ?? []).map((d) => d.signature)}
+      initialLegacy={(rowsOrThrow(legacyRes, 'legacy companies') as { company_name: string }[]).map((l) => l.company_name)}
+      initialDismissed={(rowsOrThrow(dismissedRes, 'dismissed reminders') as { signature: string }[]).map((d) => d.signature)}
     />
   )
 }

@@ -3,15 +3,9 @@
 import { useState } from 'react'
 import { X, Loader2, Trash2 } from 'lucide-react'
 import { Catalyst } from '@/lib/types'
+import { PERIODS, STATUSES, periodEnd } from '@/lib/catalysts'
 import { createClient } from '@/lib/supabase/client'
 import { logCatalystActivity } from '@/lib/activity'
-
-const PERIODS = ['1Q', '2Q', '3Q', '4Q', '1H', '2H', 'FY'] as const
-const STATUSES = ['Pending', 'On Track', 'Done', 'Delayed', 'On Hold', 'Failed', 'Terminated'] as const
-const PERIOD_END: Record<string, string> = {
-  '1Q': '03-31', '2Q': '06-30', '3Q': '09-30', '4Q': '12-31',
-  '1H': '06-30', '2H': '12-31', 'FY': '12-31',
-}
 
 interface Props {
   catalyst: Catalyst
@@ -24,6 +18,7 @@ export default function CatalystEditModal({ catalyst, onClose, onSaved, onDelete
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState('')
 
   const [periodPart, yearPart] = (catalyst.period ?? '').split(' ')
   const [form, setForm] = useState({
@@ -40,28 +35,37 @@ export default function CatalystEditModal({ catalyst, onClose, onSaved, onDelete
     const year = parseInt(form.year, 10)
     if (!year || year < 2000 || year > 2100) return
     setSaving(true)
-    const { data } = await supabase.from('catalysts').update({
+    setError('')
+    const { data, error: e } = await supabase.from('catalysts').update({
       title: form.title.trim(),
       period: `${form.period} ${year}`,
-      catalyst_date: `${year}-${PERIOD_END[form.period]}`,
+      catalyst_date: periodEnd(form.period, year),
       status: form.status,
       resolved_date: form.resolved_date || null,
       notes: form.notes.trim() || null,
     }).eq('id', catalyst.id).select().single()
-    if (data) {
-      onSaved(data as Catalyst)
-      if (catalyst.status !== form.status) {
-        await logCatalystActivity(catalyst.company_name, form.title.trim(), 'Status changed', `${catalyst.status ?? 'Pending'} \u2192 ${form.status}`)
-      }
-      onClose()
-    } else {
+    if (e || !data) {
+      setError(`Couldn't save: ${e?.message ?? 'update failed'}`)
       setSaving(false)
+      return
     }
+    onSaved(data as Catalyst)
+    if (catalyst.status !== form.status) {
+      await logCatalystActivity(catalyst.company_name, form.title.trim(), 'Status changed', `${catalyst.status ?? 'Pending'} \u2192 ${form.status}`)
+    }
+    onClose()
   }
 
   async function handleDelete() {
     setDeleting(true)
-    await supabase.from('catalysts').delete().eq('id', catalyst.id)
+    setError('')
+    const { error: e } = await supabase.from('catalysts').delete().eq('id', catalyst.id)
+    if (e) {
+      setError(`Couldn't delete: ${e.message}`)
+      setDeleting(false)
+      return
+    }
+    // Only log once the delete is confirmed \u2014 a phantom "deleted" entry is worse than none.
     await logCatalystActivity(catalyst.company_name, catalyst.title, 'Catalyst deleted', catalyst.period)
     onDeleted(catalyst.id)
     onClose()
@@ -116,6 +120,8 @@ export default function CatalystEditModal({ catalyst, onClose, onSaved, onDelete
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none" />
           </div>
         </div>
+
+        {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg mx-5 mb-3">{error}</p>}
 
         <div className="flex items-center gap-2 px-5 py-4 border-t border-slate-100">
           <button onClick={handleDelete} disabled={deleting}

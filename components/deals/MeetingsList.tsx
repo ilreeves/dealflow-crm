@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Plus, ChevronDown, ChevronRight, Calendar, Users, Send, FileText, Trash2, Download, Upload, Loader2 } from 'lucide-react'
 import { DealMeeting, MeetingNote, MeetingFile } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
+import { getActorName } from '@/lib/useActorName'
 import { formatDate } from '@/lib/utils'
 
 interface Props {
@@ -18,19 +19,24 @@ function AddMeetingForm({ dealId, onAdded }: { dealId: string; onAdded: (m: Deal
   const [attendees, setAttendees] = useState('')
   const [summary, setSummary] = useState('')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
   const supabase = createClient()
 
   async function handleSave() {
     if (!title.trim()) return
     setSaving(true)
-    const { data } = await supabase.from('deal_meetings').insert({
+    setError('')
+    const { data, error: insertError } = await supabase.from('deal_meetings').insert({
       deal_id: dealId,
       title: title.trim(),
       meeting_date: date || null,
       attendees: attendees || null,
       summary: summary || null,
     }).select().single()
-    if (data) {
+    if (insertError || !data) {
+      // Form stays open with its contents so a failed save loses nothing.
+      setError(`Failed to save meeting: ${insertError?.message ?? 'no row returned'}`)
+    } else {
       onAdded(data as DealMeeting)
       setTitle(''); setDate(''); setAttendees(''); setSummary('')
       setOpen(false)
@@ -86,6 +92,9 @@ function AddMeetingForm({ dealId, onAdded }: { dealId: string; onAdded: (m: Deal
         onChange={(e) => setSummary(e.target.value)}
         className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none bg-white"
       />
+      {error && (
+        <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+      )}
       <div className="flex justify-end gap-2">
         <button onClick={() => setOpen(false)} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 transition">
           Cancel
@@ -110,6 +119,7 @@ function MeetingNotes({ meetingId }: { meetingId: string }) {
   const [newNote, setNewNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const supabase = createClient()
 
   useEffect(() => {
@@ -122,21 +132,32 @@ function MeetingNotes({ meetingId }: { meetingId: string }) {
     e.preventDefault()
     if (!newNote.trim()) return
     setSubmitting(true)
+    setError('')
     const { data: userData } = await supabase.auth.getUser()
-    const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', userData.user?.id).single()
-    const { data } = await supabase.from('meeting_notes').insert({
+    const user = userData.user
+    // Resolved once per session and shared across components — no per-submit
+    // profiles round-trip (and no eq('id', undefined) when signed out).
+    const actorName = user ? await getActorName(supabase) : null
+    const { data, error: insertError } = await supabase.from('meeting_notes').insert({
       meeting_id: meetingId,
       content: newNote.trim(),
-      author_id: userData.user?.id,
-      author_name: profile?.full_name ?? userData.user?.email ?? 'Unknown',
+      author_id: user?.id,
+      author_name: user ? actorName ?? 'Unknown' : null,
     }).select().single()
-    if (data) setNotes((prev) => [data as MeetingNote, ...prev])
-    setNewNote('')
+    if (insertError || !data) {
+      // Keep the typed text in the box — clearing it would discard the note.
+      setError(`Failed to save note: ${insertError?.message ?? 'no row returned'}`)
+    } else {
+      setNotes((prev) => [data as MeetingNote, ...prev])
+      setNewNote('')
+    }
     setSubmitting(false)
   }
 
   async function handleDelete(id: string) {
-    await supabase.from('meeting_notes').delete().eq('id', id)
+    setError('')
+    const { error: delError } = await supabase.from('meeting_notes').delete().eq('id', id)
+    if (delError) { setError(`Failed to delete note: ${delError.message}`); return }
     setNotes((prev) => prev.filter((n) => n.id !== id))
   }
 
@@ -157,6 +178,9 @@ function MeetingNotes({ meetingId }: { meetingId: string }) {
           {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
         </button>
       </form>
+      {error && (
+        <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+      )}
       {loading ? (
         <div className="flex justify-center py-2"><Loader2 className="w-4 h-4 animate-spin text-slate-400" /></div>
       ) : notes.length === 0 ? (
@@ -191,6 +215,7 @@ function MeetingFiles({ meetingId }: { meetingId: string }) {
   const [files, setFiles] = useState<MeetingFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
@@ -204,10 +229,14 @@ function MeetingFiles({ meetingId }: { meetingId: string }) {
     const selected = Array.from(e.target.files ?? [])
     if (!selected.length) return
     setUploading(true)
+    setError('')
     for (const file of selected) {
       const path = `meetings/${meetingId}/${Date.now()}-${file.name}`
       const { error: uploadError } = await supabase.storage.from('deal-files').upload(path, file)
-      if (uploadError) continue
+      if (uploadError) {
+        setError(`Failed to upload ${file.name}: ${uploadError.message}`)
+        continue
+      }
       const { data, error: insertError } = await supabase.from('meeting_files').insert({
         meeting_id: meetingId,
         name: file.name,
@@ -218,6 +247,7 @@ function MeetingFiles({ meetingId }: { meetingId: string }) {
       if (insertError || !data) {
         // Roll back the uploaded object so it isn't orphaned in storage.
         await supabase.storage.from('deal-files').remove([path])
+        setError(`Failed to save ${file.name}: ${insertError?.message ?? 'could not create record'}`)
         continue
       }
       setFiles((prev) => [data as MeetingFile, ...prev])
@@ -237,10 +267,11 @@ function MeetingFiles({ meetingId }: { meetingId: string }) {
   }
 
   async function handleDelete(file: MeetingFile) {
+    setError('')
     // Delete the row first; only remove the file once the row is gone, so a
     // failed delete never leaves a live record pointing at a missing file.
     const { error: delError } = await supabase.from('meeting_files').delete().eq('id', file.id)
-    if (delError) return
+    if (delError) { setError(`Failed to delete ${file.name}: ${delError.message}`); return }
     await supabase.storage.from('deal-files').remove([file.storage_path])
     setFiles((prev) => prev.filter((f) => f.id !== file.id))
   }
@@ -257,6 +288,9 @@ function MeetingFiles({ meetingId }: { meetingId: string }) {
         </button>
         <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleUpload} />
       </div>
+      {error && (
+        <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+      )}
       {loading ? (
         <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
       ) : files.length === 0 ? (
@@ -288,12 +322,19 @@ function MeetingItem({ meeting, onDelete }: { meeting: DealMeeting; onDelete: (i
   const [expanded, setExpanded] = useState(false)
   const [subTab, setSubTab] = useState<'notes' | 'files'>('notes')
   const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState('')
   const supabase = createClient()
 
   async function handleDelete(e: React.MouseEvent) {
     e.stopPropagation()
     setDeleting(true)
-    await supabase.from('deal_meetings').delete().eq('id', meeting.id)
+    setError('')
+    const { error: delError } = await supabase.from('deal_meetings').delete().eq('id', meeting.id)
+    if (delError) {
+      setError(`Failed to delete meeting: ${delError.message}`)
+      setDeleting(false)
+      return
+    }
     onDelete(meeting.id)
   }
 
@@ -332,6 +373,10 @@ function MeetingItem({ meeting, onDelete }: { meeting: DealMeeting; onDelete: (i
           {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
         </button>
       </div>
+
+      {error && (
+        <p className="text-xs text-red-600 bg-red-50 px-4 py-2 border-t border-red-100">{error}</p>
+      )}
 
       {expanded && (
         <div className="border-t border-slate-100 bg-slate-50 px-4 py-3 space-y-3">

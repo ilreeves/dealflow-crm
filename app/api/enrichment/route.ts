@@ -124,8 +124,11 @@ export async function POST(req: NextRequest) {
   // Curated overrides: exact CT.gov sponsor name (falls back to company name)
   // and comma-separated drug/asset names searched as trial interventions.
   const sponsor = (typeof body?.sponsorName === 'string' && body.sponsorName.trim()) || name
+  // Each drug name fans out into its own CT.gov request (each with a 10s
+  // timeout) — cap the list so a long free-text entry can't turn one request
+  // into hundreds of concurrent outbound fetches.
   const drugs = (typeof body?.drugNames === 'string' ? body.drugNames : '')
-    .split(',').map((d: string) => d.trim()).filter(Boolean)
+    .split(',').map((d: string) => d.trim()).filter(Boolean).slice(0, 8)
 
   const [trials, publications] = await Promise.all([fetchTrials(sponsor, drugs), fetchPubs(name)])
   const fetched_at = new Date().toISOString()

@@ -46,7 +46,8 @@ export default function SettingsPage() {
       .from('custom_field_definitions')
       .select('*')
       .order('sort_order')
-      .then(({ data }) => {
+      .then(({ data, error: err }) => {
+        if (err) setError("Couldn't load custom fields: " + err.message)
         setFields((data as CustomFieldDefinition[]) ?? [])
         setLoading(false)
       })
@@ -92,7 +93,9 @@ export default function SettingsPage() {
   }
 
   async function handleDelete(id: string) {
-    await supabase.from('custom_field_definitions').delete().eq('id', id)
+    setError('')
+    const { error: err } = await supabase.from('custom_field_definitions').delete().eq('id', id)
+    if (err) { setError("Couldn't delete that field: " + err.message); return }
     setFields((prev) => prev.filter((f) => f.id !== id))
   }
 
@@ -205,6 +208,11 @@ export default function SettingsPage() {
               </button>
             </div>
           </form>
+        )}
+
+        {/* Load/delete errors happen with the form closed, where the in-form message can't show */}
+        {error && !showForm && (
+          <p className="mx-5 my-3 text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
         )}
 
         {/* Fields list */}

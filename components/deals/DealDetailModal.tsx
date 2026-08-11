@@ -4,10 +4,13 @@ import { useState, useEffect } from 'react'
 import { X, Pencil, Trash2, Globe, Building2, User, DollarSign, Tag, Mail, Send, Link, MapPin } from 'lucide-react'
 import { Deal, DEAL_STAGES, STAGE_COLORS } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
+import { useActorName } from '@/lib/useActorName'
 import { formatDate } from '@/lib/utils'
 import DealForm from './DealForm'
 import { logActivity } from '@/lib/activity'
 import { addDealToPortfolio } from '@/lib/portfolio'
+import { gatherEntityCleanup, finishEntityCleanup } from '@/lib/cleanup'
+import { buildDeckEmail } from '@/lib/deck'
 import PassReasonModal from './PassReasonModal'
 import InvestModal from './InvestModal'
 import FilesSection from '@/components/shared/FilesSection'
@@ -36,20 +39,21 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const supabase = createClient()
-  const [actorName, setActorName] = useState<string | null>(null)
+  const actorName = useActorName()
   const [showPassReason, setShowPassReason] = useState(false)
   const [showInvest, setShowInvest] = useState(false)
   const [stageError, setStageError] = useState('')
   const colors = STAGE_COLORS[deal.stage]
 
+  // The board ships a slim row (BOARD_COLUMNS in app/(dashboard)/page.tsx) —
+  // fetch the full deal so the overview has description & co, and so a stale
+  // board row can't show outdated details.
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        supabase.from('profiles').select('full_name').eq('id', user.id).single()
-          .then(({ data }) => setActorName(data?.full_name || user.email || null))
-      }
-    })
-  }, [supabase])
+    let active = true
+    supabase.from('deals').select('*').eq('id', initialDeal.id).maybeSingle()
+      .then(({ data }) => { if (active && data) setDeal(data as Deal) })
+    return () => { active = false }
+  }, [initialDeal.id, supabase])
 
   async function handleStageChange(newStage: string, passReason?: string) {
     if (newStage === 'Passed' && deal.stage !== 'Passed' && !passReason) {
@@ -108,12 +112,17 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
 
   async function handleDelete() {
     setDeleting(true)
+    // Snapshot storage paths BEFORE the delete — the cascade destroys the rows
+    // that point at them.
+    const paths = await gatherEntityCleanup(supabase, 'deal', deal.id)
     const { error } = await supabase.from('deals').delete().eq('id', deal.id)
     if (error) {
       setDeleting(false)
       setStageError(`Couldn't delete ${deal.name}: ${error.message}`)
       return
     }
+    // Kills any public share links and removes the orphaned storage objects.
+    await finishEntityCleanup(supabase, 'deal', deal.id, paths)
     onDeleted(deal.id)
     onClose()
   }
@@ -334,6 +343,7 @@ function OverviewTab({ deal }: { deal: Deal }) {
     { icon: Building2, label: 'Sector', value: deal.sector },
     { icon: MapPin, label: 'Location', value: [deal.city, deal.state, deal.country].filter(Boolean).join(', ') || null },
     { icon: Tag, label: 'Clinical Stage', value: deal.clinical_stage },
+    { icon: Tag, label: 'Indication', value: deal.indication },
     { icon: User, label: 'Lead Partner', value: deal.lead_partner },
     { icon: User, label: 'CEO', value: deal.founders },
     { icon: Tag, label: 'Source', value: deal.source },
@@ -360,32 +370,17 @@ function OverviewTab({ deal }: { deal: Deal }) {
         entityType="deal"
         entityId={deal.id}
         entityName={deal.name}
-        buildEmail={(deckUrl, label) => {
-          const named = label && label.toLowerCase() !== 'deck'
-          const details = [
-            deal.sector ? `Sector: ${deal.sector}` : null,
-            deal.series ? `Series: ${deal.series}` : null,
-            deal.clinical_stage ? `Clinical stage: ${deal.clinical_stage}` : null,
-            // Prefer the latest fundraising round; fall back to the free-text fields.
-            (latest?.raiseSummary ?? deal.current_fundraise) ? `Current raise: ${latest?.raiseSummary ?? deal.current_fundraise}` : null,
-            (latest?.valuation ?? deal.current_valuation) ? `Valuation: ${latest?.valuation ?? deal.current_valuation}` : null,
-            deal.fundraising_to_date ? `Raised to date: ${deal.fundraising_to_date}` : null,
-            deal.website ? `Website: ${deal.website}` : null,
-          ].filter(Boolean) as string[]
-          const body = [
-            'Hi,',
-            '',
-            `I wanted to share the ${named ? label + ' ' : ''}non-confidential deck for ${deal.name}.`,
-            '',
-            ...details,
-            '',
-            `View the deck here: ${deckUrl}`,
-            '(link active for 4 weeks)',
-            '',
-            'Best,',
-          ].filter((line, i, arr) => !(line === '' && arr[i - 1] === '')).join('\n')
-          return { subject: named ? `${deal.name} — ${label} deck` : `${deal.name} — non-confidential overview`, body }
-        }}
+        buildEmail={(deckUrl, label) => buildDeckEmail({
+          name: deal.name,
+          sector: deal.sector,
+          series: deal.series,
+          clinicalStage: deal.clinical_stage,
+          // Prefer the latest fundraising round; fall back to the free-text fields.
+          currentRaise: latest?.raiseSummary ?? deal.current_fundraise,
+          valuation: latest?.valuation ?? deal.current_valuation,
+          raisedToDate: deal.fundraising_to_date,
+          website: deal.website,
+        }, deckUrl, label)}
       />
 
       <ClinicalContextSection entityType="deal" entityId={deal.id} name={deal.name} drugNames={deal.drug_names} ctSponsorName={deal.ct_sponsor_name} />

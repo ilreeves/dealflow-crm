@@ -1,59 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X, Upload } from 'lucide-react'
 import { PortfolioCompany } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
-import { fetchListOptions, FALLBACK_LISTS, ListKey } from '@/lib/listOptions'
+import { fetchListOptions, ABMS_SPECIALTIES, FALLBACK_LISTS, ListKey } from '@/lib/listOptions'
 
 interface Props {
   company?: PortfolioCompany
   onClose: () => void
   onSaved: (company: PortfolioCompany) => void
 }
-
-const ABMS_SPECIALTIES = [
-  'Allergy & Immunology',
-  'Anesthesiology',
-  'Colon & Rectal Surgery',
-  'Dermatology',
-  'Emergency Medicine',
-  'Family Medicine',
-  'Internal Medicine (General)',
-  // ABIM subspecialties
-  'IM - Advanced Heart Failure & Transplant Cardiology',
-  'IM - Cardiovascular Disease',
-  'IM - Clinical Cardiac Electrophysiology',
-  'IM - Critical Care Medicine',
-  'IM - Endocrinology, Diabetes & Metabolism',
-  'IM - Gastroenterology',
-  'IM - Geriatric Medicine',
-  'IM - Hematology',
-  'IM - Infectious Disease',
-  'IM - Interventional Cardiology',
-  'IM - Medical Oncology',
-  'IM - Nephrology',
-  'IM - Pulmonary Disease',
-  'IM - Rheumatology',
-  'IM - Sleep Medicine',
-  'Medical Genetics and Genomics',
-  'Neurological Surgery',
-  'Nuclear Medicine',
-  'Obstetrics & Gynecology',
-  'Ophthalmology',
-  'Orthopaedic Surgery',
-  'Otolaryngology - Head and Neck Surgery',
-  'Pathology',
-  'Pediatrics',
-  'Physical Medicine & Rehabilitation',
-  'Plastic Surgery',
-  'Preventive Medicine',
-  'Psychiatry & Neurology',
-  'Radiology',
-  'Surgery',
-  'Thoracic Surgery',
-  'Urology',
-]
 
 export default function PortfolioCompanyForm({ company, onClose, onSaved }: Props) {
   const supabase = createClient()
@@ -62,6 +19,10 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
   const [lists, setLists] = useState<Record<ListKey, string[]>>(FALLBACK_LISTS)
   const [deckFile, setDeckFile] = useState<File | null>(null)
   const [deckLabel, setDeckLabel] = useState('')
+  // Set once the INSERT succeeds. If a later step (rename relink, deck upload)
+  // fails and the user hits Save again, the retry must take the UPDATE path —
+  // otherwise it inserts the company a second time.
+  const createdRef = useRef<PortfolioCompany | null>(null)
 
   useEffect(() => { fetchListOptions().then(setLists) }, [])
 
@@ -129,9 +90,10 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
       sharepoint_link: form.sharepoint_link || null,
     }
 
+    const existing = company ?? createdRef.current
     let result
-    if (company) {
-      result = await supabase.from('portfolio_companies').update(payload).eq('id', company.id).select().single()
+    if (existing) {
+      result = await supabase.from('portfolio_companies').update(payload).eq('id', existing.id).select().single()
     } else {
       result = await supabase.from('portfolio_companies').insert(payload).select().single()
     }
@@ -143,20 +105,53 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
     }
 
     const saved = result.data as PortfolioCompany
+    if (!existing) createdRef.current = saved
+
+    // Catalysts (and their activity log, the legacy roster, and deck labels)
+    // join to this company BY NAME — a rename without these updates silently
+    // detaches every catalyst from the company's tab.
+    if (company && company.name !== saved.name) {
+      const renames = await Promise.all([
+        supabase.from('catalysts').update({ company_name: saved.name }).eq('company_name', company.name),
+        supabase.from('catalyst_activity').update({ company_name: saved.name }).eq('company_name', company.name),
+        supabase.from('legacy_companies').update({ company_name: saved.name }).eq('company_name', company.name),
+        supabase.from('company_decks').update({ company_name: saved.name })
+          .eq('entity_type', 'portfolio').eq('entity_id', saved.id),
+      ])
+      const renameErr = renames.map((r) => r.error).find(Boolean)
+      if (renameErr) {
+        setError(`Renamed, but couldn't relink its catalysts — old rows may still say "${company.name}": ${renameErr.message}`)
+        setLoading(false)
+        return
+      }
+    }
+
     // Attach the optional non-con deck now that the company (and its id) exists
     if (!company && deckFile) {
       const storagePath = `portfolio/${saved.id}/noncon-deck/${Date.now()}-${deckFile.name}`
       const { error: upErr } = await supabase.storage.from('deal-files').upload(storagePath, deckFile)
-      if (!upErr) {
-        await supabase.from('company_decks').insert({
-          entity_type: 'portfolio',
-          entity_id: saved.id,
-          company_name: saved.name,
-          label: deckLabel.trim() || 'Deck',
-          storage_path: storagePath,
-          file_name: deckFile.name,
-          sort_order: 0,
-        })
+      if (upErr) {
+        // The company itself saved — don't block on the deck, but don't let the
+        // failure vanish either. It can be re-attached from the Decks section.
+        setError(`${saved.name} was saved, but the deck failed to upload: ${upErr.message}. Add it again from the Decks section.`)
+        setLoading(false)
+        return
+      }
+      const { error: deckErr } = await supabase.from('company_decks').insert({
+        entity_type: 'portfolio',
+        entity_id: saved.id,
+        company_name: saved.name,
+        label: deckLabel.trim() || 'Deck',
+        storage_path: storagePath,
+        file_name: deckFile.name,
+        sort_order: 0,
+      })
+      if (deckErr) {
+        // Roll the orphaned object back so a retry doesn't stack copies.
+        await supabase.storage.from('deal-files').remove([storagePath])
+        setError(`${saved.name} was saved, but the deck couldn't be recorded: ${deckErr.message}. Add it again from the Decks section.`)
+        setLoading(false)
+        return
       }
     }
 
@@ -166,8 +161,11 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
   const fields = [
     { name: 'name', label: 'Company Name', type: 'text', required: true },
     { name: 'sector', label: 'Sector / Therapeutic Area', type: 'select', options: ABMS_SPECIALTIES },
-    { name: 'series', label: 'Series', type: 'select', options: ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'A', 'B', 'C', 'D+', 'Crossover', 'Public'] },
-    { name: 'clinical_stage', label: 'Clinical Stage', type: 'select', options: ['Preclinical', 'Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Pre-IDE', 'FIH', 'Pivotal', '510(k)', 'PMA', 'Approved / Marketed'] },
+    // fieldOpts routes these two to `lists` (seeded from FALLBACK_LISTS), so
+    // the options here never actually render — kept pointing at the same
+    // constants so they can't drift if that ever changes.
+    { name: 'series', label: 'Series', type: 'select', options: FALLBACK_LISTS.series },
+    { name: 'clinical_stage', label: 'Clinical Stage', type: 'select', options: FALLBACK_LISTS.clinical_stage },
     { name: 'drug_names', label: 'Drug / Asset Name(s)', type: 'text' },
     { name: 'indication', label: 'Indication', type: 'text' },
     { name: 'ct_sponsor_name', label: 'ClinicalTrials.gov Sponsor', type: 'text' },
@@ -193,7 +191,7 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+        <form id="portfolio-company-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           {fields.map((field) => (
             <div key={field.name}>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
@@ -325,7 +323,8 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
             Cancel
           </button>
           <button
-            onClick={handleSubmit as unknown as React.MouseEventHandler}
+            type="submit"
+            form="portfolio-company-form"
             disabled={loading}
             className="px-4 py-2 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition"
             style={{backgroundColor: '#023a51'}}

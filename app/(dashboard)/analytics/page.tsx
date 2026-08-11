@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { rowsOrThrow } from '@/lib/supabase/unwrap'
 import { Deal } from '@/lib/types'
 import BreakdownTable, { BreakdownRow } from '@/components/analytics/BreakdownTable'
 import CollapsibleSection from '@/components/analytics/CollapsibleSection'
@@ -14,7 +15,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function AnalyticsPage() {
   const supabase = await createClient()
-  const [{ data }, { data: activityData }, { data: catalystData }, { data: portfolioData }, { data: legacyData }, { data: listData }, { data: revenueData }] = await Promise.all([
+  const [dealsRes, activityRes, catalystRes, portfolioRes, legacyRes, listRes, { data: revenueData }] = await Promise.all([
     supabase.from('deals').select('id,name,stage,category,source,sector,clinical_stage,series,stage_entered_at,created_at'),
     supabase.from('deal_activity').select('deal_id,details,created_at').eq('action', 'Stage changed').order('created_at', { ascending: true }),
     supabase.from('catalysts').select('company_name,catalyst_date,original_date,status,resolved_date'),
@@ -26,7 +27,7 @@ export default async function AnalyticsPage() {
     supabase.from('portfolio_revenue').select('company_id,period_type,fiscal_year,projected,revised_projected,actual,projected_source'),
   ])
 
-  const deals = (data as Deal[]) ?? []
+  const deals = rowsOrThrow(dealsRes, 'deals') as Deal[]
   const total = deals.length
   const passed = deals.filter((d) => d.stage === 'Passed').length
   const invested = deals.filter((d) => d.stage === 'Invested').length
@@ -51,8 +52,8 @@ export default async function AnalyticsPage() {
   const drugs = deals.filter((d) => d.category === 'Drugs')
 
   // Sector breakdowns: deals and portfolio as separate expandable tables
-  const legacyNames = new Set(((legacyData as { company_name: string }[]) ?? []).map((l) => l.company_name))
-  const portfolioCompaniesAll = (portfolioData as { id: string; name: string; sector: string | null; category: string | null; series: string | null; clinical_stage: string | null; status: string | null }[]) ?? []
+  const legacyNames = new Set((rowsOrThrow(legacyRes, 'legacy companies') as { company_name: string }[]).map((l) => l.company_name))
+  const portfolioCompaniesAll = rowsOrThrow(portfolioRes, 'portfolio companies') as { id: string; name: string; sector: string | null; category: string | null; series: string | null; clinical_stage: string | null; status: string | null }[]
   // Legacy comes from two places: the legacy_companies list and a Legacy/Exited
   // status on the company itself. Exclude both everywhere on this page.
   const excludedNames = new Set(legacyNames)
@@ -104,7 +105,7 @@ export default async function AnalyticsPage() {
       }))
   }
 
-  const listRows = (listData as { list_key: string; value: string }[]) ?? []
+  const listRows = rowsOrThrow(listRes, 'list options') as { list_key: string; value: string }[]
   const fromList = (key: string, fallback: string[]) => {
     const v = listRows.filter((r) => r.list_key === key).map((r) => r.value)
     return v.length ? v : fallback
@@ -169,7 +170,7 @@ export default async function AnalyticsPage() {
   // Historical time in stage, from the stage-change activity log.
   // A completed interval = time between entering a stage and leaving it.
   type StageEvent = { deal_id: string; details: string; created_at: string }
-  const events = (activityData as StageEvent[]) ?? []
+  const events = rowsOrThrow(activityRes, 'stage-change history') as StageEvent[]
   const dealCreated: Record<string, string> = {}
   for (const d of deals) dealCreated[d.id] = d.created_at
 
@@ -234,7 +235,7 @@ export default async function AnalyticsPage() {
 
   // Catalyst reliability: per company, how many catalysts slipped vs original timeline
   type CatalystRow = { company_name: string; catalyst_date: string; original_date: string | null; status: string | null; resolved_date: string | null }
-  const catalysts = (catalystData as CatalystRow[]) ?? []
+  const catalysts = rowsOrThrow(catalystRes, 'catalysts') as CatalystRow[]
   const reliabilityMap: Record<string, { total: number; delayed: number; slipDays: number[] }> = {}
   for (const cat of catalysts) {
     // Legacy / exited companies are out entirely — their historical slips aren't

@@ -5,6 +5,7 @@ import { Plus, Trash2, Loader2, Pencil, TrendingUp } from "lucide-react"
 import { PortfolioFundraiseRound, PortfolioPosition, PortfolioValuationMark, VALUATION_BASES } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
 import { parseNum, numToStr, fmtMoney, fmtPct, saveHint, exactDate, valueColor, inputCls } from "@/lib/rounds"
+import { latestValuation, positionValue } from "@/lib/portfolio"
 import Field from "@/components/shared/Field"
 
 // Our valuation view: what Solas has in, what it's worth now, and the interim
@@ -18,6 +19,7 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
   const [loading, setLoading] = useState(true)
   const [addingMark, setAddingMark] = useState(false)
   const [editingMarkId, setEditingMarkId] = useState<string | null>(null)
+  const [markError, setMarkError] = useState("")
 
   useEffect(() => {
     load()
@@ -48,26 +50,17 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
   const lookthroughInvested = lookthroughPositions.reduce((s, p) => s + (Number(p.invested_amount) || 0), 0)
   const totalInvested = ownPositions.reduce((s, p) => s + (Number(p.invested_amount) || 0), 0)
   const ownership = ownPositions.reduce((s, p) => s + (Number(p.ownership_pct) || 0), 0)
-  // effective current valuation = most recent by date among round post-moneys and manual marks
-  const valuation = (() => {
-    const candidates: { value: number; date: string; source: string }[] = []
-    for (const r of rounds) if (r.post_money != null) candidates.push({ value: Number(r.post_money), date: r.date ?? "", source: `${r.round_name} post-money` })
-    for (const m of marks) if (m.valuation != null) candidates.push({ value: Number(m.valuation), date: m.as_of_date ?? "", source: m.basis || "mark" })
-    candidates.sort((a, b) => (b.date || "").localeCompare(a.date || ""))
-    return candidates[0] ?? null
-  })()
-  // per-position value = the most recent of (its own fair-value mark) and (ownership × latest company valuation)
+  // Both resolutions live in lib/portfolio.ts — the SAME functions Fund
+  // Performance uses, so this tab can't drift out of agreement with it.
+  const valuation = latestValuation(rounds, marks)
   const currentValue = (() => {
     if (!ownPositions.length) return null
     let total = 0
     let any = false
     for (const p of ownPositions) {
-      const cands: { v: number; d: string }[] = []
-      if (p.fair_value != null) cands.push({ v: Number(p.fair_value), d: p.fair_value_date || "" })
-      if (valuation != null && p.ownership_pct != null) cands.push({ v: (Number(p.ownership_pct) / 100) * valuation.value, d: valuation.date || "" })
-      if (!cands.length) continue
-      cands.sort((a, b) => (b.d || "").localeCompare(a.d || ""))
-      total += cands[0].v
+      const v = positionValue(p, valuation)
+      if (v == null) continue
+      total += v
       any = true
     }
     return any ? total : null
@@ -75,7 +68,9 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
   const moic = currentValue != null && totalInvested > 0 ? currentValue / totalInvested : null
 
   async function handleDeleteMark(id: string) {
-    await supabase.from("portfolio_valuation_marks").delete().eq("id", id)
+    setMarkError("")
+    const { error: e } = await supabase.from("portfolio_valuation_marks").delete().eq("id", id)
+    if (e) { setMarkError(saveHint(e.message)); return }
     setMarks((prev) => prev.filter((m) => m.id !== id))
     if (editingMarkId === id) setEditingMarkId(null)
   }
@@ -125,6 +120,7 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
             <MarkEditor companyId={companyId} onCancel={() => setAddingMark(false)} onDone={() => { setAddingMark(false); load() }} />
           </div>
         )}
+        {markError && <p className="text-sm text-red-600 bg-red-50 mx-4 mb-2.5 px-3 py-2 rounded-lg">{markError}</p>}
         {marks.length > 0 && (
           <div className="border-t border-slate-100 divide-y divide-slate-50">
             {marks.map((m) => (

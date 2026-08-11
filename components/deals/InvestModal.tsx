@@ -6,9 +6,8 @@ import { Deal, PortfolioCompany, SECURITY_TYPES } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
 import { logActivity } from "@/lib/activity"
 // Shared parser so "$25M"-style shorthand works here too.
-import { parseNum, numError } from "@/lib/rounds"
-
-const inputCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+import { parseNum, numError, fmtMoney, inputCls } from "@/lib/rounds"
+import Field from "@/components/shared/Field"
 
 interface Props {
   deal: Deal
@@ -167,10 +166,23 @@ export default function InvestModal({ deal, actorName, onCancel, onDone }: Props
       // Roll back anything we created (reverse order) so a failed investment
       // doesn't leave orphaned portfolio records behind. Deleting the round
       // cascades its positions; we only delete the company if we created it.
-      if (createdPositionId) await supabase.from("portfolio_positions").delete().eq("id", createdPositionId)
-      if (createdRoundId) await supabase.from("portfolio_fundraise_rounds").delete().eq("id", createdRoundId)
-      if (createdCompanyId) await supabase.from("portfolio_companies").delete().eq("id", createdCompanyId)
-      setError(err instanceof Error ? err.message : "Something went wrong")
+      // A rollback delete can itself fail — track those so the user knows an
+      // orphan survived instead of silently trusting the cleanup.
+      const orphaned: string[] = []
+      if (createdPositionId) {
+        const { error: e } = await supabase.from("portfolio_positions").delete().eq("id", createdPositionId)
+        if (e) orphaned.push("position")
+      }
+      if (createdRoundId) {
+        const { error: e } = await supabase.from("portfolio_fundraise_rounds").delete().eq("id", createdRoundId)
+        if (e) orphaned.push("round")
+      }
+      if (createdCompanyId) {
+        const { error: e } = await supabase.from("portfolio_companies").delete().eq("id", createdCompanyId)
+        if (e) orphaned.push("portfolio company")
+      }
+      const msg = err instanceof Error ? err.message : "Something went wrong"
+      setError(orphaned.length ? `${msg} — rollback also failed; manual cleanup may be needed for: ${orphaned.join(", ")}` : msg)
       setSaving(false)
     }
   }
@@ -251,15 +263,3 @@ export default function InvestModal({ deal, actorName, onCancel, onDone }: Props
   )
 }
 
-function fmtMoney(n: number | null): string {
-  if (n == null) return "—"
-  const abs = Math.abs(n)
-  if (abs >= 1e9) return `$${(n / 1e9).toFixed(2)}B`
-  if (abs >= 1e6) return `$${(n / 1e6).toFixed(1)}M`
-  if (abs >= 1e3) return `$${(n / 1e3).toFixed(0)}K`
-  return `$${n.toLocaleString()}`
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div><label className="block text-xs text-slate-500 mb-1">{label}</label>{children}</div>
-}

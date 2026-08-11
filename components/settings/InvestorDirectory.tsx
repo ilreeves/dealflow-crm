@@ -56,8 +56,11 @@ export default function InvestorDirectory() {
   }
 
   async function remove(id: string) {
-    setContacts((prev) => prev.filter((c) => c.id !== id))
-    await supabase.from('investor_contacts').delete().eq('id', id)
+    const prev = contacts
+    setContacts((p) => p.filter((c) => c.id !== id))
+    setError('')
+    const { error: err } = await supabase.from('investor_contacts').delete().eq('id', id)
+    if (err) { setError("Couldn't remove that investor: " + err.message); setContacts(prev) }
   }
 
   async function add() {

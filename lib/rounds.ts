@@ -49,6 +49,35 @@ export function fmtMoney(n: number | null | undefined): string {
   return `${sign}$${abs.toLocaleString()}`
 }
 
+/**
+ * Simple interest accrued on a convertible note: principal × rate × days/365
+ * (Actual/365 day count — actual calendar days elapsed over a 365-day year).
+ * This is the firm's convention for every note on the books, so a hand-entered
+ * accrued_interest figure that drifts from it deserves a second look. Returns
+ * null when any input is missing/invalid or the start date is in the future —
+ * the caller decides what "no answer" looks like.
+ */
+export function noteAccruedInterest(
+  principal: number | null | undefined,
+  annualRatePct: number | null | undefined,
+  startDate: string | null | undefined,
+  asOf?: string,
+): number | null {
+  if (principal == null || annualRatePct == null || !startDate) return null
+  const start = new Date(startDate + "T00:00:00")
+  const end = asOf ? new Date(asOf + "T00:00:00") : new Date()
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return null
+  // Calendar days via UTC — a raw millisecond diff comes up an hour short
+  // across a DST change and floors to one day too few (same trap as
+  // lib/runway.ts monthsBetween).
+  const days = Math.round(
+    (Date.UTC(end.getFullYear(), end.getMonth(), end.getDate()) -
+      Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) / 86_400_000,
+  )
+  if (days < 0) return null
+  return Number(principal) * (Number(annualRatePct) / 100) * (days / 365)
+}
+
 export function fmtPct(n: number | null | undefined): string {
   if (n == null || isNaN(Number(n))) return "—"
   return `${Number(n).toFixed(1)}%`

@@ -33,6 +33,7 @@ import {
 } from "@/lib/revenue"
 import { todayISO } from "@/lib/runway"
 import Field from "@/components/shared/Field"
+import Stat from "@/components/shared/Stat"
 
 const NAVY = "#023a51"  // variance colours come from varianceBandColor
 
@@ -246,16 +247,6 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
       </div>
 
       {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
-    </div>
-  )
-}
-
-function Stat({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: string }) {
-  return (
-    <div className="bg-slate-50 rounded-lg px-3 py-2.5">
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className="text-xl font-semibold mt-0.5 tabular-nums" style={{ color: accent ?? "#0f172a" }}>{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>}
     </div>
   )
 }

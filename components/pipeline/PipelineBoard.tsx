@@ -6,6 +6,7 @@ import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea
 import { Plus, LayoutList, Columns3, ChevronRight } from 'lucide-react'
 import { Deal, DealStage, DEAL_STAGES, STAGE_COLORS } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
+import { useActorName } from '@/lib/useActorName'
 import { logActivity } from '@/lib/activity'
 import { addDealToPortfolio } from '@/lib/portfolio'
 import DealCard from './DealCard'
@@ -26,14 +27,22 @@ export default function PipelineBoard({ initialDeals }: Props) {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<'All' | 'Devices' | 'Drugs'>('All')
   const [collapsedStages, setCollapsedStages] = useState<Set<DealStage>>(new Set(['Passed']))
-  const [actorName, setActorName] = useState<string | null>(null)
+  const actorName = useActorName()
   const [pendingPass, setPendingPass] = useState<{ id: string; name: string; fromStage: DealStage } | null>(null)
   const [isMobile, setIsMobile] = useState(false)
-  // ?open=<id> deep-links a deal modal (global search sends people here). Read as the
-  // initial value only — closing the modal clears the query string itself, so re-reading
-  // the param on every render would fight that.
+  // ?open=<id> deep-links a deal modal (global search sends people here). Track
+  // the last-seen param and react only when it CHANGES (the useServerState
+  // derived-state idiom): a mount-time read alone made search a no-op when you
+  // were already on this page, and re-reading every render would fight the
+  // modal-close handler clearing the query string.
   const searchParams = useSearchParams()
-  const [openDealId, setOpenDealId] = useState<string | null>(() => searchParams.get('open'))
+  const openParam = searchParams.get('open')
+  const [seenOpenParam, setSeenOpenParam] = useState<string | null>(null)
+  const [openDealId, setOpenDealId] = useState<string | null>(null)
+  if (openParam !== seenOpenParam) {
+    setSeenOpenParam(openParam)
+    if (openParam) setOpenDealId(openParam)
+  }
   const [moveError, setMoveError] = useState('')
   const supabase = createClient()
 
@@ -43,15 +52,6 @@ export default function PipelineBoard({ initialDeals }: Props) {
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        supabase.from('profiles').select('full_name').eq('id', user.id).single()
-          .then(({ data }) => setActorName(data?.full_name || user.email || null))
-      }
-    })
-  }, [supabase])
 
   const effectiveView = isMobile ? 'list' : view
   // Invested deals graduate to Portfolio — keep the stage in data, but drop it from the pipeline view
@@ -92,7 +92,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
     await logActivity(dealId, deal.name, 'Stage changed', details, actorName)
 
     if (newStage === 'Invested') {
-      const { error: mirrorErr } = await addDealToPortfolio(supabase, { ...deal, stage: newStage })
+      const { error: mirrorErr } = await addDealToPortfolio(supabase, { id: deal.id, name: deal.name })
       if (mirrorErr) {
         setMoveError(`${deal.name} moved to Invested, but couldn't be added to the portfolio: ${mirrorErr.message}`)
       } else {

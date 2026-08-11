@@ -85,7 +85,11 @@ export function peakFundingNeed(
  * it is a company claim rather than our arithmetic.
  */
 export function forecastZeroCrossing(series: PortfolioCashForecast[]): string | null {
-  return series.find((r) => r.cash_on_hand != null && Number(r.cash_on_hand) < 0)?.period_end ?? null
+  // Sorted defensively: "first" must mean first IN TIME, not first in whatever
+  // order the rows happened to arrive from the query.
+  return [...series]
+    .sort((a, b) => a.period_end.localeCompare(b.period_end))
+    .find((r) => r.cash_on_hand != null && Number(r.cash_on_hand) < 0)?.period_end ?? null
 }
 
 /**
@@ -275,7 +279,14 @@ export function forecastAccuracy(
   const withCash = actuals.filter((r) => r.cash_on_hand != null)
   const hits: ForecastHit[] = []
 
-  for (const f of forecast) {
+  // Base case only. A funded-path and an unfunded-path projection for the same
+  // period are forecasts of DIFFERENT worlds — pairing both against the one
+  // actual would score the company twice on one period, once unfairly. The
+  // base case (scenario null) is the company's official expectation; that is
+  // the one whose reliability is worth measuring.
+  const baseCase = forecast.filter((f) => f.scenario == null)
+
+  for (const f of baseCase) {
     if (f.cash_on_hand == null) continue
     const target = Date.parse(f.period_end + "T00:00:00")
     let best: PortfolioCash | null = null

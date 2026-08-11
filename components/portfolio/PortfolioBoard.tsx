@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Plus, Search, Globe, DollarSign, Building2, Mail, ChevronDown, ChevronRight } from 'lucide-react'
 import { PortfolioCompany } from '@/lib/types'
 import PortfolioCompanyForm from './PortfolioCompanyForm'
@@ -12,6 +13,8 @@ interface Props {
   fundOrder?: string[]
 }
 
+const isLegacy = (c: PortfolioCompany) => c.status === 'Legacy' || c.status === 'Exited'
+
 export default function PortfolioBoard({ initialCompanies, fundOrder }: Props) {
   const [companies, setCompanies] = useState(initialCompanies)
   const [search, setSearch] = useState('')
@@ -20,45 +23,55 @@ export default function PortfolioBoard({ initialCompanies, fundOrder }: Props) {
   const [groupBy, setGroupBy] = useState<'fund' | 'clinical'>('clinical')
   const [showLegacy, setShowLegacy] = useState(false)
 
-  useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('open')
-    if (id) {
-      const co = companies.find((c) => c.id === id)
+  // ?open=<id> deep-links a company modal (global search sends people here).
+  // React whenever the param CHANGES, not just on mount — a mount-only read
+  // made search a no-op when you were already on this page.
+  const searchParams = useSearchParams()
+  const openParam = searchParams.get('open')
+  const [seenOpenParam, setSeenOpenParam] = useState<string | null>(null)
+  if (openParam !== seenOpenParam) {
+    setSeenOpenParam(openParam)
+    if (openParam) {
+      const co = companies.find((c) => c.id === openParam)
       if (co) setSelected(co)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }
 
-  const filtered = companies.filter((c) =>
-    !search || c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.sector ?? '').toLowerCase().includes(search.toLowerCase())
-  )
-  const isLegacy = (c: PortfolioCompany) => c.status === 'Legacy' || c.status === 'Exited'
-  const activeFiltered = filtered.filter((c) => !isLegacy(c))
-  const legacyFiltered = filtered.filter(isLegacy)
+  const filtered = useMemo(() => {
+    const s = search.toLowerCase()
+    return companies.filter((c) =>
+      !s || c.name.toLowerCase().includes(s) || (c.sector ?? '').toLowerCase().includes(s)
+    )
+  }, [companies, search])
+  const activeFiltered = useMemo(() => filtered.filter((c) => !isLegacy(c)), [filtered])
+  const legacyFiltered = useMemo(() => filtered.filter(isLegacy), [filtered])
 
   const FUND_ORDER = fundOrder && fundOrder.length ? fundOrder : ['Fund I', 'Fund II', 'EHF', 'Solas/Sower', 'SPV']
   const CLINICAL_ORDER = ['Preclinical', 'Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Pre-IDE', 'FIH', 'Pivotal', '510(k)', 'PMA', 'Approved / Marketed']
 
   // Fund view: a company can appear in multiple fund groups
-  const groups: { label: string; items: PortfolioCompany[] }[] = []
-  function addTo(label: string, company: PortfolioCompany) {
-    let g = groups.find((x) => x.label === label)
-    if (!g) {
-      g = { label, items: [] }
-      groups.push(g)
+  const groups = useMemo(() => {
+    const out: { label: string; items: PortfolioCompany[] }[] = []
+    const addTo = (label: string, company: PortfolioCompany) => {
+      let g = out.find((x) => x.label === label)
+      if (!g) {
+        g = { label, items: [] }
+        out.push(g)
+      }
+      g.items.push(company)
     }
-    g.items.push(company)
-  }
-  for (const company of activeFiltered) {
-    const funds = company.funds?.length ? company.funds : ['Unassigned']
-    for (const f of funds) addTo(f, company)
-  }
-  groups.sort((a, b) => {
-    const ia = FUND_ORDER.indexOf(a.label); const ib = FUND_ORDER.indexOf(b.label)
-    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.label.localeCompare(b.label)
-  })
-  for (const g of groups) g.items.sort((a, b) => a.name.localeCompare(b.name))
+    for (const company of activeFiltered) {
+      const funds = company.funds?.length ? company.funds : ['Unassigned']
+      for (const f of funds) addTo(f, company)
+    }
+    out.sort((a, b) => {
+      const ia = FUND_ORDER.indexOf(a.label); const ib = FUND_ORDER.indexOf(b.label)
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.label.localeCompare(b.label)
+    })
+    for (const g of out) g.items.sort((a, b) => a.name.localeCompare(b.name))
+    return out
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFiltered, fundOrder])
 
   // Clinical view: Drugs column and Devices column, each ordered by clinical stage
   function stageGroups(items: PortfolioCompany[]): { stage: string; items: PortfolioCompany[] }[] {
@@ -75,9 +88,9 @@ export default function PortfolioBoard({ initialCompanies, fundOrder }: Props) {
       })
       .map(([stage, list]) => ({ stage, items: list.sort((a, b) => a.name.localeCompare(b.name)) }))
   }
-  const drugCompanies = activeFiltered.filter((c) => c.category === 'Drugs')
-  const deviceCompanies = activeFiltered.filter((c) => c.category === 'Devices')
-  const uncategorized = activeFiltered.filter((c) => !c.category)
+  const drugCompanies = useMemo(() => activeFiltered.filter((c) => c.category === 'Drugs'), [activeFiltered])
+  const deviceCompanies = useMemo(() => activeFiltered.filter((c) => c.category === 'Devices'), [activeFiltered])
+  const uncategorized = useMemo(() => activeFiltered.filter((c) => !c.category), [activeFiltered])
 
   function handleSaved(company: PortfolioCompany) {
     setCompanies((prev) => {
@@ -250,7 +263,12 @@ export default function PortfolioBoard({ initialCompanies, fundOrder }: Props) {
       {selected && (
         <PortfolioCompanyDetail
           company={selected}
-          onClose={() => setSelected(null)}
+          onClose={() => {
+            setSelected(null)
+            // Clear ?open so searching the same company again re-triggers the
+            // param-change logic above (mirrors PipelineBoard's close handler).
+            if (openParam) window.history.replaceState({}, '', '/portfolio')
+          }}
           onUpdated={handleUpdated}
           onDeleted={handleDeleted}
         />

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Send, Pencil, Trash2, Check, X, Loader2 } from 'lucide-react'
 import { DealNote } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
+import { getActorName } from '@/lib/useActorName'
 import { formatDate } from '@/lib/utils'
 
 interface Props {
@@ -17,6 +18,7 @@ export default function NotesList({ dealId }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
+  const [error, setError] = useState('')
   const supabase = createClient()
 
   // Derived, not stored — a setLoading(true) inside the effect would force an extra
@@ -43,44 +45,57 @@ export default function NotesList({ dealId }: Props) {
     e.preventDefault()
     if (!newNote.trim()) return
     setSubmitting(true)
+    setError('')
 
-    const { data: user } = await supabase.auth.getUser()
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', user.user?.id)
-      .single()
+    const { data: userData } = await supabase.auth.getUser()
+    const user = userData.user
+    // Resolved once per session and shared across components — no per-submit
+    // profiles round-trip (and no eq('id', undefined) when signed out).
+    const actorName = user ? await getActorName(supabase) : null
 
-    const { data } = await supabase
+    const { data, error: insertError } = await supabase
       .from('deal_notes')
       .insert({
         deal_id: dealId,
         content: newNote.trim(),
-        author_id: user.user?.id,
-        author_name: profile?.full_name ?? user.user?.email ?? 'Unknown',
+        author_id: user?.id,
+        author_name: user ? actorName ?? 'Unknown' : null,
       })
       .select()
       .single()
 
-    if (data) setNotes((prev) => [data as DealNote, ...prev])
-    setNewNote('')
+    if (insertError || !data) {
+      // Keep the typed text in the box — clearing it would discard the note.
+      setError(`Failed to save note: ${insertError?.message ?? 'no row returned'}`)
+    } else {
+      setNotes((prev) => [data as DealNote, ...prev])
+      setNewNote('')
+    }
     setSubmitting(false)
   }
 
   async function handleSaveEdit(note: DealNote) {
     if (!editContent.trim()) return
-    const { data } = await supabase
+    setError('')
+    const { data, error: updateError } = await supabase
       .from('deal_notes')
       .update({ content: editContent.trim() })
       .eq('id', note.id)
       .select()
       .single()
-    if (data) setNotes((prev) => prev.map((n) => n.id === note.id ? data as DealNote : n))
+    if (updateError || !data) {
+      // Stay in edit mode so the edited text isn't lost.
+      setError(`Failed to save edit: ${updateError?.message ?? 'no row returned'}`)
+      return
+    }
+    setNotes((prev) => prev.map((n) => n.id === note.id ? data as DealNote : n))
     setEditingId(null)
   }
 
   async function handleDelete(id: string) {
-    await supabase.from('deal_notes').delete().eq('id', id)
+    setError('')
+    const { error: delError } = await supabase.from('deal_notes').delete().eq('id', id)
+    if (delError) { setError(`Failed to delete note: ${delError.message}`); return }
     setNotes((prev) => prev.filter((n) => n.id !== id))
   }
 
@@ -109,6 +124,10 @@ export default function NotesList({ dealId }: Props) {
           </button>
         </div>
       </form>
+
+      {error && (
+        <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
+      )}
 
       {/* Notes list */}
       {loading ? (

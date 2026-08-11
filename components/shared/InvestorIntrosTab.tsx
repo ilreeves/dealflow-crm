@@ -74,7 +74,13 @@ export default function InvestorIntrosTab({ table, fkColumn, entityId }: Props) 
       const { data } = await supabase.from('investor_contacts').update(patch).eq('id', existing.id).select().single()
       if (data) setContacts((prev) => prev.map((c) => (c.id === existing.id ? (data as InvestorContact) : c)))
     } else {
-      const { data } = await supabase.from('investor_contacts').insert({ name, firm: firm || null, contact_email: email || null }).select().single()
+      const { data, error: insErr } = await supabase.from('investor_contacts').insert({ name, firm: firm || null, contact_email: email || null }).select().single()
+      if (insErr) {
+        // 23505 = unique violation: someone else added this contact between our
+        // load and now. The directory already has them, so ignore it deliberately.
+        if (insErr.code !== '23505') setError(`Intro saved, but couldn't add ${name} to the investor directory: ${insErr.message}`)
+        return
+      }
       if (data) setContacts((prev) => [...prev, data as InvestorContact].sort((a, b) => a.name.localeCompare(b.name)))
     }
   }
@@ -108,13 +114,16 @@ export default function InvestorIntrosTab({ table, fkColumn, entityId }: Props) 
   }
 
   async function handleStatusChange(id: string, status: string) {
+    setError('')
     const { data, error: updErr } = await supabase.from(table).update({ status }).eq('id', id).select().single()
     if (updErr || !data) { setError(`Couldn't update status: ${updErr?.message ?? 'update failed'}`); return }
     setIntros((prev) => prev.map((i) => (i.id === id ? (data as InvestorIntro) : i)))
   }
 
   async function handleDelete(id: string) {
-    await supabase.from(table).delete().eq('id', id)
+    setError('')
+    const { error: delErr } = await supabase.from(table).delete().eq('id', id)
+    if (delErr) { setError(`Couldn't delete intro: ${delErr.message}`); return }
     setIntros((prev) => prev.filter((i) => i.id !== id))
   }
 
@@ -211,6 +220,9 @@ export default function InvestorIntrosTab({ table, fkColumn, entityId }: Props) 
           </div>
         </div>
       )}
+
+      {/* errors from delete / status change / directory sync happen with the form closed */}
+      {error && !showForm && <p className="text-xs text-red-600">{error}</p>}
 
       {loading ? (
         <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>

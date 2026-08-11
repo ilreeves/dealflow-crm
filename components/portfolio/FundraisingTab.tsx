@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Plus, Trash2, Loader2, ChevronDown, ChevronRight, Pencil, Building2, ArrowRightCircle } from "lucide-react"
 import { PortfolioFundraiseRound, PortfolioPosition, SECURITY_TYPES } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
-import { parseNum, numError, numToStr, termStr, fmtMoney, fmtPct, saveHint, monthYear, exactDate, SECURITY_COLOR, valueColor, inputCls } from "@/lib/rounds"
+import { parseNum, numError, numToStr, termStr, fmtMoney, fmtPct, saveHint, monthYear, exactDate, noteAccruedInterest, SECURITY_COLOR, valueColor, inputCls } from "@/lib/rounds"
 import Field from "@/components/shared/Field"
 
 type Staged = {
@@ -32,6 +32,7 @@ export default function FundraisingTab({ companyId }: { companyId: string }) {
   const [adding, setAdding] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState("")
 
   useEffect(() => {
     load()
@@ -54,8 +55,21 @@ export default function FundraisingTab({ companyId }: { companyId: string }) {
   const positionsForRound = (rid: string) => positions.filter((p) => p.round_id === rid)
 
   async function handleDeleteRound(id: string) {
-    await supabase.from("portfolio_positions").delete().eq("round_id", id)
-    await supabase.from("portfolio_fundraise_rounds").delete().eq("id", id)
+    setDeleteError("")
+    // Positions must go before the round (FK), but snapshot them first so we
+    // can restore them if the round delete then fails — otherwise that failure
+    // would silently lose the Solas position data while the round survives.
+    const { data: prevPositions, error: snapErr } = await supabase.from("portfolio_positions").select("*").eq("round_id", id)
+    if (snapErr) { setDeleteError(saveHint(snapErr.message)); return }
+    const { error: posErr } = await supabase.from("portfolio_positions").delete().eq("round_id", id)
+    if (posErr) { setDeleteError(saveHint(posErr.message)); return }
+    const { error: rndErr } = await supabase.from("portfolio_fundraise_rounds").delete().eq("id", id)
+    if (rndErr) {
+      // Restore the positions we just deleted so the surviving round keeps them.
+      if (prevPositions && prevPositions.length) await supabase.from("portfolio_positions").insert(prevPositions)
+      setDeleteError(saveHint(rndErr.message))
+      return
+    }
     setRounds((prev) => prev.filter((r) => r.id !== id))
     setPositions((prev) => prev.filter((p) => p.round_id !== id))
     if (editingId === id) setEditingId(null)
@@ -92,6 +106,8 @@ export default function FundraisingTab({ companyId }: { companyId: string }) {
           onDone={() => { setAdding(false); load() }}
         />
       )}
+
+      {deleteError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{deleteError}</p>}
 
       {rounds.length === 0 && !adding ? (
         <p className="text-center text-sm text-slate-400 py-6">No rounds recorded yet</p>
@@ -559,6 +575,22 @@ function RoundEditor({
                 ) : <span className="col-span-1" />}
                 <button onClick={() => removePos(p._k)} className="col-span-1 flex justify-center text-slate-300 hover:text-red-500 transition"><Trash2 className="w-4 h-4" /></button>
               </div>
+              {/* Accrual sanity check: every note on the books follows simple
+                  Actual/365, so show what the terms imply and flag a stored
+                  figure that has drifted — accrued interest goes stale by
+                  itself as days pass. Advisory only; the entered value wins. */}
+              {isNote && f.interest_type === "Simple" && (() => {
+                const calc = noteAccruedInterest(parseNum(p.invested_amount), parseNum(f.interest_rate), f.date || null)
+                if (calc == null) return null
+                const entered = parseNum(p.accrued_interest)
+                const drifted = entered != null && calc > 0 && Math.abs(entered - calc) / calc > 0.05
+                return (
+                  <p className={`text-[11px] pl-1 ${drifted ? "text-amber-600" : "text-slate-400"}`}>
+                    {f.interest_rate}% simple Actual/365 from {f.date} ≈ {fmtMoney(calc)} today
+                    {drifted ? ` — entered ${fmtMoney(entered)} is off by more than 5%` : ""}
+                  </p>
+                )
+              })()}
               <div className="grid grid-cols-12 gap-2 items-center">
                 <span className="col-span-3 text-[11px] text-slate-400 pl-1">Fair-value mark</span>
                 <input placeholder="$ fair value" value={p.fair_value} onChange={(e) => setPos(p._k, "fair_value", e.target.value)} className={`${inputCls} col-span-3`} />
