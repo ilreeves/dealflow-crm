@@ -26,10 +26,11 @@ export default async function AnalyticsPage() {
     // then simply doesn't render rather than breaking the page.
     supabase.from('portfolio_revenue').select('company_id,period_type,fiscal_year,projected,revised_projected,actual,projected_source'),
   ])
-  // Separate soft query, same reasoning: if migration_features_1.sql hasn't
-  // added the inbound column yet, this errors and the pitch section skips
-  // rendering instead of taking the page down.
+  // Separate soft queries, same reasoning: if the features migrations haven't
+  // run yet, these error and their sections skip rendering instead of taking
+  // the page down.
   const { data: inboundData } = await supabase.from('deals').select('inbound,created_at')
+  const { data: pitchCountData } = await supabase.from('monthly_pitch_counts').select('month,pitches')
 
   const deals = rowsOrThrow(dealsRes, 'deals') as Deal[]
   const total = deals.length
@@ -141,6 +142,26 @@ export default async function AnalyticsPage() {
     }
   }
   const maxPitchMonth = Math.max(...pitchMonths.map((m) => m.count), 1)
+
+  // ── The funnel around those months: pitches received → evaluated → invested ──
+  // Pitch totals come from the monthly email audit (Settings → Monthly Pitch
+  // Counts; distinct companies, not raw messages). Deals evaluated = added to
+  // the CRM. Invested = reached the Invested stage inside the window (by
+  // stage_entered_at — the stamp of the move itself).
+  const pitchesByMonth = new Map(
+    ((pitchCountData as { month: string; pitches: number }[] | null) ?? []).map((r) => [r.month.slice(0, 7), r.pitches]),
+  )
+  const monthsWithPitchData = pitchMonths.filter((m) => pitchesByMonth.has(m.key))
+  const pitches12mo = monthsWithPitchData.reduce((s, m) => s + (pitchesByMonth.get(m.key) ?? 0), 0)
+  const windowStart = pitchMonths[0]?.key ?? ''
+  const invested12mo = windowStart
+    ? deals.filter((d) => d.stage === 'Invested' && (d.stage_entered_at ?? '') >= windowStart).length
+    : 0
+  // Conversion rates only over months where BOTH sides exist — comparing a
+  // full year of deals against seven months of pitch counts would overstate
+  // the pass-through.
+  const evaluatedInPitchMonths = monthsWithPitchData.reduce((s, m) => s + m.count, 0)
+  const showFunnel = pitches12mo > 0
 
   const listRows = rowsOrThrow(listRes, 'list options') as { list_key: string; value: string }[]
   const fromList = (key: string, fallback: string[]) => {
@@ -590,13 +611,37 @@ export default async function AnalyticsPage() {
         {inboundRows && (
           <CollapsibleSection
             title="Dealflow"
-            subtitle={`${dealsAdded12mo} deals in the last 12 months${anyClassified ? ` · ${inboundTotal12mo} inbound` : ''}`}
+            subtitle={
+              showFunnel
+                ? `${pitches12mo} pitches → ${dealsAdded12mo} evaluated → ${invested12mo} invested`
+                : `${dealsAdded12mo} deals in the last 12 months${anyClassified ? ` · ${inboundTotal12mo} inbound` : ''}`
+            }
           >
+            {/* The LP funnel. Pitch totals come from the monthly email audit
+                (Settings → Monthly Pitch Counts); the conversion rate compares
+                only months that have a pitch count, so a year of deals is
+                never divided by seven months of pitches. */}
+            {showFunnel && (
+              <div className="grid grid-cols-3 gap-2.5 mb-3">
+                {[
+                  { label: 'Pitches received', value: pitches12mo, sub: `${monthsWithPitchData.length} audited month${monthsWithPitchData.length === 1 ? '' : 's'}` },
+                  { label: 'Evaluated in CRM', value: dealsAdded12mo, sub: pitches12mo > 0 ? `${((evaluatedInPitchMonths / pitches12mo) * 100).toFixed(0)}% of pitches in audited months` : undefined },
+                  { label: 'Invested', value: invested12mo, sub: dealsAdded12mo > 0 ? `${((invested12mo / dealsAdded12mo) * 100).toFixed(0)}% of evaluated` : undefined },
+                ].map((t) => (
+                  <div key={t.label} className="bg-white rounded-xl border border-slate-200 p-4">
+                    <p className="text-xs text-slate-400">{t.label}</p>
+                    <p className="text-xl font-semibold tabular-nums mt-0.5" style={{ color: '#023a51' }}>{t.value}</p>
+                    {t.sub && <p className="text-xs text-slate-400 mt-0.5">{t.sub}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100">
                     <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Month</th>
+                    {showFunnel && <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Pitches</th>}
                     <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Added</th>
                     {anyClassified && <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Inbound</th>}
                     <th className="px-4 py-2.5 w-32"></th>
@@ -606,6 +651,11 @@ export default async function AnalyticsPage() {
                   {pitchMonths.map((m) => (
                     <tr key={m.key} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
                       <td className="px-4 py-2 font-medium text-slate-700 w-24">{m.label}</td>
+                      {showFunnel && (
+                        <td className="px-4 py-2 text-right text-slate-500 w-16 tabular-nums">
+                          {pitchesByMonth.has(m.key) ? pitchesByMonth.get(m.key) : '—'}
+                        </td>
+                      )}
                       <td className="px-4 py-2 text-right text-slate-600 w-12 tabular-nums">{m.count}</td>
                       {anyClassified && <td className="px-4 py-2 text-right text-slate-500 w-16 tabular-nums">{m.inbound || '—'}</td>}
                       <td className="px-4 py-2">

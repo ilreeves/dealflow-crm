@@ -568,3 +568,16 @@ export interface LogEvent {
   message: string
   created_at: string
 }
+
+/**
+ * One month of inbound pitch volume from the email audit — distinct companies,
+ * not raw messages. The top of the dealflow funnel on Analytics.
+ */
+export interface MonthlyPitchCount {
+  id: string
+  /** First of the month, yyyy-mm-01. One row per month. */
+  month: string
+  pitches: number
+  created_at: string
+  updated_at: string
+}

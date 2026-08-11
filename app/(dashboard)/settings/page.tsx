@@ -10,6 +10,7 @@ import ListManager from '@/components/settings/ListManager'
 import InvestorDirectory from '@/components/settings/InvestorDirectory'
 import DataExport from '@/components/settings/DataExport'
 import SystemHealth from '@/components/settings/SystemHealth'
+import PitchCounts from '@/components/settings/PitchCounts'
 
 const FIELD_TYPES: { value: CustomFieldType; label: string }[] = [
   { value: 'text', label: 'Text' },
@@ -273,6 +274,7 @@ export default function SettingsPage() {
       <ListManager listKey="fund" title="Fund / Vehicle Options" description="Funds and vehicles for grouping portfolio companies. Add a new fund here and it appears top-level on Fund Performance." />
       <ListManager listKey="spv_fund" title="SPV / Sidecar Vehicles" description="Which of the above are single-deal vehicles. These roll up under “SPVs & Sidecars” on Fund Performance; anything not listed here shows as its own fund." />
       <InvestorDirectory />
+      <PitchCounts />
       <DataExport />
       <SystemHealth />
 
