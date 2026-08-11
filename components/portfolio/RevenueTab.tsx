@@ -31,6 +31,7 @@ import {
   VARIANCE_BAND_PCT,
   SEVERE_MISS_PCT,
 } from "@/lib/revenue"
+import { todayISO } from "@/lib/runway"
 import Field from "@/components/shared/Field"
 
 const NAVY = "#023a51"  // variance colours come from varianceBandColor
@@ -345,6 +346,8 @@ type ChartPoint = {
   label: string
   /** Year caption under a quarter; blank when it repeats the one to its left. */
   group: string
+  /** The fiscal year regardless of whether `group` prints it — windowing needs it. */
+  yearHint: string
   /** The plan in force — revised where one exists. This is what the bar is scored against. */
   projected: number | null
   /** The original plan, drawn as a second, fainter tick when the target moved. */
@@ -360,11 +363,51 @@ function quarterPoints(rows: PortfolioRevenue[]): ChartPoint[] {
     key: r.id,
     label: r.period_type,
     group: i === 0 || chron[i - 1].fiscal_year !== r.fiscal_year ? String(r.fiscal_year) : "",
+    yearHint: String(r.fiscal_year),
     projected: planValue(r, "revised"),
     original: isRevised(r) ? planValue(r, "original") : null,
     actual: r.actual != null ? Number(r.actual) : null,
     basis: null,
   }))
+}
+
+/** How many quarters forward the near-term view reaches, counting the current one. */
+export const NEAR_TERM_QUARTERS = 8
+
+/**
+ * The near-term slice of the quarterly series: this calendar year so far, plus
+ * the next NEAR_TERM_QUARTERS from the current quarter.
+ *
+ * Isaiah asked for a "next 8 quarters" toggle because a full five-year plan is
+ * unreadable on a linear axis — Francis runs $154K in Q1-2026 to $100M in
+ * Q4-2030, and at that range every near-term bar is flat against zero.
+ *
+ * It reaches BACK to 1 January as well as forward, which "next 8" alone would
+ * not. Reported quarters cluster at the start of the year, so a strictly
+ * forward window would hide every actual on file and leave a view with nothing
+ * to score the plan against — the opposite of what a near-term view is for.
+ */
+function nearTermPoints(pts: ChartPoint[], today: string): ChartPoint[] {
+  const year = Number(today.slice(0, 4))
+  const q = Math.floor((Number(today.slice(5, 7)) - 1) / 3)      // 0-3
+  const idx = (y: number, label: string) => y * 4 + (Number(label.slice(1)) - 1)
+  const from = year * 4                                          // Q1 of this year
+  const to = year * 4 + q + NEAR_TERM_QUARTERS - 1
+  // `group` only prints when the year changes, so a slice that cuts mid-series
+  // can lose its first year caption. Re-derive it rather than inherit it.
+  let prevYear: number | null = null
+  return pts
+    .filter((p) => {
+      const y = Number(p.group || p.yearHint)
+      const i = idx(y, p.label)
+      return i >= from && i <= to
+    })
+    .map((p) => {
+      const y = Number(p.group || p.yearHint)
+      const out = { ...p, group: prevYear === y ? "" : String(y) }
+      prevYear = y
+      return out
+    })
 }
 
 function annualPoints(rows: PortfolioRevenue[]): ChartPoint[] {
@@ -382,6 +425,7 @@ function annualPoints(rows: PortfolioRevenue[]): ChartPoint[] {
         key: `fy-${y}`,
         label: String(y),
         group: "",
+        yearHint: String(y),
         projected: p?.value ?? null,
         // Only when the restatement moved the annual figure — an identical
         // second tick would just look like a rendering fault.
@@ -400,24 +444,40 @@ function annualPoints(rows: PortfolioRevenue[]): ChartPoint[] {
 const PLOT_BAND_REM = 5
 const PLOT_TOP_OFFSET_REM = 0.625 + 0.25
 
+const MODES = [
+  ["near", `next ${NEAR_TERM_QUARTERS}`],
+  ["quarterly", "all quarters"],
+  ["annual", "annual"],
+] as const
+type Mode = (typeof MODES)[number][0]
+
+/** Past this many quarters a full series stops being legible on a linear axis. */
+const NEAR_TERM_DEFAULT_ABOVE = 12
+
 function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
-  const [mode, setMode] = useState<"quarterly" | "annual">("quarterly")
   const quarterly = quarterPoints(rows)
   const annual = annualPoints(rows)
-  const pts = mode === "quarterly" ? quarterly : annual
+  const near = nearTermPoints(quarterly, todayISO())
+  // Open on the near-term view only when the full series is too long to read.
+  // A company with six quarters gains nothing from being windowed, and would
+  // just be showing fewer bars than it has for no reason.
+  const [mode, setMode] = useState<Mode>(
+    quarterly.length > NEAR_TERM_DEFAULT_ABOVE && near.length > 1 ? "near" : "quarterly",
+  )
+  const pts = mode === "annual" ? annual : mode === "near" ? near : quarterly
 
   const toggle = (
     <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-100 shrink-0">
-      {(["quarterly", "annual"] as const).map((m) => (
+      {MODES.filter(([m]) => m !== "near" || near.length > 1).map(([m, label]) => (
         <button
           key={m}
           onClick={() => setMode(m)}
           aria-pressed={mode === m}
-          className={`px-2 py-0.5 text-[11px] rounded-md capitalize transition ${
+          className={`px-2 py-0.5 text-[11px] rounded-md transition ${
             mode === m ? "bg-white text-slate-700 shadow-sm font-medium" : "text-slate-500 hover:text-slate-700"
           }`}
         >
-          {m}
+          {label}
         </button>
       ))}
     </div>
@@ -427,9 +487,11 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
     return (
       <div className="px-4 pt-3 pb-4 border-b border-slate-100 flex items-start justify-between gap-3">
         <p className="text-xs text-slate-400">
-          {mode === "quarterly"
-            ? "No quarterly periods recorded yet."
-            : "No complete year yet — an annual bar needs an FY row, or all four quarters."}
+          {mode === "annual"
+            ? "No complete year yet — an annual bar needs an FY row, or all four quarters."
+            : mode === "near"
+              ? `Nothing recorded for this year or the next ${NEAR_TERM_QUARTERS} quarters.`
+              : "No quarterly periods recorded yet."}
         </p>
         {toggle}
       </div>
