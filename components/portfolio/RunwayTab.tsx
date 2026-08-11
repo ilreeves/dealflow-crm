@@ -351,10 +351,14 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
             </span>
           </div>
           <div className="flex items-center gap-1.5">
-            {/* Only worth offering when there is a tail to trim — with 5 points
-                the two views are the same chart and the control would be noise.
-                Matches the revenue chart's window group in shape and placement. */}
-            {full.length > near.length && (
+            {/* ALWAYS PRESENT, even where the two views are identical because
+                the forecast has no tail past the window. Isaiah has now made
+                this point twice — first about the Log button, then here — and
+                it is right both times: a control that appears and disappears
+                with the data teaches nobody where it lives, and the cost of
+                showing it on a company where it happens to change nothing is
+                far smaller than the cost of it moving around. */}
+            {curve.length > 0 && (
               <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-100 shrink-0">
                 {([["near", `Next ${NEAR_TERM_MONTHS / 12} yrs`], ["all", "All"]] as const).map(([v, label]) => (
                   <button
