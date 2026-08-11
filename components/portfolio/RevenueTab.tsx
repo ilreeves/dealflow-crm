@@ -437,12 +437,32 @@ function annualPoints(rows: PortfolioRevenue[]): ChartPoint[] {
     .filter((pt) => pt.projected != null || pt.actual != null)
 }
 
-// Chart geometry, in rem. The plot band is h-20; above it sits the variance
-// readout (h-2.5) and a gap-1. The Y axis and its gridlines have to skip exactly
-// that much to line up with the bars, so the three are defined together — change
-// one without the others and the axis silently drifts off the bars.
+// Chart geometry, in rem. The plot band is h-20; above it sits the readout and a
+// gap-1. The Y axis and its gridlines have to skip exactly that much to line up
+// with the bars, so the three are defined together — change one without the
+// others and the axis silently drifts off the bars.
+//
+// The readout is TWO lines since 2026-08-11: the figure itself over the variance.
+// Isaiah asked for the number as well as the percent, on forecast bars as well as
+// reported ones — a plan of "$41M" is the thing you actually want to read off a
+// future quarter, and the percent alone never carried it.
 const PLOT_BAND_REM = 5
-const PLOT_TOP_OFFSET_REM = 0.625 + 0.25
+const CAP_REM = 1.25                       // two 10px lines
+const PLOT_TOP_OFFSET_REM = CAP_REM + 0.25
+
+/**
+ * Money for a bar caption: as short as it can be without losing the magnitude.
+ *
+ * fmtMoney keeps one decimal into the millions ("$109.0M", 7 characters), which
+ * at 20 quarters is wider than the column it sits over. Above 100 the decimal
+ * carries nothing a reader of a bar chart needs, so it goes.
+ */
+function fmtCap(n: number): string {
+  const s = fmtMoney(n)
+  return Math.abs(n) >= 100e6 || (Math.abs(n) >= 100e3 && Math.abs(n) < 1e6)
+    ? s.replace(/\.\d+/, "")
+    : s.replace(/\.0(?=[KMB]$)/, "")
+}
 
 const MODES = [
   ["near", `Next ${NEAR_TERM_QUARTERS}`],
@@ -601,6 +621,17 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
     .map((pt) => variance({ projected: pt.projected, actual: pt.actual })?.pct != null)
     .lastIndexOf(true)
   const shownVariance = (i: number) => !dense || i === lastScored
+  // The figure fits where the variance did not: it exists on EVERY bar rather
+  // than clustering at the start, so alternating actually separates these. At
+  // 20 quarters a column is ~26px and "$110K" is ~23px, which touches its
+  // neighbour — every other column doubles the room.
+  //
+  // ⚠️ THE ALTERNATION IS ANCHORED ON THE NEWEST REPORTED PERIOD, not on index
+  // 0. Anchoring at 0 and then force-keeping lastScored puts two labels side by
+  // side whenever lastScored is odd — Francis printed "$110K$168K" touching.
+  // Radiating from lastScored keeps it visible AND keeps every pair one column
+  // apart. Next 8 and Annual are never dense, so they label everything.
+  const shownValue = (i: number) => !dense || Math.abs(i - lastScored) % 2 === 0
 
   return (
     <div className="px-4 pt-3 pb-4 border-b border-slate-100">
@@ -610,7 +641,7 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
             caption, caption — so the ticks align with the bars by construction
             rather than by a hand-tuned offset. */}
         <div className="flex flex-col gap-1 shrink-0 w-12" aria-hidden="true">
-          <span className="h-2.5" />
+          <span style={{ height: `${CAP_REM}rem` }} />
           <div className="relative h-20">
             {ticks.map((t) => (
               <span
@@ -666,15 +697,23 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
 
           return (
             <div key={pt.key} className="flex flex-col items-center gap-1 flex-1 min-w-0">
-              {/* Signed variance, always shown alongside the fill. Green and orange
-                  are indistinguishable to protan viewers, so the colour is never
-                  the only thing saying whether a period beat or missed. */}
-              <span
-                className="text-[9px] leading-none tabular-nums h-2.5 whitespace-nowrap"
-                style={{ color: v?.pct != null && shownVariance(i) ? fill : "transparent" }}
+              {/* The figure, then the variance under it. Reported periods show the
+                  actual; periods not yet reported show the plan, which is the
+                  number you want off a future quarter and which the percent alone
+                  never carried. Variance is always text as well as fill — green
+                  and orange are indistinguishable to protan viewers, so colour is
+                  never the only thing saying whether a period beat or missed. */}
+              <div
+                className="flex flex-col items-center justify-end leading-none tabular-nums whitespace-nowrap"
+                style={{ height: `${CAP_REM}rem`, fontSize: dense ? 8 : 9 }}
               >
-                {v?.pct != null && shownVariance(i) ? fmtSignedPct(v.pct) : "—"}
-              </span>
+                <span className={a != null ? "text-slate-600 font-medium" : "text-slate-400"}>
+                  {shownValue(i) ? (a != null ? fmtCap(a) : p != null ? fmtCap(p) : "") : ""}
+                </span>
+                <span style={{ color: v?.pct != null && shownVariance(i) ? fill : "transparent" }}>
+                  {v?.pct != null && shownVariance(i) ? fmtSignedPct(v.pct) : "\u00a0"}
+                </span>
+              </div>
 
               <div className="relative w-full max-w-9 h-20" title={tip}>
                 {a != null ? (
