@@ -501,13 +501,19 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
   const pts = mode === "annual" ? annual : mode === "near" ? near : quarterly
 
   const figures = pts.flatMap((p) => [p.projected, p.original, p.actual].filter((v): v is number => v != null))
-  // A log axis can't place a non-positive figure, so don't offer one it would
-  // silently drop. Nor offer it inside a single decade, where it buys nothing
-  // and only makes "twice as tall" stop meaning "twice as much".
-  const logUsable =
-    figures.length > 1 && figures.every((v) => v > 0) &&
-    Math.max(...figures) / Math.min(...figures) >= 10
-  const useLog = log && logUsable
+  // The control is ALWAYS PRESENT, and disabled rather than hidden when the
+  // data genuinely cannot carry it. An earlier version hid it unless the series
+  // spanned a decade, so it appeared on Francis and Eirsystems and nowhere else
+  // — Isaiah, 2026-08-11: "it seems a bit odd that the others don't have it."
+  // He is right. A control that moves around teaches nobody where it lives, and
+  // whether a narrow range is worth viewing on a log axis is a reader's call,
+  // not one to make on their behalf by deleting the button.
+  //
+  // The remaining guard is real rather than editorial: a log axis cannot place
+  // zero or a negative number at all, so on that data the button is disabled
+  // and says why, instead of quietly dropping bars.
+  const logPossible = figures.length > 1 && figures.every((v) => v > 0)
+  const useLog = log && logPossible
 
   const toggle = (
     <div className="flex items-center gap-1.5 shrink-0">
@@ -528,24 +534,27 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
       {/* Separate from the window group because the two are orthogonal — see
           plotScale. Titled rather than labelled twice: the word "Log" is the
           control, and what it does needs a sentence, not a second button. */}
-      {logUsable && (
-        <button
-          onClick={() => setLog((v) => !v)}
-          aria-pressed={useLog}
-          title={
-            useLog
-              ? "Log scale: each gridline is 10x the one below. Bar heights are no longer proportional."
+      <button
+        onClick={() => setLog((v) => !v)}
+        aria-pressed={useLog}
+        disabled={!logPossible}
+        title={
+          !logPossible
+            ? "A log scale can't place a zero or negative figure, and this series has one"
+            : useLog
+              ? "Log scale: each gridline is 10x the one below. Bar heights are no longer proportional to revenue."
               : "Switch to a log scale so small early periods stay visible beside much larger later ones"
-          }
-          className={`px-2 py-0.5 text-[11px] rounded-lg border transition ${
-            useLog
+        }
+        className={`px-2 py-0.5 text-[11px] rounded-lg border transition ${
+          !logPossible
+            ? "bg-slate-50 border-transparent text-slate-300 cursor-not-allowed"
+            : useLog
               ? "bg-white border-slate-300 text-slate-700 shadow-sm font-medium"
               : "bg-slate-100 border-transparent text-slate-500 hover:text-slate-700"
-          }`}
-        >
-          Log
-        </button>
-      )}
+        }`}
+      >
+        Log
+      </button>
     </div>
   )
 
