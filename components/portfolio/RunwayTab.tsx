@@ -555,8 +555,28 @@ function CashRow({ row, onEdit, onDelete }: { row: PortfolioCash; onEdit: () => 
 // these two constants, so the three can't drift apart: the axis column is padded
 // down by CAP_H (+ the 4px flex gap) to clear the runway caption above each bar,
 // and every band is PLOT_H tall.
-const CAP_H = 10
+// Two lines: the cash figure over the runway. Isaiah asked for the same readout
+// the revenue chart got — the number as well as the derived metric, on projected
+// bars as well as reported ones.
+const CAP_H = 20
 const PLOT_H = 80
+
+/**
+ * Money for a bar caption: sign-first and as short as it can be.
+ *
+ * ⚠️ fmtMoney puts the minus INSIDE the currency — a -$49M balance renders
+ * "$-49.0M", which reads as a typo. It also keeps a decimal into the millions,
+ * seven characters, wider than the column at 23 quarters. Both matter more here
+ * than on the revenue chart, because a runway forecast is the one series that
+ * goes negative.
+ */
+function fmtCap(n: number): string {
+  const a = Math.abs(n)
+  const sign = n < 0 ? "-" : ""
+  if (a >= 1e6) return `${sign}$${a >= 100e6 ? Math.round(a / 1e6) : +(a / 1e6).toFixed(1)}M`
+  if (a >= 1e3) return `${sign}$${Math.round(a / 1e3)}K`
+  return `${sign}$${Math.round(a)}`
+}
 
 /**
  * Round tick values spanning a SIGNED domain, always including zero.
@@ -639,6 +659,12 @@ function CashBars({ points }: { points: BurnPoint[] }) {
   // historical ones, which the table underneath states exactly anyway.
   const lastReported = pts.map((p) => p.projected).lastIndexOf(false)
   const shownCap = (i: number) => !dense || i === lastReported
+  // The cash figure exists on every bar, so alternating separates these where it
+  // could not for the runway caption. Anchored on the newest reported bar rather
+  // than index 0 — anchoring at 0 and force-keeping the reported one puts two
+  // labels side by side whenever its index is odd, which is the collision this
+  // exists to avoid. Same rule as the revenue chart.
+  const shownValue = (i: number) => !dense || Math.abs(i - lastReported) % 2 === 0
 
   return (
     <div className="px-4 pt-3 pb-4 border-b border-slate-100">
@@ -690,7 +716,7 @@ function CashBars({ points }: { points: BurnPoint[] }) {
               const bottom = v >= 0 ? zero * 100 : zero * 100 - h
               const tip = [
                 exactDate(p.date) + (p.projected ? "  (projected)" : ""),
-                `Cash: ${fmtMoney(v)}`,
+                `Cash: ${fmtCap(v)}`,
                 p.burn != null
                   ? Number(p.burn) <= 0 ? "Burn: none — generating cash" : `Burn: ${fmtMoney(p.burn)}/mo`
                   : "Burn: not reported",
@@ -701,17 +727,22 @@ function CashBars({ points }: { points: BurnPoint[] }) {
 
               return (
                 <div key={p.date + String(p.projected)} className="flex flex-col items-center gap-1 flex-1 min-w-0">
-                  {/* The runway length in text as well as colour — colour alone
-                      can't carry the verdict for protan viewers. */}
-                  <span
-                    className="text-[9px] leading-none tabular-nums whitespace-nowrap"
-                    style={{
-                      color: p.runwayMonths != null && shownCap(i) ? band : "transparent",
-                      height: CAP_H,
-                    }}
+                  {/* The cash figure, then the runway under it. Reported bars
+                      show both; a projected bar has no runway verdict of its own
+                      (see BurnPoint.runwayMonths) so it shows the balance alone.
+                      The runway is text as well as colour — colour alone can't
+                      carry a verdict for protan viewers. */}
+                  <div
+                    className="flex flex-col items-center justify-end leading-none tabular-nums whitespace-nowrap"
+                    style={{ height: CAP_H, fontSize: dense ? 8 : 9 }}
                   >
-                    {p.runwayMonths != null && shownCap(i) ? fmtMonths(p.runwayMonths) : "—"}
-                  </span>
+                    <span className={p.projected ? "text-slate-400" : "text-slate-600 font-medium"}>
+                      {shownValue(i) ? fmtCap(v) : ""}
+                    </span>
+                    <span style={{ color: p.runwayMonths != null && shownCap(i) ? band : "transparent" }}>
+                      {p.runwayMonths != null && shownCap(i) ? fmtMonths(p.runwayMonths) : "\u00a0"}
+                    </span>
+                  </div>
                   <div className="relative z-10 w-full max-w-9" style={{ height: plotH }} title={tip}>
                     <div
                       className="absolute inset-x-0"
