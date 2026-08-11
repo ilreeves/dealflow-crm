@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { Plus, Trash2, Loader2, Pencil, Wallet } from "lucide-react"
-import { PortfolioCash, BURN_BASES, CASH_SOURCES } from "@/lib/types"
+import { PortfolioCash, PortfolioCashForecast, BURN_BASES, CASH_SOURCES } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
 import { parseNum, numToStr, numError, fmtMoney, saveHint, exactDate, inputCls } from "@/lib/rounds"
 import {
@@ -30,6 +30,14 @@ import {
   isPlannedBurn,
   todayISO,
 } from "@/lib/runway"
+import {
+  burnTimeline,
+  forecastSeries,
+  forecastVintages,
+  peakFundingNeed,
+  forecastBreakeven,
+  type BurnPoint,
+} from "@/lib/cashForecast"
 import Field from "@/components/shared/Field"
 
 const { navy: NAVY, green: GREEN, orange: ORANGE, red: RED } = RUNWAY_COLORS
@@ -41,6 +49,7 @@ const { navy: NAVY, green: GREEN, orange: ORANGE, red: RED } = RUNWAY_COLORS
 export default function RunwayTab({ companyId }: { companyId: string }) {
   const supabase = createClient()
   const [rows, setRows] = useState<PortfolioCash[]>([])
+  const [forecast, setForecast] = useState<PortfolioCashForecast[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [adding, setAdding] = useState(false)
@@ -61,6 +70,14 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
       .order("as_of", { ascending: false })
     if (e) setError(saveHint(e.message))
     setRows(sortCash((data as PortfolioCash[]) ?? []))
+    // Projections live in their own table so they can never be picked up by the
+    // runway helpers — see supabase/migration_cash_forecast.sql. A missing table
+    // (migration not yet run) is not an error worth blocking the tab over.
+    const { data: fc } = await supabase
+      .from("portfolio_cash_forecast")
+      .select("*")
+      .eq("company_id", companyId)
+    setForecast((fc as PortfolioCashForecast[]) ?? [])
     setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId])
@@ -136,6 +153,12 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
     last?.burn_basis,
   )
   const notBurning = !!last && last.monthly_burn != null && Number(last.monthly_burn) <= 0
+  // The projected half. `curve` is one vintage and one scenario — never spliced.
+  const curve = forecastSeries(forecast)
+  const timeline = burnTimeline(rows, forecast)
+  const need = peakFundingNeed(curve)
+  const breakeven = forecastBreakeven(curve)
+  const vintages = forecastVintages(forecast)
 
   if (loading) {
     return <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
@@ -315,7 +338,9 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
           <div className="flex items-center gap-2">
             <Wallet className="w-4 h-4 text-slate-400" />
             <span className="text-sm font-medium text-slate-600">Cash &amp; burn</span>
-            <span className="text-xs text-slate-400">by observation date</span>
+            <span className="text-xs text-slate-400">
+              {curve.length ? "reported, then projected" : "by observation date"}
+            </span>
           </div>
           {!adding && !editingId && (
             <button
@@ -340,7 +365,37 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
 
         {rows.length > 0 && (
           <div className="border-t border-slate-100">
-            <CashBars rows={rows} />
+            <CashBars points={timeline} />
+
+            {/* The two figures only a curve can give you, and neither is visible
+                anywhere else in the app. The funding need is the size of the
+                raise the company's own model implies — the single most useful
+                number on an unfunded path. Breakeven changes the question from
+                "how much runway" to "how big a bridge", which is a different
+                financing conversation. */}
+            {curve.length > 0 && (need || breakeven) && (
+              <div className="px-4 pb-3 -mt-1 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-slate-500">
+                {need && (
+                  <span>
+                    <span className="font-medium" style={{ color: RED }}>
+                      Peak funding need {fmtMoney(Math.abs(need.amount))}
+                    </span>{" "}
+                    at {exactDate(need.period_end)} — the raise this path implies
+                  </span>
+                )}
+                {breakeven && (
+                  <span>
+                    <span className="font-medium" style={{ color: GREEN }}>Stops burning {exactDate(breakeven)}</span>
+                    {need && breakeven < need.period_end && " — but the cash trough is later; burn isn't monotonic"}
+                  </span>
+                )}
+                {vintages.length > 1 && (
+                  <span className="text-slate-400">
+                    showing the {exactDate(vintages[0])} projection ({vintages.length} vintages on file)
+                  </span>
+                )}
+              </div>
+            )}
             <div className="divide-y divide-slate-50">
               {rows.map((row) =>
                 editingId === row.id ? (
@@ -466,23 +521,29 @@ const CAP_H = 10
 const PLOT_H = 80
 
 /**
- * Round tick values for the cash axis, at or below `max`.
+ * Round tick values spanning a SIGNED domain, always including zero.
  *
- * `max` keeps its 8% headroom rather than being rounded up to the top tick, so
- * the bars stay tall and a series still reads as a depletion. That means the top
- * gridline sits below the top of the plot, which is the deliberate trade: a
- * rounded-up scale would squash a $10.5M series into 70% of the height.
+ * The domain keeps its 8% headroom rather than being rounded out to the extreme
+ * ticks, so bars stay tall and a series still reads as a depletion. That means
+ * the outermost gridline sits inside the plot, which is the deliberate trade: a
+ * rounded-out scale would squash a $10.5M series into 70% of the height.
+ *
+ * Signed because a projected cash curve goes NEGATIVE — Francis's unfunded path
+ * bottoms at -$49M — and that hole below the axis is the most informative part
+ * of the chart. Clamping it at zero would erase the size of the raise.
  */
-function cashTicks(max: number): number[] {
+function cashTicks(lo: number, hi: number): number[] {
+  const span = Math.max(1, hi - lo)
   // Aim for ~5 intervals, then snap the step onto a 1/2/2.5/5 ladder so the
   // labels read as money a person would say out loud.
-  const target = max / 5
+  const target = span / 5
   const mag = Math.pow(10, Math.floor(Math.log10(target)))
   const n = target / mag
   const step = (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag
 
   const ticks: number[] = []
-  for (let t = 0; t <= max; t += step) ticks.push(t)
+  for (let t = 0; t >= lo; t -= step) ticks.unshift(t)      // zero, then downwards
+  for (let t = step; t <= hi; t += step) ticks.push(t)      // and upwards
   return ticks
 }
 
@@ -492,31 +553,46 @@ function fmtAxisTick(n: number): string {
 }
 
 // Oldest → newest left to right, so the depletion reads the way a chart should
-// even though the list below it is newest-first. Each bar is coloured by that
-// observation's OWN runway, so a series can visibly go from green to orange as
-// the company burns down — that progression is the point of the chart.
-function CashBars({ rows }: { rows: PortfolioCash[] }) {
-  const pts = sortCash(rows).slice().reverse().filter((r) => r.cash_on_hand != null)
+// even though the list below it is newest-first.
+//
+// Reported bars are SOLID and coloured by that observation's own runway, so a
+// series visibly goes green → orange as the company burns down. Projected bars
+// are HOLLOW. That distinction is the whole contract of this chart: a company's
+// forecast must never be able to read as something that happened, and colour
+// alone would not carry it — an outline reads as "not yet real" at a glance and
+// survives being printed in greyscale.
+function CashBars({ points }: { points: BurnPoint[] }) {
+  const pts = points.filter((p) => p.cash != null)
   if (pts.length < 2) return null
 
-  // Headroom so the tallest bar isn't flush against the top edge.
-  const max = Math.max(1, ...pts.map((r) => Number(r.cash_on_hand))) * 1.08
-  const ticks = cashTicks(max)
+  const vals = pts.map((p) => p.cash as number)
+  // Headroom on both ends. Zero is always in the domain so the axis can't imply
+  // a company is closer to (or further from) the line than it is.
+  const hi = Math.max(0, ...vals) * 1.08
+  const lo = Math.min(0, ...vals) * 1.08
+  const span = Math.max(1, hi - lo)
+  const ticks = cashTicks(lo, hi)
+  const frac = (v: number) => (v - lo) / span          // 0..1 from the bottom
+  const zero = frac(0)
+  const hasHole = lo < 0
+  // A signed domain has to fit roughly twice the range in the same box, which
+  // squashes both halves. Give it more room — only when there IS a hole, so a
+  // company with no forecast renders exactly as it did before.
+  const plotH = hasHole ? 128 : PLOT_H
 
   return (
     <div className="px-4 pt-3 pb-4 border-b border-slate-100">
       <div className="flex gap-2">
         {/* Y axis. Bar heights were previously readable only against each other —
             without a scale, a 13-month series looked identical whether it ran
-            $40M to $8M or $4M to $800K. Ticks are round numbers below the top of
-            the scale rather than a rounded-up max, so the bars keep their height. */}
+            $40M to $8M or $4M to $800K. */}
         <div className="shrink-0 w-11" style={{ paddingTop: CAP_H + 4 }} aria-hidden>
-          <div className="relative" style={{ height: PLOT_H }}>
+          <div className="relative" style={{ height: plotH }}>
             {ticks.map((t) => (
               <span
                 key={t}
-                className="absolute right-0 translate-y-1/2 text-[9px] leading-none tabular-nums text-slate-400"
-                style={{ bottom: `${(t / max) * 100}%` }}
+                className="absolute right-0 translate-y-1/2 text-[9px] leading-none tabular-nums"
+                style={{ bottom: `${frac(t) * 100}%`, color: t === 0 && hasHole ? "#64748b" : "#94a3b8" }}
               >
                 {fmtAxisTick(t)}
               </span>
@@ -526,56 +602,74 @@ function CashBars({ rows }: { rows: PortfolioCash[] }) {
 
         <div className="relative flex-1 min-w-0">
           {/* Gridlines sit behind the bars and share the tick geometry exactly —
-              same top offset, same height — so a bar can be read off the axis. */}
-          <div className="pointer-events-none absolute inset-x-0" style={{ top: CAP_H + 4, height: PLOT_H }}>
+              same top offset, same height — so a bar can be read off the axis.
+              Zero gets a darker line: with a funding hole on the chart it is the
+              one line that means something rather than just aiding the eye. */}
+          <div className="pointer-events-none absolute inset-x-0 z-0" style={{ top: CAP_H + 4, height: plotH }}>
             {ticks.map((t) => (
               <div
                 key={t}
-                className="absolute inset-x-0 border-t border-slate-100"
-                style={{ bottom: `${(t / max) * 100}%` }}
+                className="absolute inset-x-0"
+                style={{
+                  bottom: `${frac(t) * 100}%`,
+                  borderTopWidth: 1,
+                  borderTopColor: t === 0 && hasHole ? "#cbd5e1" : "#f1f5f9",
+                }}
               />
             ))}
           </div>
 
-          <div className="flex items-start gap-3 overflow-x-auto">
-        {pts.map((row) => {
-          const r = runwayMonths(row)
-          const fill = runwayBandColor(r?.months)
-          const tip = [
-            exactDate(row.as_of),
-            `Cash: ${fmtMoney(row.cash_on_hand)}`,
-            row.monthly_burn != null
-              ? Number(row.monthly_burn) <= 0 ? "Burn: none reported" : `Burn: ${fmtMoney(row.monthly_burn)}/mo`
-              : "Burn: not reported",
-            r ? `Runway: ${fmtMonths(r.months)} (${r.basis})` : null,
-            row.source ?? null,
-          ].filter(Boolean).join("\n")
+          <div className="relative flex items-start gap-3 overflow-x-auto">
+            {pts.map((p) => {
+              const v = p.cash as number
+              const band = runwayBandColor(p.runwayMonths)
+              // Below the line is a funding gap, not a small balance — red says
+              // that in a way a muted outline would not.
+              const stroke = p.projected ? (v < 0 ? RED : NAVY) : band
+              const h = (Math.abs(v) / span) * 100
+              const bottom = v >= 0 ? zero * 100 : zero * 100 - h
+              const tip = [
+                exactDate(p.date) + (p.projected ? "  (projected)" : ""),
+                `Cash: ${fmtMoney(v)}`,
+                p.burn != null
+                  ? Number(p.burn) <= 0 ? "Burn: none — generating cash" : `Burn: ${fmtMoney(p.burn)}/mo`
+                  : "Burn: not reported",
+                p.runwayMonths != null ? `Runway: ${fmtMonths(p.runwayMonths)}` : null,
+                p.burnBasis,
+                p.label,
+              ].filter(Boolean).join("\n")
 
-          return (
-            <div key={row.id} className="flex flex-col items-center gap-1 shrink-0 min-w-[3.5rem]">
-              {/* The runway length in text as well as colour — colour alone can't
-                  carry the verdict for protan viewers. */}
-              <span
-                className="text-[9px] leading-none tabular-nums"
-                style={{ color: r ? fill : "transparent", height: CAP_H }}
-              >
-                {r ? fmtMonths(r.months) : "—"}
-              </span>
-              <div className="relative w-9" style={{ height: PLOT_H }} title={tip}>
-                <div
-                  className="absolute inset-x-0 bottom-0 rounded-t"
-                  style={{ height: `${Math.max(2, (Number(row.cash_on_hand) / max) * 100)}%`, backgroundColor: fill }}
-                />
-              </div>
-              <span className="text-[10px] text-slate-500 leading-none">
-                {new Date(row.as_of + "T00:00:00").toLocaleDateString("en-US", { month: "short" })}
-              </span>
-              <span className="text-[9px] text-slate-400 leading-none h-2.5">
-                {new Date(row.as_of + "T00:00:00").getFullYear()}
-              </span>
-            </div>
-          )
-        })}
+              return (
+                <div key={p.date + String(p.projected)} className="flex flex-col items-center gap-1 shrink-0 min-w-[3.5rem]">
+                  {/* The runway length in text as well as colour — colour alone
+                      can't carry the verdict for protan viewers. */}
+                  <span
+                    className="text-[9px] leading-none tabular-nums"
+                    style={{ color: p.runwayMonths != null ? band : "transparent", height: CAP_H }}
+                  >
+                    {p.runwayMonths != null ? fmtMonths(p.runwayMonths) : "—"}
+                  </span>
+                  <div className="relative w-9 z-10" style={{ height: plotH }} title={tip}>
+                    <div
+                      className="absolute inset-x-0"
+                      style={{
+                        height: `${Math.max(2, h)}%`,
+                        bottom: `${bottom}%`,
+                        backgroundColor: p.projected ? "transparent" : stroke,
+                        border: p.projected ? `1.5px solid ${stroke}` : undefined,
+                        borderRadius: v >= 0 ? "4px 4px 0 0" : "0 0 4px 4px",
+                      }}
+                    />
+                  </div>
+                  <span className="text-[10px] leading-none" style={{ color: p.projected ? "#94a3b8" : "#64748b" }}>
+                    {new Date(p.date + "T00:00:00").toLocaleDateString("en-US", { month: "short" })}
+                  </span>
+                  <span className="text-[9px] text-slate-400 leading-none h-2.5">
+                    {new Date(p.date + "T00:00:00").getFullYear()}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>
@@ -592,7 +686,12 @@ function CashBars({ rows }: { rows: PortfolioCash[] }) {
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: RED }} /> under {RUNWAY_BANDS.critical} mo or lapsed
         </span>
-        <span>Bar height is cash; colour is that date&apos;s runway.</span>
+        {pts.some((p) => p.projected) && (
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded" style={{ border: `1.5px solid ${NAVY}` }} /> projected
+          </span>
+        )}
+        <span>Bar height is cash; solid bars are reported.</span>
       </div>
     </div>
   )

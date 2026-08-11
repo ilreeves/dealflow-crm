@@ -388,6 +388,38 @@ export interface PortfolioCash {
   updated_at: string
 }
 
+/**
+ * A projected cash/burn point from a company deck.
+ *
+ * Deliberately a separate table from PortfolioCash — see
+ * supabase/migration_cash_forecast.sql for why a `kind` column was rejected.
+ * The short version: a forecast has a VINTAGE, it has to be able to coexist
+ * with the actual for the same period so the two can be compared, and it must
+ * never be picked up by the runway helpers.
+ */
+export interface PortfolioCashForecast {
+  id: string
+  company_id: string
+  /** When the projection was MADE. Two vintages of one period are both kept. */
+  forecast_as_of: string
+  /** The period being projected, end-dated to line up with balance dates. */
+  period_end: string
+  /** Projected end-of-period cash. NEGATIVE on purpose — that's the funding gap. */
+  cash_on_hand: number | null
+  /** Projected burn per MONTH, positive when spending. Same units as PortfolioCash. */
+  monthly_burn: number | null
+  burn_basis: string | null
+  /** NULL = the company's base case. Otherwise names the path, e.g. "Unfunded". */
+  scenario: string | null
+  source: string | null
+  source_detail: string | null
+  notes: string | null
+  created_by: string | null
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 export const INTRO_STATUSES = ['Introduced', 'Meeting Scheduled', 'In Diligence', 'Passed', 'Invested'] as const
 export type IntroStatus = typeof INTRO_STATUSES[number]
 
