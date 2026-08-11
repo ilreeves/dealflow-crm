@@ -37,6 +37,8 @@ import {
   peakFundingNeed,
   forecastBreakeven,
   chartWindowStart,
+  nearTermEnd,
+  NEAR_TERM_MONTHS,
   type BurnPoint,
 } from "@/lib/cashForecast"
 import Field from "@/components/shared/Field"
@@ -156,7 +158,12 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
   const notBurning = !!last && last.monthly_burn != null && Number(last.monthly_burn) <= 0
   // The projected half. `curve` is one vintage and one scenario — never spliced.
   const curve = forecastSeries(forecast)
-  const timeline = burnTimeline(rows, forecast, chartWindowStart(today))
+  const full = burnTimeline(rows, forecast, chartWindowStart(today))
+  const near = burnTimeline(rows, forecast, chartWindowStart(today), nearTermEnd(today))
+  // Open windowed only when the full curve is long enough to be worth trimming.
+  // Today that is Francis alone (23 points); nobody else exceeds 13.
+  const [span, setSpan] = useState<"near" | "all">(full.length > 14 ? "near" : "all")
+  const timeline = span === "near" ? near : full
   const need = peakFundingNeed(curve)
   const breakeven = forecastBreakeven(curve)
   const vintages = forecastVintages(forecast)
@@ -343,14 +350,35 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
               {curve.length ? "reported, then projected" : "by observation date"}
             </span>
           </div>
-          {!adding && !editingId && (
-            <button
-              onClick={() => setAdding(true)}
-              className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 hover:border-slate-300 transition"
-            >
-              <Plus className="w-3.5 h-3.5" /> Add snapshot
-            </button>
-          )}
+          <div className="flex items-center gap-1.5">
+            {/* Only worth offering when there is a tail to trim — with 5 points
+                the two views are the same chart and the control would be noise.
+                Matches the revenue chart's window group in shape and placement. */}
+            {full.length > near.length && (
+              <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-100 shrink-0">
+                {([["near", `Next ${NEAR_TERM_MONTHS / 12} yrs`], ["all", "All"]] as const).map(([v, label]) => (
+                  <button
+                    key={v}
+                    onClick={() => setSpan(v)}
+                    aria-pressed={span === v}
+                    className={`px-2 py-0.5 text-[11px] rounded-md transition ${
+                      span === v ? "bg-white text-slate-700 shadow-sm font-medium" : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!adding && !editingId && (
+              <button
+                onClick={() => setAdding(true)}
+                className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 hover:border-slate-300 transition"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add snapshot
+              </button>
+            )}
+          </div>
         </div>
 
         {adding && (
@@ -382,6 +410,11 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
                       Peak funding need {fmtMoney(Math.abs(need.amount))}
                     </span>{" "}
                     at {exactDate(need.period_end)} — the raise this path implies
+                    {/* These come from the whole curve, never the visible window,
+                        so trimming the tail can't quietly shrink the headline
+                        number. Say when the trough is off the end. */}
+                    {span === "near" && timeline.length > 0 &&
+                      need.period_end > timeline[timeline.length - 1].date && ", beyond this view"}
                   </span>
                 )}
                 {breakeven && (

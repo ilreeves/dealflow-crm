@@ -140,6 +140,24 @@ export function chartWindowStart(today: string): string {
   return today.slice(0, 4) + "-01-01"
 }
 
+/** How far forward the near-term runway view reaches. */
+export const NEAR_TERM_MONTHS = 24
+
+/**
+ * End of the near-term window: NEAR_TERM_MONTHS from today.
+ *
+ * Expressed as a DURATION rather than a period count, unlike the revenue
+ * chart's "Next 8" quarters. Runway points arrive at whatever cadence the deck
+ * used — Francis and Basking project quarterly, iO Urology and Stimdia
+ * monthly — so "the next 8 points" would mean two years for one company and
+ * eight months for another.
+ */
+export function nearTermEnd(today: string, months = NEAR_TERM_MONTHS): string {
+  const d = new Date(today + "T00:00:00")
+  d.setMonth(d.getMonth() + months)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+
 /**
  * Reported history and the projected curve on one timeline.
  *
@@ -155,6 +173,8 @@ export function burnTimeline(
   forecast: PortfolioCashForecast[],
   /** Drop reported points before this date. Projections are never trimmed. */
   since?: string,
+  /** Drop PROJECTED points after this date. Reported points are never trimmed. */
+  until?: string,
 ): BurnPoint[] {
   const withFigures = actuals.filter((r) => r.cash_on_hand != null || r.monthly_burn != null)
   // ⚠️ THE NEWEST REPORTED BALANCE ALWAYS SURVIVES THE WINDOW. Stimdia is why:
@@ -184,6 +204,7 @@ export function burnTimeline(
   const lastReported = reported.length ? reported[reported.length - 1].date : null
   const projected: BurnPoint[] = forecastSeries(forecast)
     .filter((r) => lastReported == null || r.period_end > lastReported)
+    .filter((r) => until == null || r.period_end <= until)
     .map((r) => ({
       date: r.period_end,
       cash: r.cash_on_hand == null ? null : Number(r.cash_on_hand),

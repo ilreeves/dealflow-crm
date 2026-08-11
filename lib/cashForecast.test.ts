@@ -12,6 +12,7 @@ import {
   forecastAccuracy,
   forecastContradictsFlatBurn,
   chartWindowStart,
+  nearTermEnd,
   FORECAST_MATCH_DAYS,
 } from "./cashForecast"
 
@@ -197,6 +198,21 @@ describe("reported history and projection on one timeline", () => {
 
   it("window start is 1 January of the given year", () => {
     expect(chartWindowStart("2026-08-11")).toBe("2026-01-01")
+  })
+
+  it("can trim the forecast tail without touching reported history", () => {
+    const actuals = [a({ as_of: "2026-05-31", cash_on_hand: 36_332_539 })]
+    const t = burnTimeline(actuals, FRANCIS, "2026-01-01", nearTermEnd("2026-08-11"))
+    expect(t.filter((p) => !p.projected)).toHaveLength(1)          // history intact
+    expect(t.every((p) => p.date <= "2028-08-11")).toBe(true)      // tail trimmed
+    // ...and untrimmed it runs to the end of the curve.
+    const full = burnTimeline(actuals, FRANCIS, "2026-01-01")
+    expect(full.length).toBeGreaterThan(t.length)
+  })
+
+  it("the near-term end is a DURATION, so it works at any cadence", () => {
+    expect(nearTermEnd("2026-08-11")).toBe("2028-08-11")
+    expect(nearTermEnd("2026-08-11", 3)).toBe("2026-11-11")
   })
 })
 
