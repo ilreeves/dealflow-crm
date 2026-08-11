@@ -36,6 +36,7 @@ import {
   forecastVintages,
   peakFundingNeed,
   forecastBreakeven,
+  chartWindowStart,
   type BurnPoint,
 } from "@/lib/cashForecast"
 import Field from "@/components/shared/Field"
@@ -155,7 +156,7 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
   const notBurning = !!last && last.monthly_burn != null && Number(last.monthly_burn) <= 0
   // The projected half. `curve` is one vintage and one scenario — never spliced.
   const curve = forecastSeries(forecast)
-  const timeline = burnTimeline(rows, forecast)
+  const timeline = burnTimeline(rows, forecast, chartWindowStart(today))
   const need = peakFundingNeed(curve)
   const breakeven = forecastBreakeven(curve)
   const vintages = forecastVintages(forecast)
@@ -579,6 +580,28 @@ function CashBars({ points }: { points: BurnPoint[] }) {
   // squashes both halves. Give it more room — only when there IS a hole, so a
   // company with no forecast renders exactly as it did before.
   const plotH = hasHole ? 128 : PLOT_H
+  // Fit the whole curve without scrolling. Columns share the available width
+  // rather than claiming a fixed 3.5rem, so a 23-quarter series compresses
+  // instead of running off the edge — the shape of a curve is the point, and a
+  // shape you have to scroll to see isn't one. Sparse charts are unaffected:
+  // the bar caps at its original 36px, so 5 points look exactly as they did.
+  //
+  // Labels are what actually break under compression, not bars. A 17px bar
+  // still reads; "Sep" needs ~22px and starts colliding below ~34px of pitch.
+  // So past a threshold the month label shows on every other column, and the
+  // year only where it changes — which reads as a timeline rather than a list.
+  const dense = pts.length > 14
+  const shownYear = (i: number) =>
+    i === 0 || pts[i].date.slice(0, 4) !== pts[i - 1].date.slice(0, 4)
+  const shownMonth = (i: number) => !dense || i % 2 === 0 || i === pts.length - 1
+  // The runway caption is the widest thing in a column ("20.3 mo" ≈ 34px) and
+  // is the first casualty of compression — five of them collide and wrap. When
+  // dense, show it only on the newest REPORTED bar. That keeps the point of
+  // having it at all (colour alone can't carry a verdict for protan viewers)
+  // on the one figure that is actually a verdict about today, and drops the
+  // historical ones, which the table underneath states exactly anyway.
+  const lastReported = pts.map((p) => p.projected).lastIndexOf(false)
+  const shownCap = (i: number) => !dense || i === lastReported
 
   return (
     <div className="px-4 pt-3 pb-4 border-b border-slate-100">
@@ -619,8 +642,8 @@ function CashBars({ points }: { points: BurnPoint[] }) {
             ))}
           </div>
 
-          <div className="relative flex items-start gap-3 overflow-x-auto">
-            {pts.map((p) => {
+          <div className="relative flex items-start gap-1.5">
+            {pts.map((p, i) => {
               const v = p.cash as number
               const band = runwayBandColor(p.runwayMonths)
               // Below the line is a funding gap, not a small balance — red says
@@ -640,16 +663,19 @@ function CashBars({ points }: { points: BurnPoint[] }) {
               ].filter(Boolean).join("\n")
 
               return (
-                <div key={p.date + String(p.projected)} className="flex flex-col items-center gap-1 shrink-0 min-w-[3.5rem]">
+                <div key={p.date + String(p.projected)} className="flex flex-col items-center gap-1 flex-1 min-w-0">
                   {/* The runway length in text as well as colour — colour alone
                       can't carry the verdict for protan viewers. */}
                   <span
-                    className="text-[9px] leading-none tabular-nums"
-                    style={{ color: p.runwayMonths != null ? band : "transparent", height: CAP_H }}
+                    className="text-[9px] leading-none tabular-nums whitespace-nowrap"
+                    style={{
+                      color: p.runwayMonths != null && shownCap(i) ? band : "transparent",
+                      height: CAP_H,
+                    }}
                   >
-                    {p.runwayMonths != null ? fmtMonths(p.runwayMonths) : "—"}
+                    {p.runwayMonths != null && shownCap(i) ? fmtMonths(p.runwayMonths) : "—"}
                   </span>
-                  <div className="relative w-9 z-10" style={{ height: plotH }} title={tip}>
+                  <div className="relative z-10 w-full max-w-9" style={{ height: plotH }} title={tip}>
                     <div
                       className="absolute inset-x-0"
                       style={{
@@ -661,11 +687,13 @@ function CashBars({ points }: { points: BurnPoint[] }) {
                       }}
                     />
                   </div>
-                  <span className="text-[10px] leading-none" style={{ color: p.projected ? "#94a3b8" : "#64748b" }}>
-                    {new Date(p.date + "T00:00:00").toLocaleDateString("en-US", { month: "short" })}
+                  <span className="text-[10px] leading-none h-2.5" style={{ color: p.projected ? "#94a3b8" : "#64748b" }}>
+                    {shownMonth(i)
+                      ? new Date(p.date + "T00:00:00").toLocaleDateString("en-US", { month: "short" })
+                      : ""}
                   </span>
                   <span className="text-[9px] text-slate-400 leading-none h-2.5">
-                    {new Date(p.date + "T00:00:00").getFullYear()}
+                    {shownYear(i) ? new Date(p.date + "T00:00:00").getFullYear() : ""}
                   </span>
                 </div>
               )

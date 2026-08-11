@@ -11,6 +11,7 @@ import {
   burnTimeline,
   forecastAccuracy,
   forecastContradictsFlatBurn,
+  chartWindowStart,
   FORECAST_MATCH_DAYS,
 } from "./cashForecast"
 
@@ -167,6 +168,35 @@ describe("reported history and projection on one timeline", () => {
 
   it("draws the whole forecast when nothing has been reported yet", () => {
     expect(burnTimeline([], FRANCIS)).toHaveLength(FRANCIS.length)
+  })
+
+  it("windows out previous years but NEVER the newest balance", () => {
+    // Stimdia is the case: its only reported balance is 12/31/2025, so a plain
+    // "current year" cut left a chart that was entirely projection with nothing
+    // to anchor it. A stale anchor is the one you most need to see.
+    const old = [
+      a({ as_of: "2024-06-30", cash_on_hand: 9_000_000 }),
+      a({ as_of: "2025-12-31", cash_on_hand: 1_554_080 }),
+    ]
+    const t = burnTimeline(old, FRANCIS, "2026-01-01")
+    const rep = t.filter((p) => !p.projected)
+    expect(rep).toHaveLength(1)
+    expect(rep[0].date).toBe("2025-12-31")   // anchor kept
+    // ...and the genuinely old one is gone.
+    expect(t.some((p) => p.date === "2024-06-30")).toBe(false)
+  })
+
+  it("drops prior-year history when a current-year balance exists", () => {
+    const mixed = [
+      a({ as_of: "2025-12-31", cash_on_hand: 17_135_463 }),
+      a({ as_of: "2026-03-31", cash_on_hand: 11_877_609 }),
+    ]
+    const dates = burnTimeline(mixed, FRANCIS, "2026-01-01").filter((p) => !p.projected).map((p) => p.date)
+    expect(dates).toEqual(["2026-03-31"])
+  })
+
+  it("window start is 1 January of the given year", () => {
+    expect(chartWindowStart("2026-08-11")).toBe("2026-01-01")
   })
 })
 

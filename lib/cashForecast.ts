@@ -128,6 +128,19 @@ export interface BurnPoint {
 }
 
 /**
+ * Start of the chart window: 1 January of the current year.
+ *
+ * Isaiah, 2026-08-10: "We don't need to see data from previous years here
+ * (though previous months/quarters in the current year are worthwhile)." A
+ * runway chart is about where the money goes next; a balance from two years ago
+ * costs a column and settles nothing. Earlier observations stay in the table
+ * below the chart and in the accuracy pairs — this trims the DRAWING, not the data.
+ */
+export function chartWindowStart(today: string): string {
+  return today.slice(0, 4) + "-01-01"
+}
+
+/**
  * Reported history and the projected curve on one timeline.
  *
  * The forecast is TRUNCATED to periods after the last reported balance. A deck
@@ -140,9 +153,23 @@ export interface BurnPoint {
 export function burnTimeline(
   actuals: PortfolioCash[],
   forecast: PortfolioCashForecast[],
+  /** Drop reported points before this date. Projections are never trimmed. */
+  since?: string,
 ): BurnPoint[] {
-  const reported: BurnPoint[] = actuals
-    .filter((r) => r.cash_on_hand != null || r.monthly_burn != null)
+  const withFigures = actuals.filter((r) => r.cash_on_hand != null || r.monthly_burn != null)
+  // ⚠️ THE NEWEST REPORTED BALANCE ALWAYS SURVIVES THE WINDOW. Stimdia is why:
+  // its only balance is 12/31/2025, so a straight "current year" cut left a
+  // chart that was 100% projection with nothing solid to anchor it — and a
+  // company whose last balance is stale is precisely the one where seeing how
+  // old that anchor is matters most. The window trims history, never the anchor.
+  const anchor = withFigures.reduce<string | null>(
+    (a, r) => (r.cash_on_hand != null && (a == null || r.as_of > a) ? r.as_of : a), null)
+
+  const reported: BurnPoint[] = withFigures
+    // Only the REPORTED side is windowed. A forecast that starts before the
+    // window would leave the curve beginning mid-air, and every projected point
+    // is by definition about what happens next.
+    .filter((r) => since == null || r.as_of >= since || r.as_of === anchor)
     .map((r) => ({
       date: r.as_of,
       cash: r.cash_on_hand == null ? null : Number(r.cash_on_hand),
