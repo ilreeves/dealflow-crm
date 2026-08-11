@@ -445,14 +445,47 @@ const PLOT_BAND_REM = 5
 const PLOT_TOP_OFFSET_REM = 0.625 + 0.25
 
 const MODES = [
-  ["near", `next ${NEAR_TERM_QUARTERS}`],
-  ["quarterly", "all quarters"],
-  ["annual", "annual"],
+  ["near", `Next ${NEAR_TERM_QUARTERS}`],
+  ["quarterly", "All quarters"],
+  ["annual", "Annual"],
 ] as const
 type Mode = (typeof MODES)[number][0]
 
 /** Past this many quarters a full series stops being legible on a linear axis. */
 const NEAR_TERM_DEFAULT_ABOVE = 12
+
+/**
+ * Where a value sits in the plot, 0 (floor) to 1 (top), plus the axis ticks.
+ *
+ * ⚠️ LOG IS A SEPARATE CONTROL FROM THE WINDOW, not a fourth option beside it.
+ * The two are orthogonal: Francis specifically needs "All quarters" AND log —
+ * the whole five-year plan, with the near-term quarters still visible. Folding
+ * log into the window group would make exactly that combination unreachable.
+ *
+ * On a linear axis the domain is 0 → max with 8% headroom, as before. On a log
+ * axis it runs decade to decade around the data: the floor is the power of ten
+ * at or below the smallest positive figure, the top the one at or above the
+ * largest. Francis's near-term window then puts Q1-2026 at 6.3% of the plot
+ * height instead of 0.6% — the difference between a visible bar and none.
+ *
+ * ⚠️ A log axis cannot place zero or a negative number. No figure in the book
+ * is non-positive today (104 checked), and the Log control hides itself if one
+ * ever appears, so this never silently drops a bar.
+ */
+function plotScale(values: number[], log: boolean): { pos: (v: number) => number; ticks: number[]; lo: number } {
+  const max = Math.max(1, ...values)
+  if (!log) {
+    const top = max * 1.08
+    return { pos: (v) => v / top, ticks: axisTicks(top), lo: 0 }
+  }
+  const positive = values.filter((v) => v > 0)
+  const lo = Math.pow(10, Math.floor(Math.log10(Math.min(...positive))))
+  const hi = Math.pow(10, Math.ceil(Math.log10(max)))
+  const span = Math.log10(hi) - Math.log10(lo) || 1
+  const ticks: number[] = []
+  for (let t = lo; t <= hi * 1.0001; t *= 10) ticks.push(t)
+  return { pos: (v) => (v <= 0 ? 0 : (Math.log10(v) - Math.log10(lo)) / span), ticks, lo }
+}
 
 function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
   const quarterly = quarterPoints(rows)
@@ -464,22 +497,55 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
   const [mode, setMode] = useState<Mode>(
     quarterly.length > NEAR_TERM_DEFAULT_ABOVE && near.length > 1 ? "near" : "quarterly",
   )
+  const [log, setLog] = useState(false)
   const pts = mode === "annual" ? annual : mode === "near" ? near : quarterly
 
+  const figures = pts.flatMap((p) => [p.projected, p.original, p.actual].filter((v): v is number => v != null))
+  // A log axis can't place a non-positive figure, so don't offer one it would
+  // silently drop. Nor offer it inside a single decade, where it buys nothing
+  // and only makes "twice as tall" stop meaning "twice as much".
+  const logUsable =
+    figures.length > 1 && figures.every((v) => v > 0) &&
+    Math.max(...figures) / Math.min(...figures) >= 10
+  const useLog = log && logUsable
+
   const toggle = (
-    <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-100 shrink-0">
-      {MODES.filter(([m]) => m !== "near" || near.length > 1).map(([m, label]) => (
+    <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-100">
+        {MODES.filter(([m]) => m !== "near" || near.length > 1).map(([m, label]) => (
+          <button
+            key={m}
+            onClick={() => setMode(m)}
+            aria-pressed={mode === m}
+            className={`px-2 py-0.5 text-[11px] rounded-md transition ${
+              mode === m ? "bg-white text-slate-700 shadow-sm font-medium" : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {/* Separate from the window group because the two are orthogonal — see
+          plotScale. Titled rather than labelled twice: the word "Log" is the
+          control, and what it does needs a sentence, not a second button. */}
+      {logUsable && (
         <button
-          key={m}
-          onClick={() => setMode(m)}
-          aria-pressed={mode === m}
-          className={`px-2 py-0.5 text-[11px] rounded-md transition ${
-            mode === m ? "bg-white text-slate-700 shadow-sm font-medium" : "text-slate-500 hover:text-slate-700"
+          onClick={() => setLog((v) => !v)}
+          aria-pressed={useLog}
+          title={
+            useLog
+              ? "Log scale: each gridline is 10x the one below. Bar heights are no longer proportional."
+              : "Switch to a log scale so small early periods stay visible beside much larger later ones"
+          }
+          className={`px-2 py-0.5 text-[11px] rounded-lg border transition ${
+            useLog
+              ? "bg-white border-slate-300 text-slate-700 shadow-sm font-medium"
+              : "bg-slate-100 border-transparent text-slate-500 hover:text-slate-700"
           }`}
         >
-          {label}
+          Log
         </button>
-      ))}
+      )}
     </div>
   )
 
@@ -498,10 +564,7 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
     )
   }
 
-  // Headroom so the tallest plan tick never sits flush against the top edge.
-  const max = Math.max(1, ...pts.flatMap((p) => [p.projected ?? 0, p.original ?? 0, p.actual ?? 0])) * 1.08
-
-  const ticks = axisTicks(max)
+  const { pos, ticks } = plotScale(figures, useLog)
 
   // Fit the whole series without scrolling: columns share the available width
   // rather than claiming a fixed 3.5rem. The bar caps at its original 36px, so
@@ -544,7 +607,7 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
               <span
                 key={t}
                 className="absolute right-0 translate-y-1/2 text-[9px] leading-none tabular-nums text-slate-400"
-                style={{ bottom: `${(t / max) * 100}%` }}
+                style={{ bottom: `${pos(t) * 100}%` }}
               >
                 {fmtMoney(t)}
               </span>
@@ -565,8 +628,10 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
             {ticks.map((t) => (
               <div
                 key={t}
-                className={`absolute inset-x-0 border-t ${t === 0 ? "border-slate-200" : "border-slate-100"}`}
-                style={{ bottom: `${(t / max) * 100}%` }}
+                className={`absolute inset-x-0 border-t ${
+                  t === ticks[0] ? "border-slate-200" : "border-slate-100"
+                }`}
+                style={{ bottom: `${pos(t) * 100}%` }}
               />
             ))}
           </div>
@@ -606,7 +671,7 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
                 {a != null ? (
                   <div
                     className="absolute inset-x-0 bottom-0 rounded-t"
-                    style={{ height: `${Math.max(2, (a / max) * 100)}%`, backgroundColor: fill }}
+                    style={{ height: `${Math.max(2, pos(a) * 100)}%`, backgroundColor: fill }}
                   />
                 ) : (
                   <div className="absolute inset-x-0 bottom-0 h-4 rounded-t border border-dashed border-slate-300" />
@@ -616,13 +681,13 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
                 {orig != null && (
                   <div
                     className="absolute -inset-x-1 border-t border-dashed border-slate-300"
-                    style={{ bottom: `${(orig / max) * 100}%` }}
+                    style={{ bottom: `${pos(orig) * 100}%` }}
                   />
                 )}
                 {p != null && (
                   <div
                     className="absolute -inset-x-1 h-[2.5px] rounded-full bg-slate-400"
-                    style={{ bottom: `calc(${(p / max) * 100}% - 1.25px)` }}
+                    style={{ bottom: `calc(${pos(p) * 100}% - 1.25px)` }}
                   />
                 )}
               </div>
@@ -636,6 +701,10 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
         </div>
       </div>
       <div className="flex items-center gap-x-4 gap-y-1.5 mt-2 text-xs text-slate-400 flex-wrap">
+        {/* A log axis has to announce itself. Bar height stops being
+            proportional to revenue, and a reader who assumes otherwise reads
+            every comparison on the chart wrong. */}
+        {useLog && <span className="text-slate-500">Log scale — each gridline is 10&times; the one below</span>}
         {/* Swatches are produced by varianceBandColor itself rather than local
             hexes, so this legend cannot drift from the rule it documents. */}
         <span className="flex items-center gap-1.5">
