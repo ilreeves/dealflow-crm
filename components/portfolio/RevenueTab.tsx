@@ -441,6 +441,33 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
 
   const ticks = axisTicks(max)
 
+  // Fit the whole series without scrolling: columns share the available width
+  // rather than claiming a fixed 3.5rem. The bar caps at its original 36px, so
+  // a 6-quarter company looks exactly as it did; only Francis (20 quarters) and
+  // Eirsystems (16) actually compress.
+  //
+  // ⚠️ HISTORY IS DELIBERATELY NOT WINDOWED HERE, unlike the runway chart.
+  // Isaiah, 2026-08-11: "I do think having historical data (previous years) is
+  // good to see here." Runway is a question about what happens next, so a
+  // two-year-old balance costs a column and settles nothing; revenue is a
+  // trajectory, and the 2023 → 2026 shape IS the finding.
+  //
+  // Quarter labels ("Q1") are narrow enough to survive compression. The signed
+  // variance caption ("+10.3%", ~30px) is not: at 20 quarters the column is
+  // ~27px, so any two adjacent captions overlap. Thinning to every other column
+  // does NOT fix it — reported periods cluster at the start of a series, so
+  // Francis put -28.6% and -57.9% side by side anyway.
+  //
+  // So when dense, show only the most recently SCORED period. That is the read
+  // someone is actually looking for, every other variance is stated exactly in
+  // the table below, and it matches what the runway chart does with its runway
+  // caption for the same reason.
+  const dense = pts.length > 14
+  const lastScored = pts
+    .map((pt) => variance({ projected: pt.projected, actual: pt.actual })?.pct != null)
+    .lastIndexOf(true)
+  const shownVariance = (i: number) => !dense || i === lastScored
+
   return (
     <div className="px-4 pt-3 pb-4 border-b border-slate-100">
       <div className="flex items-center justify-end mb-1">{toggle}</div>
@@ -466,8 +493,9 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
         </div>
 
         <div className="relative flex-1 min-w-0">
-          {/* Gridlines are anchored to the viewport, not the scrolling content, so
-              they stay put while the bars scroll under them. */}
+          {/* Gridlines share the plot band's geometry exactly — same top offset,
+              same height — so a bar can be read off the axis. (They used to be
+              anchored against scrolling content; the bars no longer scroll.) */}
           <div
             className="absolute inset-x-0 pointer-events-none"
             style={{ top: `${PLOT_TOP_OFFSET_REM}rem`, height: `${PLOT_BAND_REM}rem` }}
@@ -481,8 +509,8 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
             ))}
           </div>
 
-          <div className="relative flex items-end gap-3 overflow-x-auto">
-        {pts.map((pt) => {
+          <div className="relative flex items-end gap-1.5">
+        {pts.map((pt, i) => {
           // Null is NOT zero on either side. A plan that was never recorded draws
           // no tick, and a period not yet reported draws a hollow stub — neither
           // may render as a short bar, which reads as "≈0" instead of "absent".
@@ -501,18 +529,18 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
             .join("\n")
 
           return (
-            <div key={pt.key} className="flex flex-col items-center gap-1 shrink-0 min-w-[3.5rem]">
+            <div key={pt.key} className="flex flex-col items-center gap-1 flex-1 min-w-0">
               {/* Signed variance, always shown alongside the fill. Green and orange
                   are indistinguishable to protan viewers, so the colour is never
                   the only thing saying whether a period beat or missed. */}
               <span
-                className="text-[9px] leading-none tabular-nums h-2.5"
-                style={{ color: v?.pct != null ? fill : "transparent" }}
+                className="text-[9px] leading-none tabular-nums h-2.5 whitespace-nowrap"
+                style={{ color: v?.pct != null && shownVariance(i) ? fill : "transparent" }}
               >
-                {v?.pct != null ? fmtSignedPct(v.pct) : "—"}
+                {v?.pct != null && shownVariance(i) ? fmtSignedPct(v.pct) : "—"}
               </span>
 
-              <div className="relative w-9 h-20" title={tip}>
+              <div className="relative w-full max-w-9 h-20" title={tip}>
                 {a != null ? (
                   <div
                     className="absolute inset-x-0 bottom-0 rounded-t"
