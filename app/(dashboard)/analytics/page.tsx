@@ -109,14 +109,17 @@ export default async function AnalyticsPage() {
       }))
   }
 
-  // ── Inbound pitch tracking (replaces the manual monthly count) ──
-  // Trailing 12 months of inbound-flagged deals by month-added. Deals from
-  // before the flag existed sit in `unclassified` and are surfaced as such —
-  // silently counting them as outbound would misstate the history.
+  // ── Dealflow (the LP-facing volume number) ──
+  // Trailing 12 months of deals ADDED per month — every deal counts, passed
+  // or not, because the story is "how much dealflow do we see", and a pass is
+  // still dealflow. Needs no per-deal classification: created_at is on every
+  // row. The inbound flag is an optional refinement — the split column only
+  // appears once at least one deal has been classified.
   const inboundRows = (inboundData as { inbound: boolean | null; created_at: string }[] | null) ?? null
-  const pitchMonths: { key: string; label: string; count: number }[] = []
+  const pitchMonths: { key: string; label: string; count: number; inbound: number }[] = []
+  let dealsAdded12mo = 0
   let inboundTotal12mo = 0
-  let unclassified = 0
+  const anyClassified = !!inboundRows?.some((r) => r.inbound != null)
   if (inboundRows) {
     const now = new Date()
     for (let i = 11; i >= 0; i--) {
@@ -125,14 +128,16 @@ export default async function AnalyticsPage() {
         key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
         label: d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
         count: 0,
+        inbound: 0,
       })
     }
     const byKey = new Map(pitchMonths.map((m) => [m.key, m]))
     for (const r of inboundRows) {
-      if (r.inbound == null) { unclassified++; continue }
-      if (!r.inbound) continue
       const m = byKey.get(r.created_at.slice(0, 7))
-      if (m) { m.count++; inboundTotal12mo++ }
+      if (!m) continue
+      m.count++
+      dealsAdded12mo++
+      if (r.inbound) { m.inbound++; inboundTotal12mo++ }
     }
   }
   const maxPitchMonth = Math.max(...pitchMonths.map((m) => m.count), 1)
@@ -578,21 +583,31 @@ export default async function AnalyticsPage() {
           </div>
         </CollapsibleSection>
 
-        {/* Inbound pitches — only when the inbound column exists (see the soft
-            query above). Counts are by month ADDED, matching how the manual
-            monthly audit counted them. */}
+        {/* Dealflow volume — only when the inbound column exists (see the soft
+            query above). Every deal added counts, whatever became of it; the
+            inbound split is optional garnish that appears once any deal has
+            been classified. */}
         {inboundRows && (
           <CollapsibleSection
-            title="Inbound Pitches"
-            subtitle={`${inboundTotal12mo} in the last 12 months${unclassified > 0 ? ` · ${unclassified} deals not yet classified` : ''}`}
+            title="Dealflow"
+            subtitle={`${dealsAdded12mo} deals in the last 12 months${anyClassified ? ` · ${inboundTotal12mo} inbound` : ''}`}
           >
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Month</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Added</th>
+                    {anyClassified && <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Inbound</th>}
+                    <th className="px-4 py-2.5 w-32"></th>
+                  </tr>
+                </thead>
                 <tbody>
                   {pitchMonths.map((m) => (
                     <tr key={m.key} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
                       <td className="px-4 py-2 font-medium text-slate-700 w-24">{m.label}</td>
                       <td className="px-4 py-2 text-right text-slate-600 w-12 tabular-nums">{m.count}</td>
+                      {anyClassified && <td className="px-4 py-2 text-right text-slate-500 w-16 tabular-nums">{m.inbound || '—'}</td>}
                       <td className="px-4 py-2">
                         <div className="w-full bg-slate-100 rounded-full h-1.5">
                           <div className="h-1.5 rounded-full" style={{ width: `${m.count / maxPitchMonth * 100}%`, backgroundColor: '#e98925' }} />
@@ -602,11 +617,6 @@ export default async function AnalyticsPage() {
                   ))}
                 </tbody>
               </table>
-              {unclassified > 0 && (
-                <p className="px-4 py-2.5 text-xs text-slate-400 border-t border-slate-100">
-                  {unclassified} deals predate the flag — set &ldquo;How it reached us&rdquo; on the deal form to classify them.
-                </p>
-              )}
             </div>
           </CollapsibleSection>
         )}
