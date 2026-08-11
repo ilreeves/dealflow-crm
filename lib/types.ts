@@ -66,6 +66,8 @@ export interface Deal {
   ct_sponsor_name: string | null
   indication: string | null
   custom_fields: Record<string, unknown>
+  /** Did the pitch come to us (inbound) or did we source it? NULL = not yet classified. */
+  inbound: boolean | null
   stage_entered_at: string | null
   pass_reason: string | null
   passed_at: string | null
@@ -528,6 +530,12 @@ export interface DeckView {
 export interface Catalyst {
   id: string
   company_name: string
+  /**
+   * Structural link to the portfolio company. Nullable: catalysts on pipeline
+   * deals (and legacy names) key on company_name alone. When set, it survives
+   * a company rename even if the name-sync ever fails.
+   */
+  company_id: string | null
   title: string
   catalyst_date: string
   period: string | null
@@ -547,5 +555,16 @@ export interface CatalystActivity {
   action: string
   details: string | null
   actor_name: string | null
+  created_at: string
+}
+
+// ─── Durable error log ────────────────────────────────────────────────────────
+
+/** A failure that would otherwise only reach an ephemeral console. See lib/log.ts. */
+export interface LogEvent {
+  id: string
+  level: 'error' | 'warn' | 'info'
+  source: string
+  message: string
   created_at: string
 }

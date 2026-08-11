@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
+import { logError } from '@/lib/log'
 
 export async function logActivity(
   dealId: string,
@@ -17,7 +18,7 @@ export async function logActivity(
   })
   // The activity feed is the only record of who changed what — a broken logger
   // must not look like "nothing happened".
-  if (error) console.error('deal_activity insert failed:', error.message)
+  if (error) logError('activity.logActivity', `insert failed for "${dealName} / ${action}": ${error.message}`)
 }
 
 export async function logCatalystActivity(
@@ -33,5 +34,5 @@ export async function logCatalystActivity(
     action,
     details: details ?? null,
   })
-  if (error) console.error('catalyst_activity insert failed:', error.message)
+  if (error) logError('activity.logCatalystActivity', `insert failed for "${companyName} / ${action}": ${error.message}`)
 }

@@ -143,7 +143,7 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
             {tab === 'revenue' && <RevenueTab companyId={company.id} />}
             {tab === 'runway' && <RunwayTab companyId={company.id} />}
             {tab === 'intros' && <InvestorIntrosTab table="portfolio_investor_intros" fkColumn="company_id" entityId={company.id} />}
-            {tab === 'catalysts' && <CatalystsTab companyName={company.name} />}
+            {tab === 'catalysts' && <CatalystsTab companyId={company.id} companyName={company.name} />}
             {tab === 'files' && <FilesSection entityType="portfolio" entityId={company.id} />}
           </div>
         </div>
@@ -259,7 +259,7 @@ function OverviewTab({ company }: { company: PortfolioCompany }) {
 }
 
 // ─── Catalysts Tab ────────────────────────────────────────────────────────────
-function CatalystsTab({ companyName }: { companyName: string }) {
+function CatalystsTab({ companyId, companyName }: { companyId: string; companyName: string }) {
   const [catalysts, setCatalysts] = useState<Catalyst[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -271,15 +271,19 @@ function CatalystsTab({ companyName }: { companyName: string }) {
 
   useEffect(() => {
     let active = true
-    supabase.from('catalysts').select('*').eq('company_name', companyName)
-      .order('catalyst_date', { ascending: true })
-      .then(({ data }) => {
-        if (!active) return // tab switched away mid-flight
-        setCatalysts((data as Catalyst[]) ?? [])
-        setLoading(false)
-      })
+    // company_id is the structural link (it survives renames); the name query
+    // still catches rows that predate the FK or were never backfilled.
+    Promise.all([
+      supabase.from('catalysts').select('*').eq('company_id', companyId),
+      supabase.from('catalysts').select('*').is('company_id', null).eq('company_name', companyName),
+    ]).then(([byId, byName]) => {
+      if (!active) return // tab switched away mid-flight
+      const rows = [...((byId.data as Catalyst[]) ?? []), ...((byName.data as Catalyst[]) ?? [])]
+      setCatalysts(rows.sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date)))
+      setLoading(false)
+    })
     return () => { active = false }
-  }, [companyName, supabase])
+  }, [companyId, companyName, supabase])
 
   async function handleAdd() {
     if (!form.title.trim()) return
@@ -289,6 +293,7 @@ function CatalystsTab({ companyName }: { companyName: string }) {
     setError('')
     const dateEnd = periodEnd(form.period, year)
     const { data, error: insErr } = await supabase.from('catalysts').insert({
+      company_id: companyId,
       company_name: companyName,
       title: form.title.trim(),
       catalyst_date: dateEnd,

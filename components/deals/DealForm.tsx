@@ -75,6 +75,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
     source: deal?.source ?? '',
     stage: (deal?.stage ?? 'Sourced') as DealStage,
     category: deal?.category ?? '' as string,
+    inbound: (deal?.inbound ?? null) as boolean | null,
     series: deal?.series ?? '',
     current_fundraise: deal?.current_fundraise ?? '',
     fundraising_to_date: deal?.fundraising_to_date ?? '',
@@ -151,6 +152,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
       source: form.source || null,
       stage: form.stage,
       category: form.category || null,
+      inbound: form.inbound,
       series: (form as Record<string, unknown>)['series'] as string || null,
       current_fundraise: (form as Record<string, unknown>)['current_fundraise'] as string || null,
       fundraising_to_date: (form as Record<string, unknown>)['fundraising_to_date'] as string || null,
@@ -306,6 +308,29 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
                   }`}
                 >
                   {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Inbound vs sourced — feeds the pitch-tracking section on Analytics.
+              Tri-state on purpose: deals created before the flag existed stay
+              unclassified rather than being silently counted as outbound. */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">How it reached us</label>
+            <div className="flex gap-2">
+              {([['Inbound pitch', true], ['We sourced it', false]] as const).map(([label, val]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setField('inbound', form.inbound === val ? null : val)}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${
+                    form.inbound === val
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+                  }`}
+                >
+                  {label}
                 </button>
               ))}
             </div>

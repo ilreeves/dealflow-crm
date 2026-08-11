@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isExpired } from '@/lib/deck'
+import { logError } from '@/lib/log'
 import DeckGate from './DeckGate'
 
 export const runtime = 'nodejs'
@@ -22,7 +23,7 @@ async function lookup(token: string): Promise<Lookup> {
     .select('company_name,label,storage_path,shared_at')
     .eq('token', token)
     .maybeSingle()
-  if (error) console.error('deck lookup failed:', error.message)
+  if (error) logError('deck/page', `lookup failed: ${error.message}`, admin)
   if (!data?.storage_path) return { company: null, label: null, expired: false }
   return { company: data.company_name as string, label: data.label as string, expired: isExpired(data.shared_at as string | null) }
 }

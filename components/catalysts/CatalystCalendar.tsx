@@ -15,6 +15,8 @@ interface Props {
   today: string
   initialCatalysts: Catalyst[]
   companyNames: string[]
+  /** Portfolio-company name → id, for stamping the FK on new catalysts. */
+  portfolioIdByName?: Record<string, string>
   initialLegacy: string[]
   initialDismissed: string[]
 }
@@ -33,7 +35,7 @@ function periodLabel(c: Catalyst): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export default function CatalystCalendar({ today, initialCatalysts, companyNames, initialLegacy, initialDismissed }: Props) {
+export default function CatalystCalendar({ today, initialCatalysts, companyNames, initialLegacy, initialDismissed, portfolioIdByName }: Props) {
   const [catalysts, setCatalysts] = useState<Catalyst[]>(initialCatalysts)
   const [legacy, setLegacy] = useState<string[]>(initialLegacy)
   // Collapsed by default — the reminder bar is a summary you open when you want it.
@@ -92,6 +94,9 @@ export default function CatalystCalendar({ today, initialCatalysts, companyNames
     setSaving(true)
     setError('')
     const { data, error: insErr } = await supabase.from('catalysts').insert({
+      // Stamped when the name is a portfolio company — the FK survives a
+      // rename even if the name-sync ever misses. Deal names stay name-only.
+      company_id: portfolioIdByName?.[form.company_name.trim()] ?? null,
       company_name: form.company_name.trim(),
       title: form.title.trim(),
       catalyst_date: periodEnd(form.period, year),

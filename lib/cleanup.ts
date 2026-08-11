@@ -1,4 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js'
+import { logError } from '@/lib/log'
 
 // Deleting a deal or portfolio company cascades its OWN child rows, but two
 // kinds of artifacts survive and have to be cleaned up by hand:
@@ -62,14 +63,14 @@ export async function finishEntityCleanup(
   // Deleting the company_decks rows is what actually kills the share links.
   for (const table of ['company_decks', 'company_enrichment', 'company_competitors']) {
     const { error } = await supabase.from(table).delete().eq('entity_type', entityType).eq('entity_id', entityId)
-    if (error) console.error(`cleanup: ${table} delete failed:`, error.message)
+    if (error) logError('cleanup', `${table} delete failed for ${entityType} ${entityId}: ${error.message}`)
   }
 
   if (paths.length) {
     // Storage remove() takes a list; chunk defensively for large file sets.
     for (let i = 0; i < paths.length; i += 100) {
       const { error } = await supabase.storage.from('deal-files').remove(paths.slice(i, i + 100))
-      if (error) console.error('cleanup: storage remove failed:', error.message)
+      if (error) logError('cleanup', `storage remove failed for ${entityType} ${entityId}: ${error.message}`)
     }
   }
 }

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { rowsOrThrow } from "@/lib/supabase/unwrap"
 import { latestValuation, positionValue, LatestValuation } from "@/lib/portfolio"
+import { noteAccruedInterest } from "@/lib/rounds"
 import { PortfolioFundraiseRound, PortfolioPosition } from "@/lib/types"
 import FundPerformanceView, { FundRow, TopPosition, RiskFlag, CompanyInFund } from "@/components/fund/FundPerformanceView"
 import ValuationHistory, { FundSeries } from "@/components/fund/ValuationHistory"
@@ -195,15 +196,24 @@ export default async function FundPerformancePage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const terms = (r!.terms as any) ?? {}
       const principal = Number(p.invested_amount) || 0
-      const accrued = Number(p.accrued_interest) || 0
+      const rate = terms.interest_rate != null ? Number(terms.interest_rate) : null
+      // Accrued interest AGES: a figure entered at close is stale the next
+      // day. When the terms are complete (simple interest, a rate, an issue
+      // date) compute as of today — the entered figure remains the fallback
+      // and the audit trail in the round editor.
+      const isSimple = !terms.interest_type || terms.interest_type === "Simple"
+      const computed = isSimple ? noteAccruedInterest(principal || null, rate, r!.date) : null
+      const entered = Number(p.accrued_interest) || 0
+      const accrued = computed ?? entered
       return {
         company: nameById[p.company_id] ?? "Unknown",
         fund: p.fund || "Unassigned",
         note: r!.round_name,
-        rate: terms.interest_rate != null ? Number(terms.interest_rate) : null,
+        rate,
         maturity: terms.maturity_date ? String(terms.maturity_date) : null,
         principal,
         accrued,
+        accruedBasis: (computed != null ? "computed" : "entered") as "computed" | "entered",
         // fall back to principal + accrued when no explicit mark is set
         value: p.fair_value != null ? Number(p.fair_value) : principal + accrued,
         status: r!.status ?? null,

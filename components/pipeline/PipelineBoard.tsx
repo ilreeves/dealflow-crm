@@ -11,6 +11,7 @@ import { logActivity } from '@/lib/activity'
 import { addDealToPortfolio } from '@/lib/portfolio'
 import DealCard from './DealCard'
 import NeedsAttention from './NeedsAttention'
+import DeckViewsDigest, { DeckViewDigestRow } from './DeckViewsDigest'
 import DealForm from '@/components/deals/DealForm'
 import DealsTable from './DealsTable'
 import PassReasonModal from '@/components/deals/PassReasonModal'
@@ -18,9 +19,10 @@ import DealDetailModal from '@/components/deals/DealDetailModal'
 
 interface Props {
   initialDeals: Deal[]
+  deckViews?: DeckViewDigestRow[]
 }
 
-export default function PipelineBoard({ initialDeals }: Props) {
+export default function PipelineBoard({ initialDeals, deckViews }: Props) {
   const [deals, setDeals] = useState<Deal[]>(initialDeals)
   const [showForm, setShowForm] = useState(false)
   const [view, setView] = useState<'board' | 'list'>('board')
@@ -155,6 +157,7 @@ export default function PipelineBoard({ initialDeals }: Props) {
           <button onClick={() => setMoveError('')} className="text-red-400 hover:text-red-700 transition shrink-0">✕</button>
         </div>
       )}
+      <DeckViewsDigest views={deckViews ?? []} />
       <NeedsAttention deals={deals} />
       {/* Header */}
       <div className="px-4 md:px-6 py-4 bg-white border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">

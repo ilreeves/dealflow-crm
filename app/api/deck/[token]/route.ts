@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isExpired } from '@/lib/deck'
+import { logError } from '@/lib/log'
 
 export const runtime = 'nodejs'
 
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     .maybeSingle()
   if (lookupErr) {
     // A transient DB error must not masquerade as a dead link.
-    console.error('deck lookup failed:', lookupErr.message)
+    logError('api/deck', `lookup failed: ${lookupErr.message}`, admin)
     return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 503 })
   }
   if (!deck?.storage_path) {
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     .eq('id', deck.entity_id)
     .maybeSingle()
   if (parentErr) {
-    console.error('deck parent lookup failed:', parentErr.message)
+    logError('api/deck', `parent lookup failed: ${parentErr.message}`, admin)
     return NextResponse.json({ error: 'Something went wrong. Please try again.' }, { status: 503 })
   }
   if (!parent) {
@@ -108,7 +109,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     .eq('viewer_email', email)
     .gte('viewed_at', dedupeStart)
     .limit(1)
-  if (dedupeErr) console.error('deck_views dedupe check failed:', dedupeErr.message)
+  if (dedupeErr) logError('api/deck', `view dedupe check failed: ${dedupeErr.message}`, admin)
   if (!recent?.length) {
     const { error: viewErr } = await admin.from('deck_views').insert({
       token,
@@ -118,7 +119,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       viewer_name: name,
       viewer_email: email,
     })
-    if (viewErr) console.error('deck_views insert failed:', viewErr.message)
+    if (viewErr) logError('api/deck', `deck_views insert failed (view LOST) for ${deck.company_name}: ${viewErr.message}`, admin)
   }
 
   // Short TTL: DeckGate fetches the URL on demand, so this only needs to

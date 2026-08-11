@@ -8,6 +8,11 @@ export type NotePosition = {
   maturity: string | null
   principal: number
   accrued: number
+  /**
+   * 'computed' = aged to today from the note's simple rate and issue date;
+   * 'entered' = the hand-typed figure, used when terms are incomplete.
+   */
+  accruedBasis: 'computed' | 'entered'
   value: number
   status: string | null
 }
@@ -84,7 +89,14 @@ export default function NotesExposure({ notes }: { notes: NotePosition[] }) {
                       <td className="px-4 py-2.5 text-right text-slate-500 tabular-nums">{n.rate != null ? `${n.rate}%` : "—"}</td>
                       {showMaturity && <td className="px-4 py-2.5 text-right text-slate-500 whitespace-nowrap">{n.maturity ? exactDate(n.maturity) : "—"}</td>}
                       <td className="px-4 py-2.5 text-right text-slate-600 tabular-nums">{fmtMoney(n.principal)}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: n.accrued > 0 ? "#3b6d11" : undefined }}>{n.accrued > 0 ? fmtMoney(n.accrued) : "—"}</td>
+                      <td
+                        className="px-4 py-2.5 text-right tabular-nums"
+                        style={{ color: n.accrued > 0 ? "#3b6d11" : undefined }}
+                        title={n.accruedBasis === "computed" ? "Computed to today from the note's rate and issue date" : "As entered — terms incomplete, so this figure does not age"}
+                      >
+                        {n.accrued > 0 ? fmtMoney(n.accrued) : "—"}
+                        {n.accrued > 0 && n.accruedBasis === "entered" && <span className="text-slate-400" title="As entered — does not age"> *</span>}
+                      </td>
                       <td className="px-4 py-2.5 text-right font-medium tabular-nums" style={{ color: NAVY }}>{fmtMoney(n.value)}</td>
                     </tr>
                   ))}
@@ -105,6 +117,10 @@ export default function NotesExposure({ notes }: { notes: NotePosition[] }) {
         Accrued interest is <span style={{ color: GREEN }}>{fmtMoney(accrued)}</span> on {fmtMoney(principal)} of principal
         {wRate != null ? ` at a ${wRate.toFixed(1)}% weighted coupon` : ""}
         {principal > 0 ? ` — ${((value / principal - 1) * 100).toFixed(1)}% above cost.` : "."}
+        {notes.some((n) => n.accruedBasis === "computed") &&
+          " Accruals age daily from each note's issue date (simple interest, Actual/365)."}
+        {notes.some((n) => n.accrued > 0 && n.accruedBasis === "entered") &&
+          " * = as entered; add a rate and date to the round terms to age it automatically."}
       </p>
     </div>
   )

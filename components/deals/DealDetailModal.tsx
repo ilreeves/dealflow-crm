@@ -47,11 +47,18 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
 
   // The board ships a slim row (BOARD_COLUMNS in app/(dashboard)/page.tsx) —
   // fetch the full deal so the overview has description & co, and so a stale
-  // board row can't show outdated details.
+  // board row can't show outdated details. `hydrated` gates the Edit button:
+  // a form initialized from the slim row would save nulls over every field
+  // the board didn't load (description, custom_fields, inbound…).
+  const [hydrated, setHydrated] = useState(false)
   useEffect(() => {
     let active = true
     supabase.from('deals').select('*').eq('id', initialDeal.id).maybeSingle()
-      .then(({ data }) => { if (active && data) setDeal(data as Deal) })
+      .then(({ data }) => {
+        if (!active) return
+        if (data) setDeal(data as Deal)
+        setHydrated(!!data)
+      })
     return () => { active = false }
   }, [initialDeal.id, supabase])
 
@@ -199,8 +206,9 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
                 </button>
                 <button
                   onClick={() => setShowEdit(true)}
-                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
-                  title="Edit deal"
+                  disabled={!hydrated}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition disabled:opacity-40"
+                  title={hydrated ? 'Edit deal' : 'Loading full deal…'}
                 >
                   <Pencil className="w-4 h-4" />
                 </button>

@@ -14,14 +14,20 @@ export default async function CatalystsPage() {
   const [catalystsRes, dealsRes, portfolioRes, legacyRes, dismissedRes] = await Promise.all([
     supabase.from('catalysts').select('*').order('catalyst_date', { ascending: true }),
     supabase.from('deals').select('name').neq('stage', 'Passed'),
-    supabase.from('portfolio_companies').select('name'),
+    supabase.from('portfolio_companies').select('id,name'),
     supabase.from('legacy_companies').select('company_name'),
     supabase.from('dismissed_reminders').select('signature'),
   ])
 
+  const portfolioCompanies = rowsOrThrow(portfolioRes, 'portfolio companies') as { id: string; name: string }[]
+  // Lets the calendar's add form stamp company_id (the rename-proof link)
+  // when the chosen name is a portfolio company; deal names map to nothing.
+  const portfolioIdByName: Record<string, string> = {}
+  for (const p of portfolioCompanies) portfolioIdByName[p.name] = p.id
+
   const companyNames = Array.from(new Set([
     ...(rowsOrThrow(dealsRes, 'deals') as { name: string }[]).map((d) => d.name),
-    ...(rowsOrThrow(portfolioRes, 'portfolio companies') as { name: string }[]).map((p) => p.name),
+    ...portfolioCompanies.map((p) => p.name),
   ])).sort()
 
   // The reminder bar's overdue / due-soon windows are measured from today. The clock
@@ -41,6 +47,7 @@ export default async function CatalystsPage() {
       companyNames={companyNames}
       initialLegacy={(rowsOrThrow(legacyRes, 'legacy companies') as { company_name: string }[]).map((l) => l.company_name)}
       initialDismissed={(rowsOrThrow(dismissedRes, 'dismissed reminders') as { signature: string }[]).map((d) => d.signature)}
+      portfolioIdByName={portfolioIdByName}
     />
   )
 }

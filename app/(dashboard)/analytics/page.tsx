@@ -26,6 +26,10 @@ export default async function AnalyticsPage() {
     // then simply doesn't render rather than breaking the page.
     supabase.from('portfolio_revenue').select('company_id,period_type,fiscal_year,projected,revised_projected,actual,projected_source'),
   ])
+  // Separate soft query, same reasoning: if migration_features_1.sql hasn't
+  // added the inbound column yet, this errors and the pitch section skips
+  // rendering instead of taking the page down.
+  const { data: inboundData } = await supabase.from('deals').select('inbound,created_at')
 
   const deals = rowsOrThrow(dealsRes, 'deals') as Deal[]
   const total = deals.length
@@ -104,6 +108,34 @@ export default async function AnalyticsPage() {
         companies: companies.sort((a, b) => a.name.localeCompare(b.name)),
       }))
   }
+
+  // ── Inbound pitch tracking (replaces the manual monthly count) ──
+  // Trailing 12 months of inbound-flagged deals by month-added. Deals from
+  // before the flag existed sit in `unclassified` and are surfaced as such —
+  // silently counting them as outbound would misstate the history.
+  const inboundRows = (inboundData as { inbound: boolean | null; created_at: string }[] | null) ?? null
+  const pitchMonths: { key: string; label: string; count: number }[] = []
+  let inboundTotal12mo = 0
+  let unclassified = 0
+  if (inboundRows) {
+    const now = new Date()
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      pitchMonths.push({
+        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+        label: d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+        count: 0,
+      })
+    }
+    const byKey = new Map(pitchMonths.map((m) => [m.key, m]))
+    for (const r of inboundRows) {
+      if (r.inbound == null) { unclassified++; continue }
+      if (!r.inbound) continue
+      const m = byKey.get(r.created_at.slice(0, 7))
+      if (m) { m.count++; inboundTotal12mo++ }
+    }
+  }
+  const maxPitchMonth = Math.max(...pitchMonths.map((m) => m.count), 1)
 
   const listRows = rowsOrThrow(listRes, 'list options') as { list_key: string; value: string }[]
   const fromList = (key: string, fallback: string[]) => {
@@ -545,6 +577,39 @@ export default async function AnalyticsPage() {
             </table>
           </div>
         </CollapsibleSection>
+
+        {/* Inbound pitches — only when the inbound column exists (see the soft
+            query above). Counts are by month ADDED, matching how the manual
+            monthly audit counted them. */}
+        {inboundRows && (
+          <CollapsibleSection
+            title="Inbound Pitches"
+            subtitle={`${inboundTotal12mo} in the last 12 months${unclassified > 0 ? ` · ${unclassified} deals not yet classified` : ''}`}
+          >
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <tbody>
+                  {pitchMonths.map((m) => (
+                    <tr key={m.key} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                      <td className="px-4 py-2 font-medium text-slate-700 w-24">{m.label}</td>
+                      <td className="px-4 py-2 text-right text-slate-600 w-12 tabular-nums">{m.count}</td>
+                      <td className="px-4 py-2">
+                        <div className="w-full bg-slate-100 rounded-full h-1.5">
+                          <div className="h-1.5 rounded-full" style={{ width: `${m.count / maxPitchMonth * 100}%`, backgroundColor: '#e98925' }} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {unclassified > 0 && (
+                <p className="px-4 py-2.5 text-xs text-slate-400 border-t border-slate-100">
+                  {unclassified} deals predate the flag — set &ldquo;How it reached us&rdquo; on the deal form to classify them.
+                </p>
+              )}
+            </div>
+          </CollapsibleSection>
+        )}
 
         </div>
 
