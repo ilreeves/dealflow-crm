@@ -237,6 +237,7 @@ function ClassEditor({
     price_per_share: numToStr(initial?.price_per_share),
     liq_pref_multiple: numToStr(initial?.liq_pref_multiple),
     seniority: numToStr(initial?.seniority),
+    participating: initial?.participating === true,
     notes: initial?.notes ?? "",
   })
   function set<K extends keyof typeof f>(k: K, v: (typeof f)[K]) { setF((p) => ({ ...p, [k]: v })) }
@@ -253,6 +254,7 @@ function ClassEditor({
       price_per_share: parseNum(f.price_per_share),
       liq_pref_multiple: parseNum(f.liq_pref_multiple),
       seniority: parseNum(f.seniority),
+      participating: f.participating || null,
       notes: f.notes || null,
     }
     let classId = initial?.id
@@ -291,7 +293,14 @@ function ClassEditor({
       </div>
       <div className="grid grid-cols-4 gap-3">
         <Field label="Price per share"><input placeholder="$ (4 decimals ok)" value={f.price_per_share} onChange={(e) => set("price_per_share", e.target.value)} className={inputCls} /></Field>
-        <Field label="Liq pref multiple"><input placeholder="1 = 1×" value={f.liq_pref_multiple} onChange={(e) => set("liq_pref_multiple", e.target.value)} className={inputCls} /></Field>
+        <Field label="Liq pref multiple">
+          <div className="flex items-center gap-2">
+            <input placeholder="1 = 1×" value={f.liq_pref_multiple} onChange={(e) => set("liq_pref_multiple", e.target.value)} className={inputCls} />
+            <label className="flex items-center gap-1 text-xs text-slate-500 shrink-0" title="Takes its preference AND shares pro-rata">
+              <input type="checkbox" checked={f.participating} onChange={(e) => set("participating", e.target.checked)} /> part.
+            </label>
+          </div>
+        </Field>
         <Field label="Seniority"><input placeholder="1 = most senior" value={f.seniority} onChange={(e) => set("seniority", e.target.value)} className={inputCls} /></Field>
       </div>
       <div>
@@ -339,9 +348,10 @@ type WaterfallRow = {
   shares: number
   solas: number
   prefBasis: number | null
+  participating: boolean
   seniority: number | null
   payout: number
-  mode: "preference" | "partial preference" | "converted" | "as-converted" | "wiped"
+  mode: "preference" | "partial preference" | "participating" | "converted" | "as-converted" | "wiped"
   assumed: string | null
 }
 
@@ -358,6 +368,7 @@ function computeWaterfall(exitValue: number, classes: ShareClassWithHoldings[]):
         shares,
         solas: c.portfolio_class_holdings.reduce((t, h) => t + (Number(h.shares) || 0), 0),
         prefBasis: hasPref ? shares * Number(c.price_per_share) * mult : null,
+        participating: hasPref && c.participating === true,
         seniority: c.seniority,
         payout: 0,
         mode: (hasPref ? "preference" : "as-converted") as WaterfallRow["mode"],
@@ -373,8 +384,14 @@ function computeWaterfall(exitValue: number, classes: ShareClassWithHoldings[]):
     })
   if (exitValue <= 0 || rows.length === 0) return rows.map((r) => ({ ...r, mode: "wiped" }))
 
-  const prefs = rows.filter((r) => r.prefBasis != null)
-  const commonShares = rows.filter((r) => r.prefBasis == null).reduce((t, r) => t + r.shares, 0)
+  const prefs = rows.filter((r) => r.prefBasis != null && !r.participating)
+  // Participating preferred takes its preference AND shares pro-rata, so its
+  // shares always sit in the pro-rata pool and its basis always comes off the top.
+  const parts = rows.filter((r) => r.participating)
+  const partBasis = parts.reduce((t, r) => t + r.prefBasis!, 0)
+  const commonShares =
+    rows.filter((r) => r.prefBasis == null).reduce((t, r) => t + r.shares, 0) +
+    parts.reduce((t, r) => t + r.shares, 0)
 
   // Non-participating equilibrium: a preferred converts when its as-converted
   // share of the residual beats taking its preference. Converting one class
@@ -382,7 +399,7 @@ function computeWaterfall(exitValue: number, classes: ShareClassWithHoldings[]):
   // class, and class counts are single digits).
   const converted = new Set<string>()
   for (let guard = 0; guard <= prefs.length; guard++) {
-    const residual = exitValue - prefs.filter((r) => !converted.has(r.id)).reduce((t, r) => t + r.prefBasis!, 0)
+    const residual = exitValue - partBasis - prefs.filter((r) => !converted.has(r.id)).reduce((t, r) => t + r.prefBasis!, 0)
     const convShares = commonShares + prefs.filter((r) => converted.has(r.id)).reduce((t, r) => t + r.shares, 0)
     let changed = false
     for (const r of prefs) {
@@ -399,15 +416,16 @@ function computeWaterfall(exitValue: number, classes: ShareClassWithHoldings[]):
   }
 
   const staying = prefs.filter((r) => !converted.has(r.id))
-  const prefTotal = staying.reduce((t, r) => t + r.prefBasis!, 0)
+  const prefTotal = staying.reduce((t, r) => t + r.prefBasis!, 0) + partBasis
 
   if (exitValue < prefTotal) {
     // Not enough for the stack: pay preferences in seniority order (nulls
     // last), pro-rata by basis within a rank. Everyone else is wiped.
     let remaining = exitValue
-    const ranks = Array.from(new Set(staying.map((r) => r.seniority ?? Infinity))).sort((a, b) => a - b)
+    const inStack = [...staying, ...parts]
+    const ranks = Array.from(new Set(inStack.map((r) => r.seniority ?? Infinity))).sort((a, b) => a - b)
     for (const rank of ranks) {
-      const tier = staying.filter((r) => (r.seniority ?? Infinity) === rank)
+      const tier = inStack.filter((r) => (r.seniority ?? Infinity) === rank)
       const tierBasis = tier.reduce((t, r) => t + r.prefBasis!, 0)
       const pay = Math.min(remaining, tierBasis)
       for (const r of tier) {
@@ -417,7 +435,7 @@ function computeWaterfall(exitValue: number, classes: ShareClassWithHoldings[]):
       remaining -= pay
       if (remaining <= 0) break
     }
-    for (const r of rows) if (r.prefBasis == null || converted.has(r.id)) { r.payout = 0; r.mode = "wiped" }
+    for (const r of rows) if ((r.prefBasis == null || converted.has(r.id)) && !r.participating) { r.payout = 0; r.mode = "wiped" }
     return rows
   }
 
@@ -425,7 +443,8 @@ function computeWaterfall(exitValue: number, classes: ShareClassWithHoldings[]):
   const convShares = commonShares + prefs.filter((r) => converted.has(r.id)).reduce((t, r) => t + r.shares, 0)
   const perShare = convShares > 0 ? residual / convShares : 0
   for (const r of rows) {
-    if (r.prefBasis != null && !converted.has(r.id)) { r.payout = r.prefBasis; r.mode = "preference" }
+    if (r.participating) { r.payout = r.prefBasis! + r.shares * perShare; r.mode = "participating" }
+    else if (r.prefBasis != null && !converted.has(r.id)) { r.payout = r.prefBasis; r.mode = "preference" }
     else { r.payout = r.shares * perShare; r.mode = r.prefBasis != null ? "converted" : "as-converted" }
   }
   return rows
@@ -433,6 +452,7 @@ function computeWaterfall(exitValue: number, classes: ShareClassWithHoldings[]):
 
 const MODE_STYLE: Record<WaterfallRow["mode"], { bg: string; fg: string }> = {
   preference: { bg: "#e6eef1", fg: "#023a51" },
+  participating: { bg: "#e6eef1", fg: "#023a51" },
   "partial preference": { bg: "#fef3e6", fg: "#9a5b13" },
   converted: { bg: "#eaf3df", fg: "#3b6d11" },
   "as-converted": { bg: "#eaf3df", fg: "#3b6d11" },

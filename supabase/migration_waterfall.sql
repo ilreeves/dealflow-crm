@@ -24,3 +24,8 @@ ALTER TABLE portfolio_class_holdings ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Auth users can manage portfolio_class_holdings" ON portfolio_class_holdings;
 CREATE POLICY "Auth users can manage portfolio_class_holdings" ON portfolio_class_holdings FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE INDEX IF NOT EXISTS portfolio_class_holdings_class_id_idx ON portfolio_class_holdings (class_id);
+
+-- Participating preferred takes its preference AND shares pro-rata (no
+-- convert-or-take). Francis is the known case: its own waterfall model pays
+-- "return of preference and then pro-rata proceeds".
+ALTER TABLE portfolio_share_classes ADD COLUMN IF NOT EXISTS participating BOOLEAN;

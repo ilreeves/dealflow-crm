@@ -59,11 +59,16 @@ INSERT INTO _cap VALUES
 ('%dimension%','2025-06-30','2020 Plan - options & RSUs outstanding','Option pool',5613885,NULL,NULL,NULL,NULL),
 ('%dimension%','2025-06-30','2020 Plan - available for issuance','Option pool',3020771,NULL,NULL,NULL,NULL),
 
--- ── Francis Medical, Inc. — pro forma post Series C Tranche 1, as of 2025-07-31 (holder-level source; no per-series split) ──
-('%francis%','2025-07-31','Preferred (all series, aggregate)','Preferred',98029426,NULL,NULL,1,'Source: Francis Medical CAP Table as of 2025.07.31.xlsx. $118.0M invested; per-series split not in the source — Series C T1 priced at $1.3125. Solas complex: Solas BioVentures 33.8M, Francis Sidecar 13.9M, H2Oey II 10.0M, H2Oey I 5.3M, Fund II 4.7M. NOTE: accepted J&J acquisition (~$1,119M) pending; this predates close.'),
-('%francis%','2025-07-31','Common Stock','Common',2175938,NULL,NULL,NULL,'Boston Scientific 1,109,938 + other legacy NXT 427,494 + 638,506 common held by preferred investors.'),
-('%francis%','2025-07-31','Option & RSA pool - granted','Option pool',24559838,NULL,NULL,NULL,'Founder 3.65M, board 2.26M, employees/consultants 18.64M (fully diluted basis).'),
-('%francis%','2025-07-31','Option pool - available to grant','Option pool',2144966,NULL,NULL,NULL,'1,235,267 in-pool + 909,699 employee-pool refresh.'),
+-- ── Francis Medical, Inc. — post FULL Series C, from "Francis all entity waterfall.xlsx" (4/6/2026) ──
+-- The earlier 7/31/2025 pro forma double counted Solas: its "Solas BioVentures
+-- 33,812,116" line is EXACTLY the sum of Fund II + Francis Sidecar + H2Oey I +
+-- H2Oey II — an aggregate, not a fifth holder. This version is the corrected,
+-- T2-complete capitalization. Price on the aggregate preferred is the blended
+-- $158,032,236 / 126,374,519 so shares × price reproduces the preference basis.
+('%francis%','2026-04-06','Preferred (all series, aggregate)','Preferred',126374519,1.2505057,1,1,'Source: Francis all entity waterfall.xlsx (4/6/2026). $158.0M invested across all series; per-series split not in source. Series C complete: T1 $1.3125 / T2 ~$1.4437, $80.0M. 1x PARTICIPATING per the company model ("return of preference and then pro-rata"). Accepted J&J acquisition (~$1,119M) pending. Within this aggregate the CRM waterfall pro-rates preference by shares, not invested $ — entity payouts land within ~1% of the company model.'),
+('%francis%','2026-04-06','Common Stock','Common',1537432,NULL,NULL,NULL,'Boston Scientific 1,109,938 + other legacy NXT 427,494.'),
+('%francis%','2026-04-06','Option & RSA pool - granted','Option pool',18488330,NULL,NULL,NULL,'Founder 3,653,745 + board 1,964,445 + employees/consultants 12,870,140.'),
+('%francis%','2026-04-06','Option pool - available','Option pool',13489657,NULL,NULL,NULL,NULL),
 
 -- ── I/O Urology Corporation — Carta export, as of 2024-08-26 ──
 ('%urology%','2024-08-26','Series A-1 Preferred (PA1)','Preferred',19386561,NULL,NULL,1,'Source: io-urology-corporation_2024-08-26 Carta export. $13.4M cash raised (~$0.691/sh). A-2 through A-6 show $0 cash raised in Carta. Series seniority assumed by number; not stated.'),
@@ -120,6 +125,10 @@ INSERT INTO _cap VALUES
 ('Areteia','2025-08-01','KSI II - Class B Units','Other',4604541,NULL,NULL,NULL,'Solas Areteia SPV 1,792,750.'),
 ('Areteia','2025-08-01','KSI II - Class C Units','Other',10100000,NULL,NULL,NULL,'EHF 2,906,477 + Solas Areteia SPV 325,523.');
 
+-- Francis preferred is participating (see its note); the temp table above has
+-- no column for the flag, so set it right after the insert below.
+-- (UPDATE statement follows the INSERT, further down.)
+
 -- Resolve each pattern to exactly one company; anything else is skipped.
 CREATE TEMP TABLE _match AS
 SELECT p.pattern,
@@ -135,6 +144,10 @@ INSERT INTO portfolio_share_classes
 SELECT m.id, c.name, c.class_type, c.shares, c.price, c.liq, c.sen, c.notes
 FROM _cap c JOIN _match m USING (pattern)
 WHERE m.n = 1;
+
+UPDATE portfolio_share_classes sc SET participating = true
+FROM portfolio_companies pc
+WHERE sc.company_id = pc.id AND pc.name ILIKE '%francis%' AND sc.name = 'Preferred (all series, aggregate)';
 
 UPDATE portfolio_companies pc
 SET cap_table_as_of = x.as_of
@@ -165,7 +178,8 @@ ORDER BY 1;
 -- carry on it, but proceeds still flow through to its investors; the breakout
 -- is what keeps that legible). Vektor is deliberately absent — its 8/2024
 -- file was summary-only, no holder detail; fill after the Series B.
--- "Solas BioVentures" on Francis is the source's own label, kept verbatim.
+-- Francis: the 7/31/25 pro forma's "Solas BioVentures 33,812,116" was an
+-- AGGREGATE of the four entities below — never enter it as a holder.
 WITH fill(pattern, class_name, entity, shares) AS (VALUES
   ('%basking%',  'Series Seed Preferred (PS)',         'Basking Holdings',  2159791::numeric),
   ('%arrivo%',   'Series B-1 Preferred Units',         'EHF',                101219),
@@ -186,10 +200,9 @@ WITH fill(pattern, class_name, entity, shares) AS (VALUES
   ('%cryosa%',   'Series B Preferred (PB)',            'Fund II',           1203477),
   ('%cryosa%',   'Series A-2 Preferred (PA2)',         'Fund II',            690056),
   ('%dimension%','Series A Preferred (PA)',            'EHF',               3439381),
-  ('%francis%',  'Preferred (all series, aggregate)',  'Solas BioVentures',33812116),
-  ('%francis%',  'Preferred (all series, aggregate)',  'Francis Sidecar',  13893663),
-  ('%francis%',  'Preferred (all series, aggregate)',  'H2Oey Ventures II', 9966028),
-  ('%francis%',  'Preferred (all series, aggregate)',  'H2Oey Ventures',    5297881),
+  ('%francis%',  'Preferred (all series, aggregate)',  'Francis Sidecar',  18428123),
+  ('%francis%',  'Preferred (all series, aggregate)',  'H2Oey Ventures II',11626111),
+  ('%francis%',  'Preferred (all series, aggregate)',  'H2Oey Ventures',    5403660),
   ('%francis%',  'Preferred (all series, aggregate)',  'Fund II',           4654544),
   ('%urology%',  'Series A-1 Preferred (PA1)',         'EHF',               4369212),
   ('%phenomics%','Series A-1 Preferred (PA)',          'EHF',               4465548),

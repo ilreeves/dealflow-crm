@@ -313,6 +313,8 @@ export interface PortfolioShareClass {
   liq_pref_multiple: number | null
   /** Preference-stack rank, 1 = most senior. Null (common, pool) sorts last. */
   seniority: number | null
+  /** Participating preferred: takes its preference AND shares pro-rata. */
+  participating: boolean | null
   notes: string | null
   created_at: string
 }
