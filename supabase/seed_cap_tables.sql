@@ -112,10 +112,13 @@ INSERT INTO _cap VALUES
 ('%vesalio%','2024-11-30','Available award shares','Option pool',65070,NULL,NULL,NULL,NULL),
 
 -- ── Knopp Sub Investments II, LLC (KSI II) — member schedule as of 2025-08-01 ──
--- This is the VEHICLE holding the Areteia exposure, not Areteia Therapeutics itself.
-('%knopp sub%','2025-08-01','Class A Units','Other',10100001,NULL,NULL,NULL,'Source: KSI II Cap Table 8-1-25B.xlsx — member schedule of Knopp Sub Investments II, LLC (Areteia exposure vehicle), NOT Areteia Therapeutics own cap table.'),
-('%knopp sub%','2025-08-01','Class B Units','Other',4604541,NULL,NULL,NULL,'Solas Areteia SPV 1,792,750.'),
-('%knopp sub%','2025-08-01','Class C Units','Other',10100000,NULL,NULL,NULL,'EHF 2,906,477 + Solas Areteia SPV 325,523.');
+-- The VEHICLE holding the Areteia exposure (EHF → KSI II → Areteia). The CRM has
+-- no KSI II row, so per Isaiah (2026-08-27) this lives on the Areteia row —
+-- class names prefixed "KSI II" so they cannot be misread as Areteia's own
+-- stock. Replace with Areteia Therapeutics' real cap table when one lands.
+('Areteia','2025-08-01','KSI II - Class A Units','Other',10100001,NULL,NULL,NULL,'Source: KSI II Cap Table 8-1-25B.xlsx - member schedule of Knopp Sub Investments II, LLC (the Areteia exposure vehicle), NOT Areteia Therapeutics own cap table.'),
+('Areteia','2025-08-01','KSI II - Class B Units','Other',4604541,NULL,NULL,NULL,'Solas Areteia SPV 1,792,750.'),
+('Areteia','2025-08-01','KSI II - Class C Units','Other',10100000,NULL,NULL,NULL,'EHF 2,906,477 + Solas Areteia SPV 325,523.');
 
 -- Resolve each pattern to exactly one company; anything else is skipped.
 CREATE TEMP TABLE _match AS
