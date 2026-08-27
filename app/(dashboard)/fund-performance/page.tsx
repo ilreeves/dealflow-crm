@@ -34,6 +34,18 @@ export default async function FundPerformancePage() {
   const nameById: Record<string, string> = {}
   for (const c of comps) nameById[c.id] = c.name
 
+  // Positions carry a NOT NULL foreign key to portfolio_companies, so "we hold
+  // positions but the company list is empty" cannot be real data — it means the
+  // companies read came back empty (RLS denial and a dropped connection both
+  // return zero rows, not an error). Without this guard every name silently
+  // resolves to "Unknown" and the whole portfolio collapses into one row of
+  // confident nonsense, which is worse than a failed page.
+  if (ps.length > 0 && comps.length === 0) {
+    throw new Error(
+      `Failed to load portfolio companies: ${ps.length} positions reference companies but the company list came back empty (check the portfolio_companies RLS policy).`,
+    )
+  }
+
   // Valuation resolution lives in lib/portfolio.ts — the SAME functions the
   // company Ownership tab uses, so the two surfaces can't disagree. Rounds and
   // marks are bucketed by company first (the old per-company scan over every
