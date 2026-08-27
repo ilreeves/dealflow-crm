@@ -88,6 +88,9 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
 
   return (
     <div className="space-y-4">
+      {/* Rendered inside the Ownership tab, below positions and marks — the
+          heading separates the company's structure from Solas's stake above. */}
+      <h3 className="text-sm font-semibold text-slate-700 pt-2 border-t border-slate-100">Cap table</h3>
       {/* Structure stat cards */}
       <div className="grid grid-cols-4 gap-2.5">
         <Stat label="Fully diluted" value={fmtShares(fdShares || null)} />

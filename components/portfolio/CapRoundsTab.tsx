@@ -143,9 +143,6 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
         )}
       </div>
 
-      <p className="text-xs text-slate-400 text-center">
-        Round terms and Solas positions live in the <span className="font-medium text-slate-500">Fundraising</span> tab.
-      </p>
     </div>
   )
 }
