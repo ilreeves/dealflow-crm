@@ -62,9 +62,12 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
   const solasShares = ownPositions.reduce((s, p) => s + (Number(p.shares) || 0), 0)
   const solasFdPct = fdShares > 0 && solasShares > 0 ? (solasShares / fdShares) * 100 : null
   const enteredPct = ownPositions.reduce((s, p) => s + (Number(p.ownership_pct) || 0), 0)
-  // Flag, don't fix: > 0.5pt apart with both sides populated deserves a look —
-  // usually a stale cap table or a position whose share count was never entered.
+  // Flag, don't fix — and on a mismatch the AUDITED figure (positions, from the
+  // fund audit) stands; the computed FD % is reference. Decided 2026-08-27.
   const mismatch = solasFdPct != null && enteredPct > 0 ? Math.abs(solasFdPct - enteredPct) > 0.5 : false
+  // Unconverted notes/SAFEs are carried as share-less rows, so they sit OUTSIDE
+  // the FD denominator — the usual reason the two figures legitimately differ.
+  const hasConvertibles = classes.some((c) => c.shares_outstanding == null)
 
   async function saveAsOf(date: string) {
     setError("")
@@ -107,8 +110,11 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
       </p>
       {mismatch && (
         <p className="text-xs px-3 py-2 rounded-lg -mt-1.5" style={{ backgroundColor: "#fef3e6", color: "#9a5b13" }}>
-          Computed Solas FD % ({fmtPct(solasFdPct)}) disagrees with the entered ownership on positions ({fmtPct(enteredPct)}).
-          Usually a stale cap table, or a position missing its share count. Positions keep driving valuations either way.
+          Computed FD % ({fmtPct(solasFdPct)}) differs from the audited ownership on positions ({fmtPct(enteredPct)}).
+          <span className="font-medium"> The audited figure stands</span> — it drives all valuations; this cap table is reference.
+          {hasConvertibles
+            ? " Likely cause: the unconverted convertibles below sit outside the fully diluted share count."
+            : " Likely cause: a stale cap table, or ownership stated on a different basis (outstanding vs fully diluted)."}
         </p>
       )}
 
