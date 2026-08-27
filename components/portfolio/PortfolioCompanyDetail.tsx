@@ -23,7 +23,7 @@ import DecksSection from '@/components/shared/DecksSection'
 import ClinicalContextSection from '@/components/shared/ClinicalContextSection'
 import KnownCompetitors from '@/components/shared/KnownCompetitors'
 
-type Tab = 'overview' | 'fundraising' | 'rounds' | 'revenue' | 'runway' | 'intros' | 'catalysts' | 'files'
+type Tab = 'overview' | 'fundraising' | 'rounds' | 'revenue' | 'runway' | 'catalysts' | 'files'
 
 interface Props {
   company: PortfolioCompany
@@ -84,7 +84,6 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
     { key: 'rounds', label: 'Ownership' },
     ...(showRevenue ? [{ key: 'revenue' as Tab, label: 'Revenue' }] : []),
     ...(showRunway ? [{ key: 'runway' as Tab, label: 'Runway' }] : []),
-    { key: 'intros', label: 'Investor Intros' },
     { key: 'catalysts', label: 'Catalysts' },
     // Portfolio companies had no document storage at all until August 2026,
     // which meant a company lost the ability to hold a file at exactly the
@@ -139,7 +138,13 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
 
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {tab === 'overview' && <OverviewTab company={company} />}
-            {tab === 'fundraising' && <FundraisingTab companyId={company.id} />}
+            {tab === 'fundraising' && (
+              <div className="space-y-4">
+                <FundraisingTab companyId={company.id} />
+                <h3 className="text-sm font-semibold text-slate-700 pt-2 border-t border-slate-100">Investor intros</h3>
+                <InvestorIntrosTab table="portfolio_investor_intros" fkColumn="company_id" entityId={company.id} />
+              </div>
+            )}
             {tab === 'rounds' && (
               <div className="space-y-4">
                 <CapRoundsTab companyId={company.id} />
@@ -148,7 +153,6 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
             )}
             {tab === 'revenue' && <RevenueTab companyId={company.id} />}
             {tab === 'runway' && <RunwayTab companyId={company.id} />}
-            {tab === 'intros' && <InvestorIntrosTab table="portfolio_investor_intros" fkColumn="company_id" entityId={company.id} />}
             {tab === 'catalysts' && <CatalystsTab companyId={company.id} companyName={company.name} />}
             {tab === 'files' && <FilesSection entityType="portfolio" entityId={company.id} />}
           </div>

@@ -313,6 +313,8 @@ export interface PortfolioShareClass {
   liq_pref_multiple: number | null
   /** Preference-stack rank, 1 = most senior. Null (common, pool) sorts last. */
   seniority: number | null
+  /** Solas-complex holding in this class, for the quick waterfall. Reference only. */
+  solas_shares: number | null
   notes: string | null
   created_at: string
 }

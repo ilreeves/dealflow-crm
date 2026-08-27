@@ -1485,3 +1485,6 @@ CREATE INDEX IF NOT EXISTS portfolio_share_classes_company_id_idx ON portfolio_s
 -- A cap table AGES as one document — the classes are re-keyed together from
 -- the same source file, so the as-of date lives once on the company, not per row.
 ALTER TABLE portfolio_companies ADD COLUMN IF NOT EXISTS cap_table_as_of DATE;
+
+-- Quick waterfall (from migration_waterfall.sql)
+ALTER TABLE portfolio_share_classes ADD COLUMN IF NOT EXISTS solas_shares NUMERIC;

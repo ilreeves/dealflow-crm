@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Trash2, Loader2, Pencil, Layers } from "lucide-react"
+import { Plus, Trash2, Loader2, Pencil, Layers, ChevronDown, ChevronRight, TrendingDown } from "lucide-react"
 import { PortfolioCompany, PortfolioShareClass, PortfolioPosition, SHARE_CLASS_TYPES } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
 import { parseNum, numToStr, fmtMoney, fmtPct, saveHint, inputCls } from "@/lib/rounds"
@@ -178,6 +178,8 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
         )}
       </div>
 
+      {classes.some((c) => c.shares_outstanding != null) && <WaterfallSection classes={classes} impliedValue={impliedValue} />}
+
       <p className="text-xs text-slate-400 text-center">
         Solas positions and ownership % live in the <span className="font-medium text-slate-500">Fundraising</span> tab and are the source of truth for valuations.
       </p>
@@ -224,6 +226,7 @@ function ClassEditor({
     price_per_share: numToStr(initial?.price_per_share),
     liq_pref_multiple: numToStr(initial?.liq_pref_multiple),
     seniority: numToStr(initial?.seniority),
+    solas_shares: numToStr(initial?.solas_shares),
     notes: initial?.notes ?? "",
   })
   function set<K extends keyof typeof f>(k: K, v: (typeof f)[K]) { setF((p) => ({ ...p, [k]: v })) }
@@ -240,6 +243,7 @@ function ClassEditor({
       price_per_share: parseNum(f.price_per_share),
       liq_pref_multiple: parseNum(f.liq_pref_multiple),
       seniority: parseNum(f.seniority),
+      solas_shares: parseNum(f.solas_shares),
       notes: f.notes || null,
     }
     const q = isNew
@@ -262,10 +266,11 @@ function ClassEditor({
         </Field>
         <Field label="Shares outstanding"><input placeholder="e.g. 4,215,000" value={f.shares_outstanding} onChange={(e) => set("shares_outstanding", e.target.value)} className={inputCls} /></Field>
       </div>
-      <div className="grid grid-cols-3 gap-3">
-        <Field label="Price per share"><input placeholder="$ (up to 4 decimals)" value={f.price_per_share} onChange={(e) => set("price_per_share", e.target.value)} className={inputCls} /></Field>
-        <Field label="Liq pref multiple"><input placeholder="1 = 1×, blank for common/pool" value={f.liq_pref_multiple} onChange={(e) => set("liq_pref_multiple", e.target.value)} className={inputCls} /></Field>
+      <div className="grid grid-cols-4 gap-3">
+        <Field label="Price per share"><input placeholder="$ (4 decimals ok)" value={f.price_per_share} onChange={(e) => set("price_per_share", e.target.value)} className={inputCls} /></Field>
+        <Field label="Liq pref multiple"><input placeholder="1 = 1×" value={f.liq_pref_multiple} onChange={(e) => set("liq_pref_multiple", e.target.value)} className={inputCls} /></Field>
         <Field label="Seniority"><input placeholder="1 = most senior" value={f.seniority} onChange={(e) => set("seniority", e.target.value)} className={inputCls} /></Field>
+        <Field label="Solas shares"><input placeholder="our holding" value={f.solas_shares} onChange={(e) => set("solas_shares", e.target.value)} className={inputCls} /></Field>
       </div>
       <div>
         <label className="block text-xs text-slate-500 mb-1">Notes</label>
@@ -278,6 +283,200 @@ function ClassEditor({
           {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Save class
         </button>
       </div>
+    </div>
+  )
+}
+
+// ─── quick waterfall ──────────────────────────────────────────────────────────
+// DIRECTIONAL, not a legal waterfall. Class-level, non-participating
+// convert-or-take. Where the data is silent the assumptions are: liq pref
+// defaults to 1× when a preferred class has a price but no stated multiple;
+// preferred with NO price on file has no computable preference and is treated
+// as-converted; options/warrants count as shares with strikes ignored;
+// share-less rows (unconverted notes/SAFEs) are not modeled at all. Every
+// assumption is tagged on the row it applies to.
+
+type WaterfallRow = {
+  id: string
+  name: string
+  shares: number
+  solas: number
+  prefBasis: number | null
+  seniority: number | null
+  payout: number
+  mode: "preference" | "partial preference" | "converted" | "as-converted" | "wiped"
+  assumed: string | null
+}
+
+function computeWaterfall(exitValue: number, classes: PortfolioShareClass[]): WaterfallRow[] {
+  const rows: WaterfallRow[] = classes
+    .filter((c) => c.shares_outstanding != null && Number(c.shares_outstanding) > 0)
+    .map((c) => {
+      const shares = Number(c.shares_outstanding)
+      const hasPref = c.class_type === "Preferred" && c.price_per_share != null
+      const mult = c.liq_pref_multiple != null ? Number(c.liq_pref_multiple) : 1
+      return {
+        id: c.id,
+        name: c.name,
+        shares,
+        solas: Number(c.solas_shares) || 0,
+        prefBasis: hasPref ? shares * Number(c.price_per_share) * mult : null,
+        seniority: c.seniority,
+        payout: 0,
+        mode: (hasPref ? "preference" : "as-converted") as WaterfallRow["mode"],
+        assumed:
+          c.class_type === "Preferred" && c.price_per_share == null
+            ? "no price on file — treated as-converted, no preference"
+            : hasPref && c.liq_pref_multiple == null
+              ? "1× multiple assumed"
+              : c.class_type === "Option pool" || c.class_type === "Warrants"
+                ? "strike ignored"
+                : null,
+      }
+    })
+  if (exitValue <= 0 || rows.length === 0) return rows.map((r) => ({ ...r, mode: "wiped" }))
+
+  const prefs = rows.filter((r) => r.prefBasis != null)
+  const commonShares = rows.filter((r) => r.prefBasis == null).reduce((t, r) => t + r.shares, 0)
+
+  // Non-participating equilibrium: a preferred converts when its as-converted
+  // share of the residual beats taking its preference. Converting one class
+  // changes everyone's per-share, so iterate to a fixed point (≤ one pass per
+  // class, and class counts are single digits).
+  const converted = new Set<string>()
+  for (let guard = 0; guard <= prefs.length; guard++) {
+    const residual = exitValue - prefs.filter((r) => !converted.has(r.id)).reduce((t, r) => t + r.prefBasis!, 0)
+    const convShares = commonShares + prefs.filter((r) => converted.has(r.id)).reduce((t, r) => t + r.shares, 0)
+    let changed = false
+    for (const r of prefs) {
+      if (converted.has(r.id)) continue
+      // per-share if THIS class also converts (its basis returns to the pool)
+      const perShareIf = convShares + r.shares > 0 ? Math.max(0, residual + r.prefBasis!) / (convShares + r.shares) : 0
+      if (perShareIf * r.shares > r.prefBasis!) {
+        converted.add(r.id)
+        changed = true
+        break // recompute pools before judging the next class
+      }
+    }
+    if (!changed) break
+  }
+
+  const staying = prefs.filter((r) => !converted.has(r.id))
+  const prefTotal = staying.reduce((t, r) => t + r.prefBasis!, 0)
+
+  if (exitValue < prefTotal) {
+    // Not enough for the stack: pay preferences in seniority order (nulls
+    // last), pro-rata by basis within a rank. Everyone else is wiped.
+    let remaining = exitValue
+    const ranks = Array.from(new Set(staying.map((r) => r.seniority ?? Infinity))).sort((a, b) => a - b)
+    for (const rank of ranks) {
+      const tier = staying.filter((r) => (r.seniority ?? Infinity) === rank)
+      const tierBasis = tier.reduce((t, r) => t + r.prefBasis!, 0)
+      const pay = Math.min(remaining, tierBasis)
+      for (const r of tier) {
+        r.payout = tierBasis > 0 ? (pay * r.prefBasis!) / tierBasis : 0
+        r.mode = r.payout + 0.01 < r.prefBasis! ? "partial preference" : "preference"
+      }
+      remaining -= pay
+      if (remaining <= 0) break
+    }
+    for (const r of rows) if (r.prefBasis == null || converted.has(r.id)) { r.payout = 0; r.mode = "wiped" }
+    return rows
+  }
+
+  const residual = exitValue - prefTotal
+  const convShares = commonShares + prefs.filter((r) => converted.has(r.id)).reduce((t, r) => t + r.shares, 0)
+  const perShare = convShares > 0 ? residual / convShares : 0
+  for (const r of rows) {
+    if (r.prefBasis != null && !converted.has(r.id)) { r.payout = r.prefBasis; r.mode = "preference" }
+    else { r.payout = r.shares * perShare; r.mode = r.prefBasis != null ? "converted" : "as-converted" }
+  }
+  return rows
+}
+
+const MODE_STYLE: Record<WaterfallRow["mode"], { bg: string; fg: string }> = {
+  preference: { bg: "#e6eef1", fg: "#023a51" },
+  "partial preference": { bg: "#fef3e6", fg: "#9a5b13" },
+  converted: { bg: "#eaf3df", fg: "#3b6d11" },
+  "as-converted": { bg: "#eaf3df", fg: "#3b6d11" },
+  wiped: { bg: "#fdeaea", fg: "#993c1d" },
+}
+
+function WaterfallSection({ classes, impliedValue }: { classes: PortfolioShareClass[]; impliedValue: number | null }) {
+  const [open, setOpen] = useState(false)
+  const [exitStr, setExitStr] = useState("")
+
+  const exitValue = parseNum(exitStr) ?? 0
+  const rows = exitValue > 0 ? computeWaterfall(exitValue, classes) : []
+  const solasTotal = rows.reduce((t, r) => t + (r.shares > 0 ? (r.payout * r.solas) / r.shares : 0), 0)
+  const anySolas = classes.some((c) => c.solas_shares != null)
+  const hasConvertibleRows = classes.some((c) => c.shares_outstanding == null)
+
+  function openWith(v: number | null) {
+    setOpen(true)
+    if (!exitStr && v) setExitStr(String(Math.round(v)))
+  }
+
+  return (
+    <div className="border border-slate-200 rounded-xl bg-white">
+      <button onClick={() => (open ? setOpen(false) : openWith(impliedValue))} className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-slate-50 transition rounded-xl">
+        <span className="text-slate-300">{open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</span>
+        <TrendingDown className="w-4 h-4 text-slate-400" />
+        <span className="text-sm font-medium text-slate-600">Quick waterfall</span>
+        <span className="text-xs text-slate-400">directional — 1× non-participating where terms are silent</span>
+      </button>
+      {open && (
+        <div className="border-t border-slate-100 p-4 space-y-3">
+          <div className="flex items-end gap-3">
+            <div className="w-56">
+              <Field label="Exit value (total proceeds to equity)">
+                <input placeholder="e.g. 200,000,000" value={exitStr} onChange={(e) => setExitStr(e.target.value)} className={inputCls} />
+              </Field>
+            </div>
+            {impliedValue != null && (
+              <div className="flex gap-1.5 pb-0.5">
+                {([["implied", 1], ["2×", 2], ["5×", 5]] as const).map(([label, mult]) => (
+                  <button key={label} onClick={() => setExitStr(String(Math.round(impliedValue * mult)))} className="text-xs px-2 py-1.5 border border-slate-200 rounded-lg text-slate-500 hover:text-slate-900 hover:border-slate-300 transition">
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {exitValue > 0 && anySolas && (
+              <div className="ml-auto text-right pb-0.5">
+                <p className="text-xs text-slate-400">Solas proceeds</p>
+                <p className="text-lg font-semibold" style={{ color: "#3b6d11" }}>{fmtMoney(solasTotal)}</p>
+              </div>
+            )}
+          </div>
+
+          {exitValue > 0 && rows.length > 0 && (
+            <div className="divide-y divide-slate-50 border-t border-slate-100">
+              {rows.map((r) => (
+                <div key={r.id} className="flex items-center gap-3 py-2 text-[13px]">
+                  <span className="w-56 shrink-0 truncate text-slate-700">
+                    {r.name}
+                    {r.assumed && <span className="text-slate-400 text-xs"> · {r.assumed}</span>}
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded-md shrink-0" style={{ backgroundColor: MODE_STYLE[r.mode].bg, color: MODE_STYLE[r.mode].fg }}>{r.mode}</span>
+                  <span className="flex-1" />
+                  <span className="text-slate-600 tabular-nums w-24 text-right">{fmtMoney(r.payout)}</span>
+                  <span className="text-xs text-slate-400 tabular-nums w-24 text-right">
+                    {r.solas > 0 && r.shares > 0 ? `Solas ${fmtMoney((r.payout * r.solas) / r.shares)}` : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="text-xs text-slate-400">
+            Class-level and non-participating: each preferred takes the better of its preference or converting; proceeds short of the
+            stack pay down seniority order. Options and warrants count as shares with strikes ignored.
+            {hasConvertibleRows && " Unconverted notes/SAFEs on this cap table are NOT modeled — at most exits they would take principal + interest ahead of equity, so treat Solas proceeds as slightly optimistic."}
+            {!anySolas && " No Solas share counts entered on the classes yet — add them (pencil → Solas shares) to see our proceeds."}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
