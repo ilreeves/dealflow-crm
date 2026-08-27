@@ -158,45 +158,74 @@ LEFT JOIN portfolio_share_classes sc ON sc.company_id = pc.id
 GROUP BY 1, 2, 3, 4
 ORDER BY 1;
 
--- ── Solas per-class holdings (2026-08-27, for the quick waterfall) ───────────
--- From the same source workbooks; requires migration_waterfall.sql. Vektor is
--- deliberately absent — its 8/2024 file was summary-only, no holder detail.
--- Francis EXCLUDES H2Oey I (5,297,881 pref): tracked as an SPV vehicle but
--- Solas has no economic claim on it. Included: Fund II 4,654,544 + Francis
--- Sidecar 13,893,663 + Solas BioVentures 33,812,116 + H2Oey II 9,966,028.
-WITH fill(pattern, class_name, solas, liq) AS (VALUES
-  ('%basking%',  'Series Seed Preferred (PS)',           2159791::numeric, NULL::numeric),
-  ('%arrivo%',   'Series B-1 Preferred Units',            136257, NULL),
-  ('%arrivo%',   'Series A Preferred Units',              250000, NULL),
-  ('%nxt%',      'Series C Preferred',                   4807605, NULL),
-  ('%nxt%',      'Series B Preferred',                   2565288, NULL),
-  ('%nxt%',      'Common Stock',                          294650, NULL),
-  ('%aftx%',     'Series C Preferred',                   5974102, NULL),
-  ('%aftx%',     'Series B Preferred',                   5249998, NULL),
-  ('%aftx%',     'Common Stock',                          274200, NULL),
-  ('%cryosa%',   'Series B Preferred (PB)',              3898642, NULL),
-  ('%cryosa%',   'Series A-2 Preferred (PA2)',            690056, NULL),
-  ('%dimension%','Series A Preferred (PA)',              3439381, NULL),
-  ('%francis%',  'Preferred (all series, aggregate)',   62326351, NULL),
-  ('%urology%',  'Series A-1 Preferred (PA1)',           4369212, 1),
-  ('%phenomics%','Series A-1 Preferred (PA)',            4465548, 1),
-  ('%stimdia%',  'Series B Preferred (PB)',              1483907, NULL),
-  ('%vesalio%',  'Series B Preferred',                    426568, NULL),
-  ('%vesalio%',  'Series A Preferred',                    885472, NULL),
-  ('Areteia',    'KSI II - Class B Units',               1792750, NULL),
-  ('Areteia',    'KSI II - Class C Units',               3232000, NULL)
+-- ── Solas per-entity holdings (2026-08-27, for the quick waterfall) ──────────
+-- From the same source workbooks; requires migration_waterfall.sql. One row
+-- per (class, Solas vehicle): the same company is held via several entities,
+-- and ALL of them receive cash at an exit — H2Oey I included (Solas earns no
+-- carry on it, but proceeds still flow through to its investors; the breakout
+-- is what keeps that legible). Vektor is deliberately absent — its 8/2024
+-- file was summary-only, no holder detail; fill after the Series B.
+-- "Solas BioVentures" on Francis is the source's own label, kept verbatim.
+WITH fill(pattern, class_name, entity, shares) AS (VALUES
+  ('%basking%',  'Series Seed Preferred (PS)',         'Basking Holdings',  2159791::numeric),
+  ('%arrivo%',   'Series B-1 Preferred Units',         'EHF',                101219),
+  ('%arrivo%',   'Series B-1 Preferred Units',         'Arrivo B Sidecar',    35038),
+  ('%arrivo%',   'Series A Preferred Units',           'Arrivo Sidecar',     150000),
+  ('%arrivo%',   'Series A Preferred Units',           'Fund I',             100000),
+  ('%nxt%',      'Series C Preferred',                 'Cardio Sidecar',    3826936),
+  ('%nxt%',      'Series C Preferred',                 'Fund II',            980669),
+  ('%nxt%',      'Series B Preferred',                 'Fund I',            2001560),
+  ('%nxt%',      'Series B Preferred',                 'Cardio Sidecar',     563728),
+  ('%nxt%',      'Common Stock',                       'Cardio Sidecar',     294650),
+  ('%aftx%',     'Series C Preferred',                 'Cardio Sidecar',    4688718),
+  ('%aftx%',     'Series C Preferred',                 'Fund II',           1285384),
+  ('%aftx%',     'Series B Preferred',                 'Fund I',            4096298),
+  ('%aftx%',     'Series B Preferred',                 'Cardio Sidecar',    1153700),
+  ('%aftx%',     'Common Stock',                       'Cardio Sidecar',     274200),
+  ('%cryosa%',   'Series B Preferred (PB)',            'Cryosa Sidecar',    2695165),
+  ('%cryosa%',   'Series B Preferred (PB)',            'Fund II',           1203477),
+  ('%cryosa%',   'Series A-2 Preferred (PA2)',         'Fund II',            690056),
+  ('%dimension%','Series A Preferred (PA)',            'EHF',               3439381),
+  ('%francis%',  'Preferred (all series, aggregate)',  'Solas BioVentures',33812116),
+  ('%francis%',  'Preferred (all series, aggregate)',  'Francis Sidecar',  13893663),
+  ('%francis%',  'Preferred (all series, aggregate)',  'H2Oey Ventures II', 9966028),
+  ('%francis%',  'Preferred (all series, aggregate)',  'H2Oey Ventures',    5297881),
+  ('%francis%',  'Preferred (all series, aggregate)',  'Fund II',           4654544),
+  ('%urology%',  'Series A-1 Preferred (PA1)',         'EHF',               4369212),
+  ('%phenomics%','Series A-1 Preferred (PA)',          'EHF',               4465548),
+  ('%stimdia%',  'Series B Preferred (PB)',            'Stimdia Sidecar',    959488),
+  ('%stimdia%',  'Series B Preferred (PB)',            'Fund II',            524419),
+  ('%vesalio%',  'Series B Preferred',                 'EHF',                276751),
+  ('%vesalio%',  'Series B Preferred',                 'Vesalio Sidecar',    149817),
+  ('%vesalio%',  'Series A Preferred',                 'Vesalio Sidecar',    516468),
+  ('%vesalio%',  'Series A Preferred',                 'Fund II',            369004),
+  ('Areteia',    'KSI II - Class B Units',             'Areteia SPV',       1792750),
+  ('Areteia',    'KSI II - Class C Units',             'EHF',               2906477),
+  ('Areteia',    'KSI II - Class C Units',             'Areteia SPV',        325523)
+),
+resolved AS (
+  SELECT sc.id AS class_id, f.entity, f.shares
+  FROM fill f
+  JOIN portfolio_companies pc ON pc.name ILIKE f.pattern
+  JOIN portfolio_share_classes sc ON sc.company_id = pc.id AND sc.name = f.class_name
+),
+del AS (
+  DELETE FROM portfolio_class_holdings WHERE class_id IN (SELECT class_id FROM resolved)
 )
-UPDATE portfolio_share_classes sc
-SET solas_shares = f.solas,
-    -- iO A-1 and Phenomics PA: 1x multiple is DOCUMENTED in the Carta
-    -- certificate ledgers ("Converts 1:1 CSE, 1x multiple"), not assumed.
-    liq_pref_multiple = COALESCE(f.liq, sc.liq_pref_multiple)
-FROM fill f
-JOIN portfolio_companies pc ON pc.name ILIKE f.pattern
-WHERE sc.company_id = pc.id AND sc.name = f.class_name;
+INSERT INTO portfolio_class_holdings (class_id, entity, shares)
+SELECT class_id, entity, shares FROM resolved;
 
--- Verification: every row below should show solas_shares filled.
-SELECT pc.name AS company, sc.name AS class, sc.solas_shares, sc.liq_pref_multiple
-FROM portfolio_share_classes sc JOIN portfolio_companies pc ON pc.id = sc.company_id
-WHERE sc.solas_shares IS NOT NULL
-ORDER BY pc.name, sc.seniority NULLS LAST, sc.name;
+-- iO A-1 and Phenomics PA: 1x multiple is DOCUMENTED in the Carta certificate
+-- ledgers ("Converts 1:1 CSE, 1x multiple"), so record it as data.
+UPDATE portfolio_share_classes sc SET liq_pref_multiple = 1
+FROM portfolio_companies pc
+WHERE sc.company_id = pc.id AND sc.liq_pref_multiple IS NULL
+  AND ((pc.name ILIKE '%urology%'   AND sc.name = 'Series A-1 Preferred (PA1)')
+    OR (pc.name ILIKE '%phenomics%' AND sc.name = 'Series A-1 Preferred (PA)'));
+
+-- Verification: 35 rows, grouped per company/class with the entity split.
+SELECT pc.name AS company, sc.name AS class, h.entity, h.shares::bigint
+FROM portfolio_class_holdings h
+JOIN portfolio_share_classes sc ON sc.id = h.class_id
+JOIN portfolio_companies pc ON pc.id = sc.company_id
+ORDER BY pc.name, sc.seniority NULLS LAST, sc.name, h.shares DESC;

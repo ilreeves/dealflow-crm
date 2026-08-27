@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Plus, Trash2, Loader2, Pencil, Layers, ChevronDown, ChevronRight, TrendingDown } from "lucide-react"
-import { PortfolioCompany, PortfolioShareClass, PortfolioPosition, SHARE_CLASS_TYPES } from "@/lib/types"
+import { PortfolioCompany, PortfolioShareClass, PortfolioClassHolding, PortfolioPosition, SHARE_CLASS_TYPES } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
 import { parseNum, numToStr, fmtMoney, fmtPct, saveHint, inputCls } from "@/lib/rounds"
 import Field from "@/components/shared/Field"
@@ -13,12 +13,14 @@ import Field from "@/components/shared/Field"
 // half-filled cap table can never silently move AUM. When both sides have
 // enough data to compare, a mismatch between the computed fully-diluted % and
 // the entered ownership % is flagged below instead of auto-corrected.
+export type ShareClassWithHoldings = PortfolioShareClass & { portfolio_class_holdings: PortfolioClassHolding[] }
+
 export default function CapTableTab({ company, onCompanyUpdated }: {
   company: PortfolioCompany
   onCompanyUpdated: (c: PortfolioCompany) => void
 }) {
   const supabase = createClient()
-  const [classes, setClasses] = useState<PortfolioShareClass[]>([])
+  const [classes, setClasses] = useState<ShareClassWithHoldings[]>([])
   const [positions, setPositions] = useState<PortfolioPosition[]>([])
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
@@ -35,7 +37,7 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
     const [scRes, psRes] = await Promise.all([
       // Preference-stack order: seniority 1 first, then the null-seniority rows
       // (common, pool) last — Postgres sorts nulls last ascending by default.
-      supabase.from("portfolio_share_classes").select("*").eq("company_id", company.id).order("seniority").order("name"),
+      supabase.from("portfolio_share_classes").select("*, portfolio_class_holdings(*)").eq("company_id", company.id).order("seniority").order("name"),
       supabase.from("portfolio_positions").select("*").eq("company_id", company.id),
     ])
     // A failed read must not render as an empty cap table — someone would
@@ -43,7 +45,7 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
     // hasn't been run, which saveHint turns into "run migration_cap_table.sql".
     const loadErr = scRes.error ?? psRes.error
     if (loadErr) setError(saveHint(loadErr.message))
-    setClasses((scRes.data as PortfolioShareClass[]) ?? [])
+    setClasses((scRes.data as ShareClassWithHoldings[]) ?? [])
     setPositions((psRes.data as PortfolioPosition[]) ?? [])
     setLoading(false)
   }
@@ -211,7 +213,7 @@ function ClassEditor({
   companyId, initial, onDone, onCancel,
 }: {
   companyId: string
-  initial?: PortfolioShareClass
+  initial?: ShareClassWithHoldings
   onDone: () => void
   onCancel: () => void
 }) {
@@ -219,6 +221,15 @@ function ClassEditor({
   const isNew = !initial
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  // Per-entity Solas holdings in this class ("Fund II", "Cryosa Sidecar", …).
+  // Saved wholesale on class save: delete-and-reinsert, so removing a row here
+  // removes it in the database too.
+  const [holdings, setHoldings] = useState<{ entity: string; shares: string }[]>(
+    (initial?.portfolio_class_holdings ?? [])
+      .slice()
+      .sort((a, b) => Number(b.shares) - Number(a.shares))
+      .map((h) => ({ entity: h.entity, shares: numToStr(h.shares) })),
+  )
   const [f, setF] = useState({
     name: initial?.name ?? "",
     class_type: initial?.class_type ?? SHARE_CLASS_TYPES[0],
@@ -226,7 +237,6 @@ function ClassEditor({
     price_per_share: numToStr(initial?.price_per_share),
     liq_pref_multiple: numToStr(initial?.liq_pref_multiple),
     seniority: numToStr(initial?.seniority),
-    solas_shares: numToStr(initial?.solas_shares),
     notes: initial?.notes ?? "",
   })
   function set<K extends keyof typeof f>(k: K, v: (typeof f)[K]) { setF((p) => ({ ...p, [k]: v })) }
@@ -243,14 +253,27 @@ function ClassEditor({
       price_per_share: parseNum(f.price_per_share),
       liq_pref_multiple: parseNum(f.liq_pref_multiple),
       seniority: parseNum(f.seniority),
-      solas_shares: parseNum(f.solas_shares),
       notes: f.notes || null,
     }
-    const q = isNew
-      ? supabase.from("portfolio_share_classes").insert(payload)
-      : supabase.from("portfolio_share_classes").update(payload).eq("id", initial!.id)
-    const { error: e } = await q
-    if (e) { setError(saveHint(e.message)); setSaving(false); return }
+    let classId = initial?.id
+    if (isNew) {
+      const { data, error: e } = await supabase.from("portfolio_share_classes").insert(payload).select("id").single()
+      if (e || !data) { setError(saveHint(e?.message ?? "insert returned no row")); setSaving(false); return }
+      classId = (data as { id: string }).id
+    } else {
+      const { error: e } = await supabase.from("portfolio_share_classes").update(payload).eq("id", classId!)
+      if (e) { setError(saveHint(e.message)); setSaving(false); return }
+    }
+    // Holdings are replaced wholesale — the editor rows ARE the state.
+    const rows = holdings
+      .map((h) => ({ class_id: classId!, entity: h.entity.trim(), shares: parseNum(h.shares) }))
+      .filter((h) => h.entity && h.shares != null)
+    const { error: delErr } = await supabase.from("portfolio_class_holdings").delete().eq("class_id", classId!)
+    if (delErr) { setError(saveHint(delErr.message)); setSaving(false); return }
+    if (rows.length) {
+      const { error: insErr } = await supabase.from("portfolio_class_holdings").insert(rows)
+      if (insErr) { setError(saveHint(insErr.message)); setSaving(false); return }
+    }
     setSaving(false)
     onDone()
   }
@@ -270,7 +293,21 @@ function ClassEditor({
         <Field label="Price per share"><input placeholder="$ (4 decimals ok)" value={f.price_per_share} onChange={(e) => set("price_per_share", e.target.value)} className={inputCls} /></Field>
         <Field label="Liq pref multiple"><input placeholder="1 = 1×" value={f.liq_pref_multiple} onChange={(e) => set("liq_pref_multiple", e.target.value)} className={inputCls} /></Field>
         <Field label="Seniority"><input placeholder="1 = most senior" value={f.seniority} onChange={(e) => set("seniority", e.target.value)} className={inputCls} /></Field>
-        <Field label="Solas shares"><input placeholder="our holding" value={f.solas_shares} onChange={(e) => set("solas_shares", e.target.value)} className={inputCls} /></Field>
+      </div>
+      <div>
+        <label className="block text-xs text-slate-500 mb-1">Solas holdings in this class — by entity, since several vehicles can hold the same company</label>
+        <div className="space-y-2">
+          {holdings.map((h, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input placeholder="Entity (Fund II, EHF, Cryosa Sidecar…)" value={h.entity} onChange={(e) => setHoldings((prev) => prev.map((x, j) => (j === i ? { ...x, entity: e.target.value } : x)))} className={inputCls} />
+              <input placeholder="Shares" value={h.shares} onChange={(e) => setHoldings((prev) => prev.map((x, j) => (j === i ? { ...x, shares: e.target.value } : x)))} className={inputCls} />
+              <button onClick={() => setHoldings((prev) => prev.filter((_, j) => j !== i))} className="p-1.5 text-slate-300 hover:text-red-500 shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+            </div>
+          ))}
+          <button onClick={() => setHoldings((prev) => [...prev, { entity: "", shares: "" }])} className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 hover:border-slate-300 transition">
+            <Plus className="w-3.5 h-3.5" /> Add entity
+          </button>
+        </div>
       </div>
       <div>
         <label className="block text-xs text-slate-500 mb-1">Notes</label>
@@ -308,7 +345,7 @@ type WaterfallRow = {
   assumed: string | null
 }
 
-function computeWaterfall(exitValue: number, classes: PortfolioShareClass[]): WaterfallRow[] {
+function computeWaterfall(exitValue: number, classes: ShareClassWithHoldings[]): WaterfallRow[] {
   const rows: WaterfallRow[] = classes
     .filter((c) => c.shares_outstanding != null && Number(c.shares_outstanding) > 0)
     .map((c) => {
@@ -319,7 +356,7 @@ function computeWaterfall(exitValue: number, classes: PortfolioShareClass[]): Wa
         id: c.id,
         name: c.name,
         shares,
-        solas: Number(c.solas_shares) || 0,
+        solas: c.portfolio_class_holdings.reduce((t, h) => t + (Number(h.shares) || 0), 0),
         prefBasis: hasPref ? shares * Number(c.price_per_share) * mult : null,
         seniority: c.seniority,
         payout: 0,
@@ -402,15 +439,27 @@ const MODE_STYLE: Record<WaterfallRow["mode"], { bg: string; fg: string }> = {
   wiped: { bg: "#fdeaea", fg: "#993c1d" },
 }
 
-function WaterfallSection({ classes, impliedValue }: { classes: PortfolioShareClass[]; impliedValue: number | null }) {
+function WaterfallSection({ classes, impliedValue }: { classes: ShareClassWithHoldings[]; impliedValue: number | null }) {
   const [open, setOpen] = useState(false)
   const [exitStr, setExitStr] = useState("")
 
   const exitValue = parseNum(exitStr) ?? 0
   const rows = exitValue > 0 ? computeWaterfall(exitValue, classes) : []
   const solasTotal = rows.reduce((t, r) => t + (r.shares > 0 ? (r.payout * r.solas) / r.shares : 0), 0)
-  const anySolas = classes.some((c) => c.solas_shares != null)
+  const anySolas = classes.some((c) => c.portfolio_class_holdings.length > 0)
   const hasConvertibleRows = classes.some((c) => c.shares_outstanding == null)
+  // Proceeds by Solas ENTITY across all classes — the same company is held via
+  // several vehicles, and each receives cash at an exit regardless of carry.
+  const byEntity = new Map<string, number>()
+  for (const r of rows) {
+    if (r.shares <= 0) continue
+    const cls = classes.find((c) => c.id === r.id)
+    for (const h of cls?.portfolio_class_holdings ?? []) {
+      const take = (r.payout * (Number(h.shares) || 0)) / r.shares
+      if (take > 0) byEntity.set(h.entity, (byEntity.get(h.entity) ?? 0) + take)
+    }
+  }
+  const entityRows = Array.from(byEntity.entries()).sort((a, b) => b[1] - a[1])
 
   function openWith(v: number | null) {
     setOpen(true)
@@ -469,11 +518,26 @@ function WaterfallSection({ classes, impliedValue }: { classes: PortfolioShareCl
             </div>
           )}
 
+          {exitValue > 0 && entityRows.length > 0 && (
+            <div className="bg-slate-50 rounded-lg px-3 py-2.5">
+              <p className="text-xs text-slate-400 mb-1.5">Solas proceeds by entity — every vehicle receives cash, whether or not it carries</p>
+              <div className="space-y-1">
+                {entityRows.map(([entity, amount]) => (
+                  <div key={entity} className="flex items-center text-[13px]">
+                    <span className="text-slate-600">{entity}</span>
+                    <span className="flex-1 border-b border-dotted border-slate-200 mx-2" />
+                    <span className="font-medium tabular-nums" style={{ color: "#3b6d11" }}>{fmtMoney(amount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <p className="text-xs text-slate-400">
             Class-level and non-participating: each preferred takes the better of its preference or converting; proceeds short of the
             stack pay down seniority order. Options and warrants count as shares with strikes ignored.
             {hasConvertibleRows && " Unconverted notes/SAFEs on this cap table are NOT modeled — at most exits they would take principal + interest ahead of equity, so treat Solas proceeds as slightly optimistic."}
-            {!anySolas && " No Solas share counts entered on the classes yet — add them (pencil → Solas shares) to see our proceeds."}
+            {!anySolas && " No Solas holdings entered on the classes yet — add them per entity (pencil → Solas holdings) to see our proceeds."}
           </p>
         </div>
       )}

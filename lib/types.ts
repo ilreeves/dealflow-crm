@@ -313,9 +313,19 @@ export interface PortfolioShareClass {
   liq_pref_multiple: number | null
   /** Preference-stack rank, 1 = most senior. Null (common, pool) sorts last. */
   seniority: number | null
-  /** Solas-complex holding in this class, for the quick waterfall. Reference only. */
-  solas_shares: number | null
   notes: string | null
+  created_at: string
+}
+
+// One Solas vehicle's holding in a share class. The same company is held via
+// several entities (funds, sidecars, H2Oey I/II) — the waterfall breaks
+// proceeds out per entity, because all of them receive cash at an exit even
+// where Solas earns no carry. Reference data, like the classes themselves.
+export interface PortfolioClassHolding {
+  id: string
+  class_id: string
+  entity: string
+  shares: number
   created_at: string
 }
 

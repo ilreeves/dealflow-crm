@@ -1487,4 +1487,15 @@ CREATE INDEX IF NOT EXISTS portfolio_share_classes_company_id_idx ON portfolio_s
 ALTER TABLE portfolio_companies ADD COLUMN IF NOT EXISTS cap_table_as_of DATE;
 
 -- Quick waterfall (from migration_waterfall.sql)
-ALTER TABLE portfolio_share_classes ADD COLUMN IF NOT EXISTS solas_shares NUMERIC;
+ALTER TABLE portfolio_share_classes DROP COLUMN IF EXISTS solas_shares;
+CREATE TABLE IF NOT EXISTS portfolio_class_holdings (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  class_id UUID REFERENCES portfolio_share_classes(id) ON DELETE CASCADE NOT NULL,
+  entity TEXT NOT NULL,
+  shares NUMERIC NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE portfolio_class_holdings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Auth users can manage portfolio_class_holdings" ON portfolio_class_holdings;
+CREATE POLICY "Auth users can manage portfolio_class_holdings" ON portfolio_class_holdings FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE INDEX IF NOT EXISTS portfolio_class_holdings_class_id_idx ON portfolio_class_holdings (class_id);
