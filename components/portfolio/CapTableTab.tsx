@@ -1,0 +1,274 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Plus, Trash2, Loader2, Pencil, Layers } from "lucide-react"
+import { PortfolioCompany, PortfolioShareClass, PortfolioPosition, SHARE_CLASS_TYPES } from "@/lib/types"
+import { createClient } from "@/lib/supabase/client"
+import { parseNum, numToStr, fmtMoney, fmtPct, saveHint, inputCls } from "@/lib/rounds"
+import Field from "@/components/shared/Field"
+
+// Share-class structure: Common, each preferred series, the option pool —
+// shares, price, preference. Deliberately STANDALONE from positions:
+// ownership_pct stays hand-entered and keeps driving Fund Performance, so a
+// half-filled cap table can never silently move AUM. When both sides have
+// enough data to compare, a mismatch between the computed fully-diluted % and
+// the entered ownership % is flagged below instead of auto-corrected.
+export default function CapTableTab({ company, onCompanyUpdated }: {
+  company: PortfolioCompany
+  onCompanyUpdated: (c: PortfolioCompany) => void
+}) {
+  const supabase = createClient()
+  const [classes, setClasses] = useState<PortfolioShareClass[]>([])
+  const [positions, setPositions] = useState<PortfolioPosition[]>([])
+  const [loading, setLoading] = useState(true)
+  const [adding, setAdding] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [company.id])
+
+  async function load() {
+    setLoading(true)
+    const [scRes, psRes] = await Promise.all([
+      // Preference-stack order: seniority 1 first, then the null-seniority rows
+      // (common, pool) last — Postgres sorts nulls last ascending by default.
+      supabase.from("portfolio_share_classes").select("*").eq("company_id", company.id).order("seniority").order("name"),
+      supabase.from("portfolio_positions").select("*").eq("company_id", company.id),
+    ])
+    // A failed read must not render as an empty cap table — someone would
+    // re-key the classes on top of it. Most likely failure: the migration
+    // hasn't been run, which saveHint turns into "run migration_cap_table.sql".
+    const loadErr = scRes.error ?? psRes.error
+    if (loadErr) setError(saveHint(loadErr.message))
+    setClasses((scRes.data as PortfolioShareClass[]) ?? [])
+    setPositions((psRes.data as PortfolioPosition[]) ?? [])
+    setLoading(false)
+  }
+
+  // Same exclusion as the Ownership tab and Fund Performance: a look-through
+  // row duplicates economics held at vehicle level.
+  const ownPositions = positions.filter((p) => !p.lookthrough_of)
+
+  const fdShares = classes.reduce((s, c) => s + (Number(c.shares_outstanding) || 0), 0)
+  // Implied value only covers classes that carry BOTH a share count and a
+  // price; the footnote says so when coverage is partial.
+  const pricedClasses = classes.filter((c) => c.shares_outstanding != null && c.price_per_share != null)
+  const impliedValue = pricedClasses.length
+    ? pricedClasses.reduce((s, c) => s + Number(c.shares_outstanding) * Number(c.price_per_share), 0)
+    : null
+  const solasShares = ownPositions.reduce((s, p) => s + (Number(p.shares) || 0), 0)
+  const solasFdPct = fdShares > 0 && solasShares > 0 ? (solasShares / fdShares) * 100 : null
+  const enteredPct = ownPositions.reduce((s, p) => s + (Number(p.ownership_pct) || 0), 0)
+  // Flag, don't fix: > 0.5pt apart with both sides populated deserves a look —
+  // usually a stale cap table or a position whose share count was never entered.
+  const mismatch = solasFdPct != null && enteredPct > 0 ? Math.abs(solasFdPct - enteredPct) > 0.5 : false
+
+  async function saveAsOf(date: string) {
+    setError("")
+    const cap_table_as_of = date || null
+    const { error: e } = await supabase.from("portfolio_companies").update({ cap_table_as_of }).eq("id", company.id)
+    if (e) { setError(saveHint(e.message)); return }
+    onCompanyUpdated({ ...company, cap_table_as_of })
+  }
+
+  async function handleDelete(id: string) {
+    setError("")
+    const { error: e } = await supabase.from("portfolio_share_classes").delete().eq("id", id)
+    if (e) { setError(saveHint(e.message)); return }
+    setClasses((prev) => prev.filter((c) => c.id !== id))
+    if (editingId === id) setEditingId(null)
+  }
+
+  if (loading) {
+    return <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Structure stat cards */}
+      <div className="grid grid-cols-4 gap-2.5">
+        <Stat label="Fully diluted" value={fmtShares(fdShares || null)} />
+        <Stat label="Implied value" value={fmtMoney(impliedValue)} />
+        <Stat label="Solas shares" value={fmtShares(solasShares || null)} />
+        <Stat label="Solas FD %" value={fmtPct(solasFdPct)} />
+      </div>
+      <p className="text-xs text-slate-400 -mt-1.5 px-0.5">
+        {classes.length === 0
+          ? "Add the share classes from the company's cap table to compute fully diluted totals."
+          : pricedClasses.length < classes.filter((c) => c.shares_outstanding != null).length
+            ? "Implied value covers only the classes that have a price per share."
+            : "Implied value = Σ shares × price per class. Solas FD % = Solas shares ÷ fully diluted."}
+      </p>
+      {mismatch && (
+        <p className="text-xs px-3 py-2 rounded-lg -mt-1.5" style={{ backgroundColor: "#fef3e6", color: "#9a5b13" }}>
+          Computed Solas FD % ({fmtPct(solasFdPct)}) disagrees with the entered ownership on positions ({fmtPct(enteredPct)}).
+          Usually a stale cap table, or a position missing its share count. Positions keep driving valuations either way.
+        </p>
+      )}
+
+      {/* Share classes */}
+      <div className="border border-slate-200 rounded-xl bg-white">
+        <div className="flex items-center justify-between px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-slate-400" />
+            <span className="text-sm font-medium text-slate-600">Share classes</span>
+            <label className="flex items-center gap-1.5 text-xs text-slate-400">
+              as of
+              <input
+                type="date"
+                value={company.cap_table_as_of ?? ""}
+                onChange={(e) => saveAsOf(e.target.value)}
+                className="px-1.5 py-0.5 text-xs border border-slate-200 rounded-md text-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-400"
+              />
+            </label>
+          </div>
+          {!adding && !editingId && (
+            <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 hover:border-slate-300 transition">
+              <Plus className="w-3.5 h-3.5" /> Add class
+            </button>
+          )}
+        </div>
+        {adding && (
+          <div className="border-t border-slate-100">
+            <ClassEditor companyId={company.id} onCancel={() => setAdding(false)} onDone={() => { setAdding(false); load() }} />
+          </div>
+        )}
+        {error && <p className="text-sm text-red-600 bg-red-50 mx-4 mb-2.5 px-3 py-2 rounded-lg">{error}</p>}
+        {classes.length > 0 && (
+          <div className="border-t border-slate-100 divide-y divide-slate-50">
+            {classes.map((c) => (
+              editingId === c.id ? (
+                <div key={c.id}><ClassEditor companyId={company.id} initial={c} onCancel={() => setEditingId(null)} onDone={() => { setEditingId(null); load() }} /></div>
+              ) : (
+                <div key={c.id} className="flex items-center gap-3 px-4 py-2.5 text-sm group">
+                  <span className="font-medium text-slate-800 w-36 shrink-0 truncate">{c.name}</span>
+                  <span className="text-xs px-2 py-0.5 rounded-md shrink-0" style={{ backgroundColor: "#e6eef1", color: "#023a51" }}>{c.class_type}</span>
+                  <span className="text-slate-600 shrink-0 w-24 text-right tabular-nums">{fmtShares(c.shares_outstanding)}</span>
+                  <span className="text-xs text-slate-400 shrink-0 w-12 text-right tabular-nums">
+                    {fdShares > 0 && c.shares_outstanding != null ? fmtPct((Number(c.shares_outstanding) / fdShares) * 100) : "—"}
+                  </span>
+                  <span className="text-xs text-slate-500 shrink-0 w-20 text-right tabular-nums">{fmtPrice(c.price_per_share)}</span>
+                  <span className="text-xs text-slate-400 shrink-0 w-10 text-right">{c.liq_pref_multiple != null ? `${Number(c.liq_pref_multiple)}×` : ""}</span>
+                  <span className="flex-1 min-w-0 truncate text-xs text-slate-400">{c.notes}</span>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
+                    <button onClick={() => { setEditingId(c.id); setAdding(false) }} className="p-1 text-slate-400 hover:text-slate-700"><Pencil className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => handleDelete(c.id)} className="p-1 text-slate-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                </div>
+              )
+            ))}
+          </div>
+        )}
+        {classes.length === 0 && !adding && (
+          <p className="text-sm text-slate-400 text-center border-t border-slate-100 px-4 py-6">
+            No share classes recorded. Structure only — Common, each preferred series, the option pool. No per-holder ledger.
+          </p>
+        )}
+      </div>
+
+      <p className="text-xs text-slate-400 text-center">
+        Solas positions and ownership % live in the <span className="font-medium text-slate-500">Fundraising</span> tab and are the source of truth for valuations.
+      </p>
+    </div>
+  )
+}
+
+function fmtShares(n: number | null | undefined): string {
+  return n == null || isNaN(Number(n)) ? "—" : Number(n).toLocaleString("en-US", { maximumFractionDigits: 0 })
+}
+
+// Per-share prices carry real sub-cent precision (e.g. Francis's ladder), so
+// unlike fmtMoney this keeps up to 4 decimals and never abbreviates to K/M.
+function fmtPrice(n: number | null | undefined): string {
+  return n == null || isNaN(Number(n)) ? "—" : `$${Number(n).toLocaleString("en-US", { maximumFractionDigits: 4 })}`
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-slate-50 rounded-lg px-3 py-2.5">
+      <p className="text-xs text-slate-400">{label}</p>
+      <p className="text-xl font-semibold mt-0.5 text-slate-900">{value}</p>
+    </div>
+  )
+}
+
+// ─── share class editor ───────────────────────────────────────────────────────
+function ClassEditor({
+  companyId, initial, onDone, onCancel,
+}: {
+  companyId: string
+  initial?: PortfolioShareClass
+  onDone: () => void
+  onCancel: () => void
+}) {
+  const supabase = createClient()
+  const isNew = !initial
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+  const [f, setF] = useState({
+    name: initial?.name ?? "",
+    class_type: initial?.class_type ?? SHARE_CLASS_TYPES[0],
+    shares_outstanding: numToStr(initial?.shares_outstanding),
+    price_per_share: numToStr(initial?.price_per_share),
+    liq_pref_multiple: numToStr(initial?.liq_pref_multiple),
+    seniority: numToStr(initial?.seniority),
+    notes: initial?.notes ?? "",
+  })
+  function set<K extends keyof typeof f>(k: K, v: (typeof f)[K]) { setF((p) => ({ ...p, [k]: v })) }
+
+  async function save() {
+    if (!f.name.trim()) { setError("Enter a class name."); return }
+    setSaving(true)
+    setError("")
+    const payload = {
+      company_id: companyId,
+      name: f.name.trim(),
+      class_type: f.class_type,
+      shares_outstanding: parseNum(f.shares_outstanding),
+      price_per_share: parseNum(f.price_per_share),
+      liq_pref_multiple: parseNum(f.liq_pref_multiple),
+      seniority: parseNum(f.seniority),
+      notes: f.notes || null,
+    }
+    const q = isNew
+      ? supabase.from("portfolio_share_classes").insert(payload)
+      : supabase.from("portfolio_share_classes").update(payload).eq("id", initial!.id)
+    const { error: e } = await q
+    if (e) { setError(saveHint(e.message)); setSaving(false); return }
+    setSaving(false)
+    onDone()
+  }
+
+  return (
+    <div className="p-4 space-y-3 bg-slate-50">
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="Class name *"><input placeholder="Series B Preferred" value={f.name} onChange={(e) => set("name", e.target.value)} className={inputCls} /></Field>
+        <Field label="Type">
+          <select value={f.class_type} onChange={(e) => set("class_type", e.target.value as typeof f.class_type)} className={inputCls}>
+            {SHARE_CLASS_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </Field>
+        <Field label="Shares outstanding"><input placeholder="e.g. 4,215,000" value={f.shares_outstanding} onChange={(e) => set("shares_outstanding", e.target.value)} className={inputCls} /></Field>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="Price per share"><input placeholder="$ (up to 4 decimals)" value={f.price_per_share} onChange={(e) => set("price_per_share", e.target.value)} className={inputCls} /></Field>
+        <Field label="Liq pref multiple"><input placeholder="1 = 1×, blank for common/pool" value={f.liq_pref_multiple} onChange={(e) => set("liq_pref_multiple", e.target.value)} className={inputCls} /></Field>
+        <Field label="Seniority"><input placeholder="1 = most senior" value={f.seniority} onChange={(e) => set("seniority", e.target.value)} className={inputCls} /></Field>
+      </div>
+      <div>
+        <label className="block text-xs text-slate-500 mb-1">Notes</label>
+        <textarea rows={2} value={f.notes} onChange={(e) => set("notes", e.target.value)} className={`${inputCls} resize-none`} placeholder="Participation, conversion terms, source document" />
+      </div>
+      {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <button onClick={onCancel} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 transition">Cancel</button>
+        <button onClick={save} disabled={saving || !f.name.trim()} className="flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg disabled:opacity-40 transition" style={{ backgroundColor: "#023a51" }}>
+          {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Save class
+        </button>
+      </div>
+    </div>
+  )
+}

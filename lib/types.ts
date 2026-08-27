@@ -209,6 +209,7 @@ export interface PortfolioCompany {
    * A display flag only — clearing it never deletes recorded figures.
    */
   track_revenue: boolean | null
+  cap_table_as_of: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -291,6 +292,30 @@ export interface PortfolioValuationMark {
 }
 
 export const VALUATION_BASES = ['409A', 'Secondary transaction', 'Lead investor mark', 'Internal mark', 'Public comps', 'Impairment / write-down'] as const
+
+// ─── Cap table (share-class structure) ────────────────────────────────────────
+
+// One row per share class per company — Common, each preferred series, the
+// option pool. Structure only, no per-holder ledger. Standalone from
+// portfolio_positions: ownership_pct stays hand-entered and keeps driving Fund
+// Performance; the Cap Table tab flags disagreement instead of overwriting.
+export const SHARE_CLASS_TYPES = ['Preferred', 'Common', 'Option pool', 'Warrants', 'Other'] as const
+export type ShareClassType = typeof SHARE_CLASS_TYPES[number]
+
+export interface PortfolioShareClass {
+  id: string
+  company_id: string
+  name: string
+  class_type: ShareClassType
+  shares_outstanding: number | null
+  price_per_share: number | null
+  /** Liquidation preference as a multiple (1 = 1×). Null for common/pool. */
+  liq_pref_multiple: number | null
+  /** Preference-stack rank, 1 = most senior. Null (common, pool) sorts last. */
+  seniority: number | null
+  notes: string | null
+  created_at: string
+}
 
 // ─── Revenue (projected vs actual) ────────────────────────────────────────────
 

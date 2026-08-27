@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
 import PortfolioCompanyForm from './PortfolioCompanyForm'
 import CapRoundsTab from './CapRoundsTab'
+import CapTableTab from './CapTableTab'
 import FundraisingTab from './FundraisingTab'
 import RevenueTab from './RevenueTab'
 import RunwayTab from './RunwayTab'
@@ -22,7 +23,7 @@ import DecksSection from '@/components/shared/DecksSection'
 import ClinicalContextSection from '@/components/shared/ClinicalContextSection'
 import KnownCompetitors from '@/components/shared/KnownCompetitors'
 
-type Tab = 'overview' | 'fundraising' | 'rounds' | 'revenue' | 'runway' | 'intros' | 'catalysts' | 'files'
+type Tab = 'overview' | 'fundraising' | 'rounds' | 'captable' | 'revenue' | 'runway' | 'intros' | 'catalysts' | 'files'
 
 interface Props {
   company: PortfolioCompany
@@ -81,6 +82,7 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
     { key: 'overview', label: 'Overview' },
     { key: 'fundraising', label: 'Fundraising' },
     { key: 'rounds', label: 'Ownership' },
+    { key: 'captable', label: 'Cap Table' },
     ...(showRevenue ? [{ key: 'revenue' as Tab, label: 'Revenue' }] : []),
     ...(showRunway ? [{ key: 'runway' as Tab, label: 'Runway' }] : []),
     { key: 'intros', label: 'Investor Intros' },
@@ -140,6 +142,7 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
             {tab === 'overview' && <OverviewTab company={company} />}
             {tab === 'fundraising' && <FundraisingTab companyId={company.id} />}
             {tab === 'rounds' && <CapRoundsTab companyId={company.id} />}
+            {tab === 'captable' && <CapTableTab company={company} onCompanyUpdated={(c) => { setCompany(c); onUpdated(c) }} />}
             {tab === 'revenue' && <RevenueTab companyId={company.id} />}
             {tab === 'runway' && <RunwayTab companyId={company.id} />}
             {tab === 'intros' && <InvestorIntrosTab table="portfolio_investor_intros" fkColumn="company_id" entityId={company.id} />}
