@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react"
 import { Plus, Trash2, Loader2, Pencil, Layers, ChevronDown, ChevronRight, TrendingDown } from "lucide-react"
-import { PortfolioCompany, PortfolioShareClass, PortfolioClassHolding, PortfolioPosition, SHARE_CLASS_TYPES } from "@/lib/types"
+import { PortfolioCompany, PortfolioShareClass, PortfolioClassHolding, PortfolioPosition, PortfolioFundraiseRound, SHARE_CLASS_TYPES } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
-import { parseNum, numToStr, fmtMoney, fmtPct, saveHint, inputCls } from "@/lib/rounds"
+import { parseNum, numToStr, fmtMoney, fmtPct, saveHint, inputCls, noteAccruedInterest, exactDate } from "@/lib/rounds"
 import Field from "@/components/shared/Field"
 
 // Share-class structure: Common, each preferred series, the option pool —
@@ -22,6 +22,7 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
   const supabase = createClient()
   const [classes, setClasses] = useState<ShareClassWithHoldings[]>([])
   const [positions, setPositions] = useState<PortfolioPosition[]>([])
+  const [rounds, setRounds] = useState<PortfolioFundraiseRound[]>([])
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -34,19 +35,21 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
 
   async function load() {
     setLoading(true)
-    const [scRes, psRes] = await Promise.all([
+    const [scRes, psRes, rdRes] = await Promise.all([
       // Preference-stack order: seniority 1 first, then the null-seniority rows
       // (common, pool) last — Postgres sorts nulls last ascending by default.
       supabase.from("portfolio_share_classes").select("*, portfolio_class_holdings(*)").eq("company_id", company.id).order("seniority").order("name"),
       supabase.from("portfolio_positions").select("*").eq("company_id", company.id),
+      supabase.from("portfolio_fundraise_rounds").select("id,company_id,round_name,security_type,status,date,terms").eq("company_id", company.id),
     ])
     // A failed read must not render as an empty cap table — someone would
     // re-key the classes on top of it. Most likely failure: the migration
     // hasn't been run, which saveHint turns into "run migration_cap_table.sql".
-    const loadErr = scRes.error ?? psRes.error
+    const loadErr = scRes.error ?? psRes.error ?? rdRes.error
     if (loadErr) setError(saveHint(loadErr.message))
     setClasses((scRes.data as ShareClassWithHoldings[]) ?? [])
     setPositions((psRes.data as PortfolioPosition[]) ?? [])
+    setRounds((rdRes.data as PortfolioFundraiseRound[]) ?? [])
     setLoading(false)
   }
 
@@ -70,6 +73,74 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
   // Unconverted notes/SAFEs are carried as share-less rows, so they sit OUTSIDE
   // the FD denominator — the usual reason the two figures legitimately differ.
   const hasConvertibles = classes.some((c) => c.shares_outstanding == null)
+
+  // ── Live check against the books: the CRM's note rounds and positions keep
+  // moving (accrual, maturity, conversion) while the cap table is a snapshot.
+  // Positions carry only SOLAS's slice of each note, so the comparable figure
+  // on the cap-table side is the note rows' Solas holdings (entered as $).
+  const roundById = new Map(rounds.map((r) => [r.id, r]))
+  const isNoteRound = (r: PortfolioFundraiseRound) => r.security_type === "Convertible note" || r.security_type === "SAFE"
+  const noteRounds = rounds.filter(isNoteRound)
+  const unconvertedRounds = noteRounds.filter((r) => r.status !== "Converted")
+  // Solas live P+I per entity — the same accrual rules as Fund Performance's
+  // Notes Exposure: computed simple interest when terms allow, entered fallback.
+  const liveByFund = new Map<string, number>()
+  for (const p of ownPositions) {
+    const r = p.round_id ? roundById.get(p.round_id) : undefined
+    if (!r || !isNoteRound(r) || r.status === "Converted") continue
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const terms = (r.terms as any) ?? {}
+    const principal = Number(p.invested_amount) || 0
+    const rate = terms.interest_rate != null ? Number(terms.interest_rate) : null
+    const isSimple = !terms.interest_type || terms.interest_type === "Simple"
+    const computed = isSimple ? noteAccruedInterest(principal || null, rate, r.date) : null
+    const total = principal + (computed ?? (Number(p.accrued_interest) || 0))
+    if (total <= 0) continue
+    const fund = p.fund || "Unassigned"
+    liveByFund.set(fund, (liveByFund.get(fund) ?? 0) + total)
+  }
+  const liveSolasNotes = Array.from(liveByFund.values()).reduce((a, b) => a + b, 0)
+  const earliestMaturity = unconvertedRounds
+    .map((r) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const md = ((r.terms as any) ?? {}).maturity_date
+      return md ? String(md) : null
+    })
+    .filter((d): d is string => d != null)
+    .sort()[0]
+  const maturityDays = earliestMaturity != null
+    ? Math.round((new Date(earliestMaturity + "T00:00:00").getTime() - Date.now()) / 86400000)
+    : null
+  const noteClassRows = classes.filter((c) => c.shares_outstanding == null && Number(c.convertible_balance) > 0)
+  // Cap table says a note is outstanding, the books say everything converted:
+  // the strongest stale signal there is.
+  const staleConversion = noteClassRows.length > 0 && noteRounds.length > 0 && unconvertedRounds.length === 0
+  const enteredSolasNoteDollars = noteClassRows.reduce(
+    (t, c) => t + c.portfolio_class_holdings.reduce((u, h) => u + (Number(h.shares) || 0), 0), 0)
+  const noteDrift = liveSolasNotes > 0 && enteredSolasNoteDollars > 0
+    ? Math.abs(liveSolasNotes - enteredSolasNoteDollars) / liveSolasNotes > 0.02
+    : false
+  // Adopting the live figure only makes sense when there is exactly one note
+  // row to receive it — with several, the per-row split is a human call.
+  const adoptTarget = noteClassRows.length === 1 && liveSolasNotes > 0 ? noteClassRows[0] : null
+  const [adopting, setAdopting] = useState(false)
+
+  async function adoptLiveSolasNotes() {
+    if (!adoptTarget) return
+    setError("")
+    setAdopting(true)
+    // Positions carry their fund, so the live figure arrives pre-split by
+    // entity — write it as this note row's holdings (dollars of balance).
+    const rows = Array.from(liveByFund.entries()).map(([entity, dollars]) => ({
+      class_id: adoptTarget.id, entity, shares: Math.round(dollars),
+    }))
+    const { error: delErr } = await supabase.from("portfolio_class_holdings").delete().eq("class_id", adoptTarget.id)
+    if (delErr) { setError(saveHint(delErr.message)); setAdopting(false); return }
+    const { error: insErr } = await supabase.from("portfolio_class_holdings").insert(rows)
+    if (insErr) { setError(saveHint(insErr.message)); setAdopting(false); return }
+    setAdopting(false)
+    load()
+  }
 
   async function saveAsOf(date: string) {
     setError("")
@@ -182,6 +253,34 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
         )}
       </div>
 
+      {staleConversion && (
+        <p className="text-xs px-3 py-2 rounded-lg" style={{ backgroundColor: "#fef3e6", color: "#9a5b13" }}>
+          Every note round on the books is marked <span className="font-medium">Converted</span>, but this cap table still
+          carries {noteClassRows.length === 1 ? "an unconverted note row" : "unconverted note rows"} — it predates the
+          conversion. Re-key the classes from a fresh cap table.
+        </p>
+      )}
+      {!staleConversion && noteClassRows.length > 0 && liveSolasNotes > 0 && (
+        <div className="text-xs px-3 py-2 rounded-lg space-y-1" style={{ backgroundColor: noteDrift ? "#fef3e6" : "#f8fafc", color: noteDrift ? "#9a5b13" : "#64748b" }}>
+          <p>
+            CRM books today: {unconvertedRounds.length} unconverted note {unconvertedRounds.length === 1 ? "round" : "rounds"};
+            Solas principal + accrued ≈ <span className="font-medium">{fmtMoney(liveSolasNotes)}</span> (accrues daily
+            {earliestMaturity != null && maturityDays != null && (
+              maturityDays < 0
+                ? <>; earliest maturity {exactDate(earliestMaturity)}, <span className="font-medium">overdue by {Math.abs(maturityDays)} days</span></>
+                : <>; earliest maturity {exactDate(earliestMaturity)}, in {maturityDays} days</>
+            )}).
+            {noteDrift && <> The note {noteClassRows.length === 1 ? "row carries" : "rows carry"} Solas holdings of {fmtMoney(enteredSolasNoteDollars)} — drifted from the live figure.</>}
+            {enteredSolasNoteDollars === 0 && <> The note {noteClassRows.length === 1 ? "row has" : "rows have"} no Solas holdings entered.</>}
+          </p>
+          {adoptTarget && (noteDrift || enteredSolasNoteDollars === 0) && (
+            <button onClick={adoptLiveSolasNotes} disabled={adopting} className="flex items-center gap-1.5 text-xs px-2.5 py-1 border rounded-lg transition disabled:opacity-40" style={{ borderColor: "#e0b27a", color: "#9a5b13" }}>
+              {adopting && <Loader2 className="w-3 h-3 animate-spin" />}
+              Use live figure — set “{adoptTarget.name}” Solas holdings to {fmtMoney(liveSolasNotes)}, split by fund
+            </button>
+          )}
+        </div>
+      )}
       {classes.some((c) => c.shares_outstanding != null) && <WaterfallSection classes={classes} impliedValue={impliedValue} />}
 
       <p className="text-xs text-slate-400 text-center">
