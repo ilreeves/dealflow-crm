@@ -58,12 +58,18 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
   const ownPositions = positions.filter((p) => !p.lookthrough_of)
 
   const fdShares = classes.reduce((s, c) => s + (Number(c.shares_outstanding) || 0), 0)
-  // Implied value only covers classes that carry BOTH a share count and a
-  // price; the footnote says so when coverage is partial.
-  const pricedClasses = classes.filter((c) => c.shares_outstanding != null && c.price_per_share != null)
-  const impliedValue = pricedClasses.length
-    ? pricedClasses.reduce((s, c) => s + Number(c.shares_outstanding) * Number(c.price_per_share), 0)
-    : null
+  // Implied valuation = LAST ROUND price × fully diluted shares — "the company
+  // at what the newest investor paid", the natural anchor for the waterfall's
+  // exit box. (A per-class Σ shares × price would mostly reproduce invested
+  // capital, since our prices are original-issue.) Last round = the most
+  // senior priced preferred, highest price breaking a seniority tie.
+  const lastRoundPrice = (() => {
+    const priced = classes.filter((c) => c.class_type === "Preferred" && c.price_per_share != null && c.shares_outstanding != null)
+    if (!priced.length) return null
+    const top = priced.slice().sort((a, b) => (a.seniority ?? 99) - (b.seniority ?? 99) || Number(b.price_per_share) - Number(a.price_per_share))[0]
+    return Number(top.price_per_share)
+  })()
+  const impliedValuation = lastRoundPrice != null && fdShares > 0 ? lastRoundPrice * fdShares : null
   const solasShares = ownPositions.reduce((s, p) => s + (Number(p.shares) || 0), 0)
   const solasFdPct = fdShares > 0 && solasShares > 0 ? (solasShares / fdShares) * 100 : null
   const enteredPct = ownPositions.reduce((s, p) => s + (Number(p.ownership_pct) || 0), 0)
@@ -170,16 +176,16 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
       {/* Structure stat cards */}
       <div className="grid grid-cols-4 gap-2.5">
         <Stat label="Fully diluted" value={fmtShares(fdShares || null)} />
-        <Stat label="Implied value" value={fmtMoney(impliedValue)} />
+        <Stat label="Implied valuation" value={fmtMoney(impliedValuation)} />
         <Stat label="Solas shares" value={fmtShares(solasShares || null)} />
         <Stat label="Solas FD %" value={fmtPct(solasFdPct)} />
       </div>
       <p className="text-xs text-slate-400 -mt-1.5 px-0.5">
         {classes.length === 0
           ? "Add the share classes from the company's cap table to compute fully diluted totals."
-          : pricedClasses.length < classes.filter((c) => c.shares_outstanding != null).length
-            ? "Implied value covers only the classes that have a price per share."
-            : "Implied value = Σ shares × price per class. Solas FD % = Solas shares ÷ fully diluted."}
+          : impliedValuation == null
+            ? "Implied valuation needs a priced preferred class — the last round price is applied across all fully diluted shares."
+            : `Implied valuation = last round price (${fmtPrice(lastRoundPrice)}) × fully diluted shares. Solas FD % = Solas shares ÷ fully diluted.`}
       </p>
       {mismatch && (
         <p className="text-xs px-3 py-2 rounded-lg -mt-1.5" style={{ backgroundColor: "#fef3e6", color: "#9a5b13" }}>
@@ -281,7 +287,7 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
           )}
         </div>
       )}
-      {classes.some((c) => c.shares_outstanding != null) && <WaterfallSection classes={classes} impliedValue={impliedValue} />}
+      {classes.some((c) => c.shares_outstanding != null) && <WaterfallSection classes={classes} impliedValue={impliedValuation} />}
 
       <p className="text-xs text-slate-400 text-center">
         Solas positions and ownership % live in the <span className="font-medium text-slate-500">Fundraising</span> tab and are the source of truth for valuations.
@@ -665,7 +671,7 @@ function WaterfallSection({ classes, impliedValue }: { classes: ShareClassWithHo
             )}
             {impliedValue != null && (
               <div className="flex gap-1.5 pb-0.5">
-                {([["implied", 1], ["2×", 2], ["5×", 5]] as const).map(([label, mult]) => (
+                {([["implied", 1], ["2×", 2], ["3×", 3], ["5×", 5], ["10×", 10]] as const).map(([label, mult]) => (
                   <button key={label} onClick={() => setExitStr(String(Math.round(impliedValue * mult)))} className="text-xs px-2 py-1.5 border border-slate-200 rounded-lg text-slate-500 hover:text-slate-900 hover:border-slate-300 transition">
                     {label}
                   </button>
