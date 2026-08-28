@@ -157,7 +157,9 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
                 <div key={c.id} className="flex items-center gap-3 px-4 py-2.5 text-sm group">
                   <span className="font-medium text-slate-800 w-36 shrink-0 truncate">{c.name}</span>
                   <span className="text-xs px-2 py-0.5 rounded-md shrink-0" style={{ backgroundColor: "#e6eef1", color: "#023a51" }}>{c.class_type}</span>
-                  <span className="text-slate-600 shrink-0 w-24 text-right tabular-nums">{fmtShares(c.shares_outstanding)}</span>
+                  <span className="text-slate-600 shrink-0 w-24 text-right tabular-nums">
+                    {c.shares_outstanding != null ? fmtShares(c.shares_outstanding) : c.convertible_balance != null ? fmtMoney(c.convertible_balance) : "—"}
+                  </span>
                   <span className="text-xs text-slate-400 shrink-0 w-12 text-right tabular-nums">
                     {fdShares > 0 && c.shares_outstanding != null ? fmtPct((Number(c.shares_outstanding) / fdShares) * 100) : "—"}
                   </span>
@@ -238,6 +240,8 @@ function ClassEditor({
     liq_pref_multiple: numToStr(initial?.liq_pref_multiple),
     seniority: numToStr(initial?.seniority),
     participating: initial?.participating === true,
+    convertible_balance: numToStr(initial?.convertible_balance),
+    conversion_price: numToStr(initial?.conversion_price),
     notes: initial?.notes ?? "",
   })
   function set<K extends keyof typeof f>(k: K, v: (typeof f)[K]) { setF((p) => ({ ...p, [k]: v })) }
@@ -255,6 +259,8 @@ function ClassEditor({
       liq_pref_multiple: parseNum(f.liq_pref_multiple),
       seniority: parseNum(f.seniority),
       participating: f.participating || null,
+      convertible_balance: f.class_type === "Other" ? parseNum(f.convertible_balance) : null,
+      conversion_price: f.class_type === "Other" ? parseNum(f.conversion_price) : null,
       notes: f.notes || null,
     }
     let classId = initial?.id
@@ -303,8 +309,14 @@ function ClassEditor({
         </Field>
         <Field label="Seniority"><input placeholder="1 = most senior" value={f.seniority} onChange={(e) => set("seniority", e.target.value)} className={inputCls} /></Field>
       </div>
+      {f.class_type === "Other" && (
+        <div className="grid grid-cols-4 gap-3">
+          <Field label="Convertible balance ($)"><input placeholder="principal + accrued" value={f.convertible_balance} onChange={(e) => set("convertible_balance", e.target.value)} className={inputCls} /></Field>
+          <Field label="Conversion price ($)"><input placeholder="blank = discount to last round" value={f.conversion_price} onChange={(e) => set("conversion_price", e.target.value)} className={inputCls} /></Field>
+        </div>
+      )}
       <div>
-        <label className="block text-xs text-slate-500 mb-1">Solas holdings in this class — by entity, since several vehicles can hold the same company</label>
+        <label className="block text-xs text-slate-500 mb-1">Solas holdings in this class — by entity, since several vehicles can hold the same company{f.class_type === "Other" && !f.shares_outstanding.trim() ? " (for a note row, enter DOLLARS of its balance)" : ""}</label>
         <div className="space-y-2">
           {holdings.map((h, i) => (
             <div key={i} className="flex items-center gap-2">
@@ -346,6 +358,8 @@ type WaterfallRow = {
   id: string
   name: string
   shares: number
+  /** Denominator for holdings fractions: shares, except note rows where holdings are entered as DOLLARS of balance. */
+  unitTotal: number
   solas: number
   prefBasis: number | null
   participating: boolean
@@ -355,7 +369,7 @@ type WaterfallRow = {
   assumed: string | null
 }
 
-function computeWaterfall(exitValue: number, classes: ShareClassWithHoldings[]): WaterfallRow[] {
+function computeWaterfall(exitValue: number, classes: ShareClassWithHoldings[], noteDiscount: number): WaterfallRow[] {
   const rows: WaterfallRow[] = classes
     .filter((c) => c.shares_outstanding != null && Number(c.shares_outstanding) > 0)
     .map((c) => {
@@ -366,6 +380,7 @@ function computeWaterfall(exitValue: number, classes: ShareClassWithHoldings[]):
         id: c.id,
         name: c.name,
         shares,
+        unitTotal: shares,
         solas: c.portfolio_class_holdings.reduce((t, h) => t + (Number(h.shares) || 0), 0),
         prefBasis: hasPref ? shares * Number(c.price_per_share) * mult : null,
         participating: hasPref && c.participating === true,
@@ -382,6 +397,43 @@ function computeWaterfall(exitValue: number, classes: ShareClassWithHoldings[]):
                 : null,
       }
     })
+
+  // ── Unconverted notes/SAFEs (share-less rows with a balance) ──
+  // Modeled as a most-senior preferred whose basis is its balance × multiple:
+  // convert-or-take then gives the note its debt-like floor at low exits and
+  // conversion upside at high ones. Conversion price = documented terms when
+  // stated, else the given discount to the LAST ROUND price (the most senior
+  // priced preferred). Holdings on note rows are entered as DOLLARS of balance,
+  // so unitTotal is the balance rather than the share count.
+  const pricedPref = classes.filter((c) => c.class_type === "Preferred" && c.price_per_share != null && c.shares_outstanding != null)
+  const lastRound = pricedPref
+    .slice()
+    .sort((a, b) => (a.seniority ?? 99) - (b.seniority ?? 99) || Number(b.price_per_share) - Number(a.price_per_share))[0]
+  const refPrice = lastRound ? Number(lastRound.price_per_share) : null
+  for (const c of classes) {
+    if (c.shares_outstanding != null) continue
+    const balance = Number(c.convertible_balance)
+    if (!(balance > 0)) continue
+    const documented = c.conversion_price != null ? Number(c.conversion_price) : null
+    const convPrice = documented ?? (refPrice != null ? refPrice * (1 - noteDiscount) : null)
+    if (convPrice == null || convPrice <= 0) continue
+    const mult = c.liq_pref_multiple != null ? Number(c.liq_pref_multiple) : 1
+    rows.push({
+      id: c.id,
+      name: c.name,
+      shares: balance / convPrice,
+      unitTotal: balance,
+      solas: c.portfolio_class_holdings.reduce((t, h) => t + (Number(h.shares) || 0), 0),
+      prefBasis: balance * mult,
+      participating: c.participating === true,
+      seniority: c.seniority ?? 0, // debt-like: ahead of the preferred stack unless told otherwise
+      payout: 0,
+      mode: "preference",
+      assumed: documented != null
+        ? `converts at ${fmtPrice(documented)} per note terms`
+        : `assumed conversion at ${fmtPrice(convPrice)} — ${Math.round(noteDiscount * 100)}% discount to ${fmtPrice(refPrice)}`,
+    })
+  }
   if (exitValue <= 0 || rows.length === 0) return rows.map((r) => ({ ...r, mode: "wiped" }))
 
   const prefs = rows.filter((r) => r.prefBasis != null && !r.participating)
@@ -463,19 +515,22 @@ function WaterfallSection({ classes, impliedValue }: { classes: ShareClassWithHo
   const [open, setOpen] = useState(false)
   const [exitStr, setExitStr] = useState("")
 
+  const [discountStr, setDiscountStr] = useState("20")
   const exitValue = parseNum(exitStr) ?? 0
-  const rows = exitValue > 0 ? computeWaterfall(exitValue, classes) : []
-  const solasTotal = rows.reduce((t, r) => t + (r.shares > 0 ? (r.payout * r.solas) / r.shares : 0), 0)
+  const noteDiscount = Math.min(0.95, Math.max(0, (parseNum(discountStr) ?? 20) / 100))
+  const rows = exitValue > 0 ? computeWaterfall(exitValue, classes, noteDiscount) : []
+  const solasTotal = rows.reduce((t, r) => t + (r.unitTotal > 0 ? (r.payout * r.solas) / r.unitTotal : 0), 0)
   const anySolas = classes.some((c) => c.portfolio_class_holdings.length > 0)
-  const hasConvertibleRows = classes.some((c) => c.shares_outstanding == null)
+  const modeledNotes = classes.filter((c) => c.shares_outstanding == null && Number(c.convertible_balance) > 0)
+  const unmodeledNotes = classes.filter((c) => c.shares_outstanding == null && !(Number(c.convertible_balance) > 0))
   // Proceeds by Solas ENTITY across all classes — the same company is held via
   // several vehicles, and each receives cash at an exit regardless of carry.
   const byEntity = new Map<string, number>()
   for (const r of rows) {
-    if (r.shares <= 0) continue
+    if (r.unitTotal <= 0) continue
     const cls = classes.find((c) => c.id === r.id)
     for (const h of cls?.portfolio_class_holdings ?? []) {
-      const take = (r.payout * (Number(h.shares) || 0)) / r.shares
+      const take = (r.payout * (Number(h.shares) || 0)) / r.unitTotal
       if (take > 0) byEntity.set(h.entity, (byEntity.get(h.entity) ?? 0) + take)
     }
   }
@@ -502,6 +557,13 @@ function WaterfallSection({ classes, impliedValue }: { classes: ShareClassWithHo
                 <input placeholder="e.g. 200,000,000" value={exitStr} onChange={(e) => setExitStr(e.target.value)} className={inputCls} />
               </Field>
             </div>
+            {modeledNotes.length > 0 && (
+              <div className="w-28">
+                <Field label="Note discount %">
+                  <input value={discountStr} onChange={(e) => setDiscountStr(e.target.value)} className={inputCls} />
+                </Field>
+              </div>
+            )}
             {impliedValue != null && (
               <div className="flex gap-1.5 pb-0.5">
                 {([["implied", 1], ["2×", 2], ["5×", 5]] as const).map(([label, mult]) => (
@@ -554,9 +616,10 @@ function WaterfallSection({ classes, impliedValue }: { classes: ShareClassWithHo
           )}
 
           <p className="text-xs text-slate-400">
-            Class-level and non-participating: each preferred takes the better of its preference or converting; proceeds short of the
+            Class-level: each preferred takes the better of its preference or converting; proceeds short of the
             stack pay down seniority order. Options and warrants count as shares with strikes ignored.
-            {hasConvertibleRows && " Unconverted notes/SAFEs on this cap table are NOT modeled — at most exits they would take principal + interest ahead of equity, so treat Solas proceeds as slightly optimistic."}
+            {modeledNotes.length > 0 && " Unconverted notes convert at documented terms where stated, else at the discount to the last round price, with a floor at their balance (debt-like, ahead of the stack). Balances are as of the cap table date — interest accrued since is not added."}
+            {unmodeledNotes.length > 0 && " Some convertibles here have no balance entered and are NOT modeled — edit the row and set its convertible balance."}
             {!anySolas && " No Solas holdings entered on the classes yet — add them per entity (pencil → Solas holdings) to see our proceeds."}
           </p>
         </div>

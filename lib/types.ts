@@ -315,6 +315,10 @@ export interface PortfolioShareClass {
   seniority: number | null
   /** Participating preferred: takes its preference AND shares pro-rata. */
   participating: boolean | null
+  /** Unconverted note/SAFE balance ($, incl. accrued where known) on a share-less row. */
+  convertible_balance: number | null
+  /** Documented conversion price; when null the waterfall derives one from its discount input. */
+  conversion_price: number | null
   notes: string | null
   created_at: string
 }

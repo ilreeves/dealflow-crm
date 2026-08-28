@@ -242,3 +242,30 @@ FROM portfolio_class_holdings h
 JOIN portfolio_share_classes sc ON sc.id = h.class_id
 JOIN portfolio_companies pc ON pc.id = sc.company_id
 ORDER BY pc.name, sc.seniority NULLS LAST, sc.name, h.shares DESC;
+
+-- ── Note balances for the waterfall (2026-08-27) ─────────────────────────────
+-- Requires the convertible_balance / conversion_price columns. Balances are as
+-- of each cap table's own date; interest accrued since is NOT included.
+-- CNXT/AFTx conversion prices are documented note terms; the rest convert at
+-- the waterfall's discount input (default 20% to last round).
+-- iO A-1 ($0.6912) and Phenomics PA ($0.6718) prices come from the Carta
+-- certificate ledgers — documented, and needed as the notes' reference price.
+UPDATE portfolio_share_classes sc SET price_per_share = v.price
+FROM (VALUES ('%urology%', 'Series A-1 Preferred (PA1)', 0.6912),
+             ('%phenomics%', 'Series A-1 Preferred (PA)', 0.6718)) AS v(pattern, class_name, price)
+JOIN portfolio_companies pc ON pc.name ILIKE v.pattern
+WHERE sc.company_id = pc.id AND sc.name = v.class_name AND sc.price_per_share IS NULL;
+
+UPDATE portfolio_share_classes sc
+SET convertible_balance = v.balance, conversion_price = v.conv_price
+FROM (VALUES
+  ('%basking%',  'CN Notes',                  75000::numeric,   NULL::numeric),
+  ('%cryosa%',   '2024 Note Financing (CN)',  7362500,          NULL),
+  ('%vektor%',   'Convertibles',              15181926,         NULL),
+  ('%urology%',  'Convertibles',              5734925,          NULL),
+  ('%phenomics%','Convertibles',              6504500,          NULL),
+  ('%nxt%',      '2025A Notes',               2000000,          0.7528),
+  ('%aftx%',     '2025A Notes',               1000000,          0.2877)
+) AS v(pattern, class_name, balance, conv_price)
+JOIN portfolio_companies pc ON pc.name ILIKE v.pattern
+WHERE sc.company_id = pc.id AND sc.name = v.class_name;

@@ -29,3 +29,10 @@ CREATE INDEX IF NOT EXISTS portfolio_class_holdings_class_id_idx ON portfolio_cl
 -- convert-or-take). Francis is the known case: its own waterfall model pays
 -- "return of preference and then pro-rata proceeds".
 ALTER TABLE portfolio_share_classes ADD COLUMN IF NOT EXISTS participating BOOLEAN;
+
+-- Unconverted notes/SAFEs in the waterfall: a share-less 'Other' row with a
+-- balance is modeled as converting at conversion_price when stated (e.g. the
+-- CNXT/AFTx 2025A notes), else at a discount to the last round price — with a
+-- 1x floor at its balance, which is the note's debt-like downside.
+ALTER TABLE portfolio_share_classes ADD COLUMN IF NOT EXISTS convertible_balance NUMERIC;
+ALTER TABLE portfolio_share_classes ADD COLUMN IF NOT EXISTS conversion_price NUMERIC;

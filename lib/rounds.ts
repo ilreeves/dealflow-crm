@@ -107,7 +107,7 @@ export function saveHint(msg: string): string {
   }
   // Must precede the generic case below, whose "fundraising migration" hint
   // would send someone to re-run the wrong file.
-  if (/portfolio_share_classes|cap_table_as_of|solas_shares/i.test(msg)) {
+  if (/portfolio_share_classes|portfolio_class_holdings|cap_table_as_of|solas_shares|convertible_balance|conversion_price/i.test(msg)) {
     return "Save failed — the cap table schema is missing or out of date. Run supabase/migration_cap_table.sql (and migration_waterfall.sql for solas_shares) in Supabase, then try again. (" + msg + ")"
   }
   if (/portfolio_positions|deal_fundraise_rounds|option_pool|column .* does not exist|schema cache|could not find/i.test(msg)) {

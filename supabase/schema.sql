@@ -1500,3 +1500,5 @@ DROP POLICY IF EXISTS "Auth users can manage portfolio_class_holdings" ON portfo
 CREATE POLICY "Auth users can manage portfolio_class_holdings" ON portfolio_class_holdings FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE INDEX IF NOT EXISTS portfolio_class_holdings_class_id_idx ON portfolio_class_holdings (class_id);
 ALTER TABLE portfolio_share_classes ADD COLUMN IF NOT EXISTS participating BOOLEAN;
+ALTER TABLE portfolio_share_classes ADD COLUMN IF NOT EXISTS convertible_balance NUMERIC;
+ALTER TABLE portfolio_share_classes ADD COLUMN IF NOT EXISTS conversion_price NUMERIC;
