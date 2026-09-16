@@ -532,7 +532,7 @@ function WaterfallSection({ classes, impliedValue }: { classes: ShareClassWithHo
                   <span className="flex-1" />
                   <span className="text-slate-600 tabular-nums w-24 text-right">{fmtMoney(r.payout)}</span>
                   <span className="text-xs text-slate-400 tabular-nums w-24 text-right">
-                    {r.solas > 0 && r.shares > 0 ? `Solas ${fmtMoney((r.payout * r.solas) / r.shares)}` : ""}
+                    {r.solas > 0 && r.unitTotal > 0 ? `Solas ${fmtMoney((r.payout * r.solas) / r.unitTotal)}` : ""}
                   </span>
                 </div>
               ))}
