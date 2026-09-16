@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Upload, FileText, Download, Trash2, Eye, Loader2, RefreshCw, Mail, Users, ChevronDown, ChevronRight, Plus, Pencil, Check, X, Link2 } from 'lucide-react'
+import { Upload, FileText, Download, Trash2, Eye, Loader2, RefreshCw, Mail, Users, ChevronDown, ChevronRight, Plus, Pencil, Check, X, Link2, Link } from 'lucide-react'
 import { CompanyDeck, DeckView, DealFile } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
@@ -170,6 +170,8 @@ function DeckItem({ deck, rounds, entityName, buildEmail, onUpdated, onDeleted }
   const supabase = createClient()
   const [viewing, setViewing] = useState(false)
   const [emailing, setEmailing] = useState(false)
+  const [copying, setCopying] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [replacing, setReplacing] = useState(false)
   const [editingLabel, setEditingLabel] = useState(false)
   const [labelDraft, setLabelDraft] = useState(deck.label)
@@ -239,23 +241,47 @@ function DeckItem({ deck, rounds, entityName, buildEmail, onUpdated, onDeleted }
     return `${slugify(`${entityName} ${displayLabel}`)}-${suffix}`
   }
 
-  async function handleEmail() {
-    setEmailing(true)
-    setRowError('')
+  // Persists the token and restarts the 4-week expiry window. Returns null (with
+  // rowError set) if the update failed — never hand out a link that isn't live.
+  async function ensureShareLink(): Promise<string | null> {
     const token = deck.token ?? makeToken()
     const now = new Date().toISOString()
     const { data, error: updErr } = await supabase.from('company_decks').update({ token, shared_at: now }).eq('id', deck.id).select().single()
     if (updErr || !data) {
-      // Don't open a mail draft with a link that was never persisted.
       setRowError(`Could not create share link: ${updErr?.message ?? 'update failed'}`)
-      setEmailing(false)
-      return
+      return null
     }
     onUpdated(data as CompanyDeck)
-    const shareUrl = `${window.location.origin}/deck/${token}`
-    const { subject, body } = buildEmail(shareUrl, displayLabel)
-    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    return `${window.location.origin}/deck/${token}`
+  }
+
+  async function handleEmail() {
+    setEmailing(true)
+    setRowError('')
+    const shareUrl = await ensureShareLink()
+    if (shareUrl) {
+      const { subject, body } = buildEmail(shareUrl, displayLabel)
+      window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    }
     setEmailing(false)
+  }
+
+  async function handleCopyLink() {
+    setCopying(true)
+    setRowError('')
+    const shareUrl = await ensureShareLink()
+    if (shareUrl) {
+      try {
+        await navigator.clipboard.writeText(shareUrl)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      } catch {
+        // Link is live even if the clipboard write was blocked — surface it so it
+        // can still be copied by hand.
+        setRowError(`Copy failed — link is active: ${shareUrl}`)
+      }
+    }
+    setCopying(false)
   }
 
   async function saveLabel() {
@@ -336,6 +362,9 @@ function DeckItem({ deck, rounds, entityName, buildEmail, onUpdated, onDeleted }
           <button onClick={handleEmail} disabled={emailing} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition disabled:opacity-50" title="Draft investor email with deck link">
             {emailing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
           </button>
+          <button onClick={handleCopyLink} disabled={copying} className={`p-1.5 rounded-lg transition disabled:opacity-50 ${copied ? 'text-green-600' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'}`} title="Copy share link">
+            {copying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : copied ? <Check className="w-3.5 h-3.5" /> : <Link className="w-3.5 h-3.5" />}
+          </button>
           {isPdf && (
             <button onClick={() => setViewing(true)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition" title="View deck"><Eye className="w-3.5 h-3.5" /></button>
           )}
@@ -353,7 +382,7 @@ function DeckItem({ deck, rounds, entityName, buildEmail, onUpdated, onDeleted }
       {/* Share-link status */}
       {deck.shared_at && (
         <p className={`text-xs mt-1.5 ${linkExpired ? 'text-orange-600' : 'text-slate-400'}`}>
-          {linkExpired ? 'Share link expired — click the mail icon to send a fresh 4-week link.' : `Share link active until ${expiryDate}.`}
+          {linkExpired ? 'Share link expired — the mail or link icon issues a fresh 4-week link.' : `Share link active until ${expiryDate}.`}
         </p>
       )}
 
