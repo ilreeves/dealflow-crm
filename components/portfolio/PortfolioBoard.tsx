@@ -46,7 +46,7 @@ export default function PortfolioBoard({ initialCompanies, fundOrder }: Props) {
   const activeFiltered = useMemo(() => filtered.filter((c) => !isLegacy(c)), [filtered])
   const legacyFiltered = useMemo(() => filtered.filter(isLegacy), [filtered])
 
-  const FUND_ORDER = fundOrder && fundOrder.length ? fundOrder : ['Fund I', 'Fund II', 'EHF', 'Solas/Sower', 'SPV']
+  const FUND_ORDER = fundOrder && fundOrder.length ? fundOrder : ['Fund I', 'Fund II', 'EHF', 'Sower Solas II', 'SPV']
   const CLINICAL_ORDER = ['Preclinical', 'Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Pre-IDE', 'FIH', 'Pivotal', '510(k)', 'PMA', 'Approved / Marketed']
 
   // Fund view: a company can appear in multiple fund groups

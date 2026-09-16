@@ -56,7 +56,7 @@ export const ABMS_SPECIALTIES = [
 export const FALLBACK_LISTS: Record<ListKey, string[]> = {
   series: ['Pre-Seed', 'Seed', 'Convertible Note/SAFE', 'A', 'B', 'C', 'D+', 'Crossover', 'Public'],
   clinical_stage: ['Preclinical', 'Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Pre-IDE', 'FIH', 'Pivotal', '510(k)', 'PMA', 'Approved / Marketed'],
-  fund: ['Fund I', 'Fund II', 'EHF', 'Solas/Sower', 'SPV'],
+  fund: ['Fund I', 'Fund II', 'EHF', 'Sower Solas II', 'SPV'],
   spv_fund: [
     'Arrivo B Sidecar', 'Basking Holdings', 'Cryosa Sidecar', 'Francis Sidecar',
     'Intershunt Sidecar', 'Stimdia Sidecar', 'Tvardi Sidecar', 'Vesalio Sidecar',
