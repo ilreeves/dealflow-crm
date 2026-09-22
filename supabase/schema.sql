@@ -1350,13 +1350,13 @@ ALTER TABLE deal_fundraise_rounds ADD CONSTRAINT deal_fundraise_rounds_security_
 -- Run the whole file in the Supabase SQL Editor. Safe to re-run.
 
 -- ============================================================
--- 1. Pitch tracking: inbound flag on deals
+-- 1. Pitch tracking
 -- ============================================================
--- Replaces the manual monthly inbound-pitch count. NULL means "not yet
--- classified" (every pre-existing deal), so the analytics section can show
--- an unclassified count rather than silently treating old deals as outbound.
-
-ALTER TABLE deals ADD COLUMN IF NOT EXISTS inbound BOOLEAN;
+-- There was a `deals.inbound` flag here (inbound pitch vs. self-sourced).
+-- Dropped 2026-09-21 — see migration_drop_inbound.sql. Solas doesn't source
+-- companies itself, so the distinction never existed and the column stayed
+-- effectively unpopulated. Inbound pitch VOLUME is tracked separately, in
+-- monthly_pitch_counts below (fed by the monthly email audit).
 
 -- ============================================================
 -- 2. Catalysts get a real link to their portfolio company

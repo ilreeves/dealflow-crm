@@ -49,7 +49,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
   // fetch the full deal so the overview has description & co, and so a stale
   // board row can't show outdated details. `hydrated` gates the Edit button:
   // a form initialized from the slim row would save nulls over every field
-  // the board didn't load (description, custom_fields, inbound…).
+  // the board didn't load (description, custom_fields, founders…).
   const [hydrated, setHydrated] = useState(false)
   useEffect(() => {
     let active = true

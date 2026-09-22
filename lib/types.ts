@@ -66,8 +66,6 @@ export interface Deal {
   ct_sponsor_name: string | null
   indication: string | null
   custom_fields: Record<string, unknown>
-  /** Did the pitch come to us (inbound) or did we source it? NULL = not yet classified. */
-  inbound: boolean | null
   stage_entered_at: string | null
   pass_reason: string | null
   passed_at: string | null

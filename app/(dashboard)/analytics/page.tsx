@@ -29,7 +29,7 @@ export default async function AnalyticsPage() {
   // Separate soft queries, same reasoning: if the features migrations haven't
   // run yet, these error and their sections skip rendering instead of taking
   // the page down.
-  const { data: inboundData } = await supabase.from('deals').select('inbound,created_at')
+  const { data: dealflowData } = await supabase.from('deals').select('created_at')
   const { data: pitchCountData } = await supabase.from('monthly_pitch_counts').select('month,pitches')
 
   const deals = rowsOrThrow(dealsRes, 'deals') as Deal[]
@@ -114,14 +114,12 @@ export default async function AnalyticsPage() {
   // Trailing 12 months of deals ADDED per month — every deal counts, passed
   // or not, because the story is "how much dealflow do we see", and a pass is
   // still dealflow. Needs no per-deal classification: created_at is on every
-  // row. The inbound flag is an optional refinement — the split column only
-  // appears once at least one deal has been classified.
-  const inboundRows = (inboundData as { inbound: boolean | null; created_at: string }[] | null) ?? null
-  const pitchMonths: { key: string; label: string; count: number; inbound: number }[] = []
+  // row. There is no inbound/outbound split: Solas doesn't source companies
+  // itself, so every deal here arrived inbound by definition.
+  const dealflowRows = (dealflowData as { created_at: string }[] | null) ?? null
+  const pitchMonths: { key: string; label: string; count: number }[] = []
   let dealsAdded12mo = 0
-  let inboundTotal12mo = 0
-  const anyClassified = !!inboundRows?.some((r) => r.inbound != null)
-  if (inboundRows) {
+  if (dealflowRows) {
     const now = new Date()
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
@@ -129,16 +127,14 @@ export default async function AnalyticsPage() {
         key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
         label: d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
         count: 0,
-        inbound: 0,
       })
     }
     const byKey = new Map(pitchMonths.map((m) => [m.key, m]))
-    for (const r of inboundRows) {
+    for (const r of dealflowRows) {
       const m = byKey.get(r.created_at.slice(0, 7))
       if (!m) continue
       m.count++
       dealsAdded12mo++
-      if (r.inbound) { m.inbound++; inboundTotal12mo++ }
     }
   }
   const maxPitchMonth = Math.max(...pitchMonths.map((m) => m.count), 1)
@@ -604,17 +600,14 @@ export default async function AnalyticsPage() {
           </div>
         </CollapsibleSection>
 
-        {/* Dealflow volume — only when the inbound column exists (see the soft
-            query above). Every deal added counts, whatever became of it; the
-            inbound split is optional garnish that appears once any deal has
-            been classified. */}
-        {inboundRows && (
+        {/* Dealflow volume — every deal added counts, whatever became of it. */}
+        {dealflowRows && (
           <CollapsibleSection
             title="Dealflow"
             subtitle={
               showFunnel
                 ? `${pitches12mo} pitches → ${dealsAdded12mo} evaluated → ${invested12mo} invested`
-                : `${dealsAdded12mo} deals in the last 12 months${anyClassified ? ` · ${inboundTotal12mo} inbound` : ''}`
+                : `${dealsAdded12mo} deals in the last 12 months`
             }
           >
             {/* The LP funnel. Pitch totals come from the monthly email audit
@@ -643,7 +636,6 @@ export default async function AnalyticsPage() {
                     <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Month</th>
                     {showFunnel && <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Pitches</th>}
                     <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Added</th>
-                    {anyClassified && <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Inbound</th>}
                     <th className="px-4 py-2.5 w-32"></th>
                   </tr>
                 </thead>
@@ -657,7 +649,6 @@ export default async function AnalyticsPage() {
                         </td>
                       )}
                       <td className="px-4 py-2 text-right text-slate-600 w-12 tabular-nums">{m.count}</td>
-                      {anyClassified && <td className="px-4 py-2 text-right text-slate-500 w-16 tabular-nums">{m.inbound || '—'}</td>}
                       <td className="px-4 py-2">
                         <div className="w-full bg-slate-100 rounded-full h-1.5">
                           <div className="h-1.5 rounded-full" style={{ width: `${m.count / maxPitchMonth * 100}%`, backgroundColor: '#e98925' }} />
