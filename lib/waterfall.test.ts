@@ -225,6 +225,21 @@ describe("computeWaterfall — unconverted notes", () => {
     expect((note.payout * 400_000) / note.unitTotal).toBeCloseTo(note.payout / 4, 3)
   })
 
+  it("refPrice override beats the class heuristic — the pari-stack case", () => {
+    // All-pari stack: the heuristic's tie-break lands on the pricier class, but
+    // the books know the actual last round was $0.88.
+    const classes = [
+      cls({ name: "A-3", shares_outstanding: 1_000_000, price_per_share: 2.5, seniority: 1 }),
+      cls({ name: "B-1", shares_outstanding: 1_000_000, price_per_share: 0.88, seniority: 1 }),
+      cls({ name: "Note", class_type: "Other", convertible_balance: 704_000 }),
+      cls({ name: "Common", class_type: "Common", shares_outstanding: 1_000_000 }),
+    ]
+    const rows = computeWaterfall(50_000_000, classes, 0.2, 0.88)
+    // $0.88 × (1 − 20%) = $0.704 → 1M note shares (heuristic would give $2)
+    expect(payoutOf(rows, "Note").shares).toBeCloseTo(1_000_000, 3)
+    expect(payoutOf(rows, "Note").assumed).toContain("$0.704")
+  })
+
   it("skips a note it cannot price, and a convertible row with no balance", () => {
     const noPricedPref = [
       cls({ name: "Common", class_type: "Common", shares_outstanding: 1_000_000 }),

@@ -41,7 +41,7 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
       // (common, pool) last — Postgres sorts nulls last ascending by default.
       supabase.from("portfolio_share_classes").select("*, portfolio_class_holdings(*)").eq("company_id", company.id).order("seniority").order("name"),
       supabase.from("portfolio_positions").select("*").eq("company_id", company.id),
-      supabase.from("portfolio_fundraise_rounds").select("id,company_id,round_name,security_type,status,date,terms").eq("company_id", company.id),
+      supabase.from("portfolio_fundraise_rounds").select("id,company_id,round_name,security_type,status,date,price_per_share,terms").eq("company_id", company.id),
     ])
     // A failed read must not render as an empty cap table — someone would
     // re-key the classes on top of it. Most likely failure: the migration
@@ -64,7 +64,13 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
   // exit box. (A per-class Σ shares × price would mostly reproduce invested
   // capital, since our prices are original-issue.) Last round = the most
   // senior priced preferred, highest price breaking a seniority tie.
-  const lastRound = lastRoundPriceOf(classes)
+  // The books know the actual last round when a dated, priced equity round is
+  // on file — prefer it over the class heuristic, which can't identify the
+  // newest class in a pari passu stack (equal seniority everywhere).
+  const latestPricedRound = rounds
+    .filter((r) => r.security_type === "Priced equity" && r.price_per_share != null && r.date != null)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))[0]
+  const lastRound = latestPricedRound != null ? Number(latestPricedRound.price_per_share) : lastRoundPriceOf(classes)
   const impliedValuation = lastRound != null && fdShares > 0 ? lastRound * fdShares : null
   const solasShares = ownPositions.reduce((s, p) => s + (Number(p.shares) || 0), 0)
   const solasFdPct = fdShares > 0 && solasShares > 0 ? (solasShares / fdShares) * 100 : null
@@ -181,7 +187,7 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
           ? "Add the share classes from the company's cap table to compute fully diluted totals."
           : impliedValuation == null
             ? "Implied valuation needs a priced preferred class — the last round price is applied across all fully diluted shares."
-            : `Implied valuation = last round price (${fmtPrice(lastRound)}) × fully diluted shares. Solas FD % = Solas shares ÷ fully diluted.`}
+            : `Implied valuation = last round price (${fmtPrice(lastRound)}${latestPricedRound ? `, ${latestPricedRound.round_name}` : ""}) × fully diluted shares. Solas FD % = Solas shares ÷ fully diluted.`}
       </p>
       {mismatch && (
         <p className="text-xs px-3 py-2 rounded-lg -mt-1.5" style={{ backgroundColor: "#fef3e6", color: "#9a5b13" }}>
@@ -283,7 +289,7 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
           )}
         </div>
       )}
-      {classes.some((c) => c.shares_outstanding != null) && <WaterfallSection classes={classes} impliedValue={impliedValuation} />}
+      {classes.some((c) => c.shares_outstanding != null) && <WaterfallSection classes={classes} impliedValue={impliedValuation} refPrice={lastRound} />}
 
       <p className="text-xs text-slate-400 text-center">
         Solas positions and ownership % live in the <span className="font-medium text-slate-500">Fundraising</span> tab and are the source of truth for valuations.
@@ -456,14 +462,14 @@ const MODE_STYLE: Record<WaterfallRow["mode"], { bg: string; fg: string }> = {
   wiped: { bg: "#fdeaea", fg: "#993c1d" },
 }
 
-function WaterfallSection({ classes, impliedValue }: { classes: ShareClassWithHoldings[]; impliedValue: number | null }) {
+function WaterfallSection({ classes, impliedValue, refPrice }: { classes: ShareClassWithHoldings[]; impliedValue: number | null; refPrice: number | null }) {
   const [open, setOpen] = useState(false)
   const [exitStr, setExitStr] = useState("")
 
   const [discountStr, setDiscountStr] = useState("20")
   const exitValue = parseNum(exitStr) ?? 0
   const noteDiscount = Math.min(0.95, Math.max(0, (parseNum(discountStr) ?? 20) / 100))
-  const rows = exitValue > 0 ? computeWaterfall(exitValue, classes, noteDiscount) : []
+  const rows = exitValue > 0 ? computeWaterfall(exitValue, classes, noteDiscount, refPrice) : []
   const solasTotal = solasProceeds(rows)
   const anySolas = classes.some((c) => c.portfolio_class_holdings.length > 0)
   // Make-whole exits depend on the structure and discount, not the exit box —
@@ -471,11 +477,11 @@ function WaterfallSection({ classes, impliedValue }: { classes: ShareClassWithHo
   const basisById = new Map(classes.map((c) => [c.id, investedBasis(c)]))
   const wholeAtById = useMemo(() => {
     const m = new Map<string, number | null>()
-    for (const c of classes) m.set(c.id, breakEvenExit(c.id, classes, noteDiscount))
+    for (const c of classes) m.set(c.id, breakEvenExit(c.id, classes, noteDiscount, refPrice))
     return m
-  }, [classes, noteDiscount])
+  }, [classes, noteDiscount, refPrice])
   const solasIn = useMemo(() => solasCost(classes), [classes])
-  const solasWholeAt = useMemo(() => solasBreakEven(classes, noteDiscount), [classes, noteDiscount])
+  const solasWholeAt = useMemo(() => solasBreakEven(classes, noteDiscount, refPrice), [classes, noteDiscount, refPrice])
   const modeledNotes = classes.filter((c) => c.shares_outstanding == null && Number(c.convertible_balance) > 0)
   const unmodeledNotes = classes.filter((c) => c.shares_outstanding == null && !(Number(c.convertible_balance) > 0))
   // Proceeds by Solas ENTITY across all classes — the same company is held via

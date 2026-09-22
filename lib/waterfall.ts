@@ -35,7 +35,11 @@ export type WaterfallRow = {
   assumed: string | null
 }
 
-export function computeWaterfall(exitValue: number, classes: ShareClassWithHoldings[], noteDiscount: number): WaterfallRow[] {
+/** `refPrice` overrides the last-round price used for note conversion — pass the
+ * latest priced ROUND's price when the books know it: with a pari passu stack
+ * (equal seniority everywhere, e.g. Cryosa post-B-Prime) the class heuristic
+ * cannot tell which class was the newest round. */
+export function computeWaterfall(exitValue: number, classes: ShareClassWithHoldings[], noteDiscount: number, refPrice?: number | null): WaterfallRow[] {
   const rows: WaterfallRow[] = classes
     .filter((c) => c.shares_outstanding != null && Number(c.shares_outstanding) > 0)
     .map((c) => {
@@ -71,13 +75,13 @@ export function computeWaterfall(exitValue: number, classes: ShareClassWithHoldi
   // stated, else the given discount to the LAST ROUND price (the most senior
   // priced preferred). Holdings on note rows are entered as DOLLARS of balance,
   // so unitTotal is the balance rather than the share count.
-  const refPrice = lastRoundPrice(classes)
+  const ref = refPrice ?? lastRoundPrice(classes)
   for (const c of classes) {
     if (c.shares_outstanding != null) continue
     const balance = Number(c.convertible_balance)
     if (!(balance > 0)) continue
     const documented = c.conversion_price != null ? Number(c.conversion_price) : null
-    const convPrice = documented ?? (refPrice != null ? refPrice * (1 - noteDiscount) : null)
+    const convPrice = documented ?? (ref != null ? ref * (1 - noteDiscount) : null)
     if (convPrice == null || convPrice <= 0) continue
     const mult = c.liq_pref_multiple != null ? Number(c.liq_pref_multiple) : 1
     rows.push({
@@ -93,7 +97,7 @@ export function computeWaterfall(exitValue: number, classes: ShareClassWithHoldi
       mode: "preference",
       assumed: documented != null
         ? `converts at ${fmtPrice(documented)} per note terms`
-        : `assumed conversion at ${fmtPrice(convPrice)} — ${Math.round(noteDiscount * 100)}% discount to ${fmtPrice(refPrice)}`,
+        : `assumed conversion at ${fmtPrice(convPrice)} — ${Math.round(noteDiscount * 100)}% discount to ${fmtPrice(ref)}`,
     })
   }
   if (exitValue <= 0 || rows.length === 0) return rows.map((r) => ({ ...r, mode: "wiped" }))
@@ -212,11 +216,11 @@ export function breakEvenExitAt(target: number, proceedsAt: (exit: number) => nu
 }
 
 /** Exit value that makes one class whole — its payout back to its invested basis. */
-export function breakEvenExit(classId: string, classes: ShareClassWithHoldings[], noteDiscount: number): number | null {
+export function breakEvenExit(classId: string, classes: ShareClassWithHoldings[], noteDiscount: number, refPrice?: number | null): number | null {
   const c = classes.find((x) => x.id === classId)
   const target = c ? investedBasis(c) : null
   if (target == null) return null
-  return breakEvenExitAt(target, (exit) => computeWaterfall(exit, classes, noteDiscount).find((r) => r.id === classId)?.payout ?? 0)
+  return breakEvenExitAt(target, (exit) => computeWaterfall(exit, classes, noteDiscount, refPrice).find((r) => r.id === classId)?.payout ?? 0)
 }
 
 /** Solas proceeds across all classes at one exit — Σ payout × our slice. */
@@ -243,8 +247,8 @@ export function solasCost(classes: ShareClassWithHoldings[]): number | null {
 }
 
 /** Exit value at which Solas is whole across every class and vehicle. */
-export function solasBreakEven(classes: ShareClassWithHoldings[], noteDiscount: number): number | null {
+export function solasBreakEven(classes: ShareClassWithHoldings[], noteDiscount: number, refPrice?: number | null): number | null {
   const target = solasCost(classes)
   if (target == null) return null
-  return breakEvenExitAt(target, (exit) => solasProceeds(computeWaterfall(exit, classes, noteDiscount)))
+  return breakEvenExitAt(target, (exit) => solasProceeds(computeWaterfall(exit, classes, noteDiscount, refPrice)))
 }
