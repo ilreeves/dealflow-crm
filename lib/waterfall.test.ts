@@ -93,6 +93,13 @@ describe("computeWaterfall — non-participating regimes", () => {
     expect(total(rows)).toBeCloseTo(10_200_000, 3)
   })
 
+  it("a pref tier the money never reaches is wiped, not on-preference at $0", () => {
+    const rows = computeWaterfall(9_000_000, stack(), 0.2) // short of even A's $10M
+    expect(payoutOf(rows, "A").mode).toBe("partial preference")
+    expect(payoutOf(rows, "B").payout).toBe(0)
+    expect(payoutOf(rows, "B").mode).toBe("wiped")
+  })
+
   it("pro-rates by basis within a seniority tier", () => {
     const rows = computeWaterfall(3_000_000, [
       cls({ name: "B-1", shares_outstanding: 1_000_000, price_per_share: 4, seniority: 1 }), // basis 4M

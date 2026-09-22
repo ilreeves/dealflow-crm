@@ -152,10 +152,10 @@ export function computeWaterfall(exitValue: number, classes: ShareClassWithHoldi
       const pay = Math.min(remaining, tierBasis)
       for (const r of tier) {
         r.payout = tierBasis > 0 ? (pay * r.prefBasis!) / tierBasis : 0
-        r.mode = r.payout + 0.01 < r.prefBasis! ? "partial preference" : "preference"
+        // A tier the money never reaches is wiped, not "on preference" at $0.
+        r.mode = r.payout <= 0.01 ? "wiped" : r.payout + 0.01 < r.prefBasis! ? "partial preference" : "preference"
       }
       remaining -= pay
-      if (remaining <= 0) break
     }
     for (const r of rows) if ((r.prefBasis == null || converted.has(r.id)) && !r.participating) { r.payout = 0; r.mode = "wiped" }
     return rows
