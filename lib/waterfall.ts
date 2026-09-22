@@ -163,3 +163,80 @@ export function computeWaterfall(exitValue: number, classes: ShareClassWithHoldi
   }
   return rows
 }
+
+// ── Make-whole exits and implied multiples ──────────────────────────────────
+
+/** Money actually paid in for a class: shares × original-issue price for a
+ * priced row, the entered balance for a note row. Null where nobody invested
+ * at a stated price (pools and warrants — strikes are ignored; unpriced
+ * common). Liq-pref multiples are NOT applied: "whole" means the money back,
+ * not the preference covered. Prices are original-issue, so a class's multiple
+ * and break-even apply pro-rata to Solas's slice of it. */
+export function investedBasis(c: ShareClassWithHoldings): number | null {
+  if (c.class_type === "Option pool" || c.class_type === "Warrants") return null
+  if (c.shares_outstanding != null) {
+    const shares = Number(c.shares_outstanding)
+    return c.price_per_share != null && shares > 0 ? shares * Number(c.price_per_share) : null
+  }
+  const balance = Number(c.convertible_balance)
+  return balance > 0 ? balance : null
+}
+
+/** Smallest exit value at which `proceedsAt(exit)` first reaches `target`.
+ * Bisection is safe because every payout is continuous and non-decreasing in
+ * exit value: preferences pay down in seniority order, participation only
+ * adds, and at a conversion threshold the two branches meet exactly. */
+export function breakEvenExitAt(target: number, proceedsAt: (exit: number) => number): number | null {
+  if (!(target > 0)) return null
+  const enough = (exit: number) => proceedsAt(exit) >= target - 0.01
+  let hi = target
+  for (let guard = 0; !enough(hi); guard++) {
+    if (guard >= 40) return null // target unreachable, e.g. a note the model skips for want of a price
+    hi *= 2
+  }
+  let lo = 0
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2
+    if (enough(mid)) hi = mid
+    else lo = mid
+  }
+  return hi
+}
+
+/** Exit value that makes one class whole — its payout back to its invested basis. */
+export function breakEvenExit(classId: string, classes: ShareClassWithHoldings[], noteDiscount: number): number | null {
+  const c = classes.find((x) => x.id === classId)
+  const target = c ? investedBasis(c) : null
+  if (target == null) return null
+  return breakEvenExitAt(target, (exit) => computeWaterfall(exit, classes, noteDiscount).find((r) => r.id === classId)?.payout ?? 0)
+}
+
+/** Solas proceeds across all classes at one exit — Σ payout × our slice. */
+export function solasProceeds(rows: WaterfallRow[]): number {
+  return rows.reduce((t, r) => t + (r.unitTotal > 0 ? (r.payout * r.solas) / r.unitTotal : 0), 0)
+}
+
+/** Solas money in: our slice of each held class's invested basis. Null when a
+ * Solas-held class has no basis — a partial cost would flatter the blended
+ * multiple and understate the make-whole exit. */
+export function solasCost(classes: ShareClassWithHoldings[]): number | null {
+  let cost = 0
+  let any = false
+  for (const c of classes) {
+    const solas = c.portfolio_class_holdings.reduce((t, h) => t + (Number(h.shares) || 0), 0)
+    if (!(solas > 0)) continue
+    const basis = investedBasis(c)
+    const units = c.shares_outstanding != null ? Number(c.shares_outstanding) : Number(c.convertible_balance)
+    if (basis == null || !(units > 0)) return null
+    cost += (basis * solas) / units
+    any = true
+  }
+  return any ? cost : null
+}
+
+/** Exit value at which Solas is whole across every class and vehicle. */
+export function solasBreakEven(classes: ShareClassWithHoldings[], noteDiscount: number): number | null {
+  const target = solasCost(classes)
+  if (target == null) return null
+  return breakEvenExitAt(target, (exit) => solasProceeds(computeWaterfall(exit, classes, noteDiscount)))
+}

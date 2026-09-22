@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Plus, Trash2, Loader2, Pencil, Layers, ChevronDown, ChevronRight, TrendingDown } from "lucide-react"
 import { PortfolioCompany, PortfolioPosition, PortfolioFundraiseRound, SHARE_CLASS_TYPES } from "@/lib/types"
-import { computeWaterfall, lastRoundPrice as lastRoundPriceOf, fmtPrice, WaterfallRow, ShareClassWithHoldings } from "@/lib/waterfall"
+import { computeWaterfall, lastRoundPrice as lastRoundPriceOf, fmtPrice, WaterfallRow, ShareClassWithHoldings, investedBasis, breakEvenExit, solasProceeds, solasCost, solasBreakEven } from "@/lib/waterfall"
 export type { ShareClassWithHoldings } from "@/lib/waterfall"
 import { createClient } from "@/lib/supabase/client"
 import { parseNum, numToStr, fmtMoney, fmtPct, saveHint, inputCls, noteAccruedInterest, exactDate } from "@/lib/rounds"
@@ -441,6 +441,12 @@ function ClassEditor({
 }
 
 // ─── quick waterfall (math lives in lib/waterfall.ts, tested there) ─────────
+// Money multiples read to the cent below 10× ("1.42×"), coarser above.
+function fmtMult(n: number): string {
+  const d = n < 10 ? 2 : 1
+  return `${n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d })}×`
+}
+
 const MODE_STYLE: Record<WaterfallRow["mode"], { bg: string; fg: string }> = {
   preference: { bg: "#e6eef1", fg: "#023a51" },
   participating: { bg: "#e6eef1", fg: "#023a51" },
@@ -458,8 +464,18 @@ function WaterfallSection({ classes, impliedValue }: { classes: ShareClassWithHo
   const exitValue = parseNum(exitStr) ?? 0
   const noteDiscount = Math.min(0.95, Math.max(0, (parseNum(discountStr) ?? 20) / 100))
   const rows = exitValue > 0 ? computeWaterfall(exitValue, classes, noteDiscount) : []
-  const solasTotal = rows.reduce((t, r) => t + (r.unitTotal > 0 ? (r.payout * r.solas) / r.unitTotal : 0), 0)
+  const solasTotal = solasProceeds(rows)
   const anySolas = classes.some((c) => c.portfolio_class_holdings.length > 0)
+  // Make-whole exits depend on the structure and discount, not the exit box —
+  // bisection over computeWaterfall per class, cheap at single-digit counts.
+  const basisById = new Map(classes.map((c) => [c.id, investedBasis(c)]))
+  const wholeAtById = useMemo(() => {
+    const m = new Map<string, number | null>()
+    for (const c of classes) m.set(c.id, breakEvenExit(c.id, classes, noteDiscount))
+    return m
+  }, [classes, noteDiscount])
+  const solasIn = useMemo(() => solasCost(classes), [classes])
+  const solasWholeAt = useMemo(() => solasBreakEven(classes, noteDiscount), [classes, noteDiscount])
   const modeledNotes = classes.filter((c) => c.shares_outstanding == null && Number(c.convertible_balance) > 0)
   const unmodeledNotes = classes.filter((c) => c.shares_outstanding == null && !(Number(c.convertible_balance) > 0))
   // Proceeds by Solas ENTITY across all classes — the same company is held via
@@ -516,26 +532,49 @@ function WaterfallSection({ classes, impliedValue }: { classes: ShareClassWithHo
               <div className="ml-auto text-right pb-0.5">
                 <p className="text-xs text-slate-400">Solas proceeds</p>
                 <p className="text-lg font-semibold" style={{ color: "#3b6d11" }}>{fmtMoney(solasTotal)}</p>
+                {solasIn != null && (
+                  <p className="text-xs tabular-nums" style={{ color: solasTotal >= solasIn ? "#3b6d11" : "#9a5b13" }}>
+                    {fmtMult(solasTotal / solasIn)} on {fmtMoney(solasIn)} in
+                  </p>
+                )}
+                {solasIn != null && solasWholeAt != null && (
+                  <p className="text-xs text-slate-400 tabular-nums">whole ≥ {fmtMoney(solasWholeAt)}</p>
+                )}
               </div>
             )}
           </div>
 
           {exitValue > 0 && rows.length > 0 && (
             <div className="divide-y divide-slate-50 border-t border-slate-100">
-              {rows.map((r) => (
-                <div key={r.id} className="flex items-center gap-3 py-2 text-[13px]">
-                  <span className="w-56 shrink-0 truncate text-slate-700">
-                    {r.name}
-                    {r.assumed && <span className="text-slate-400 text-xs"> · {r.assumed}</span>}
-                  </span>
-                  <span className="text-xs px-2 py-0.5 rounded-md shrink-0" style={{ backgroundColor: MODE_STYLE[r.mode].bg, color: MODE_STYLE[r.mode].fg }}>{r.mode}</span>
-                  <span className="flex-1" />
-                  <span className="text-slate-600 tabular-nums w-24 text-right">{fmtMoney(r.payout)}</span>
-                  <span className="text-xs text-slate-400 tabular-nums w-24 text-right">
-                    {r.solas > 0 && r.unitTotal > 0 ? `Solas ${fmtMoney((r.payout * r.solas) / r.unitTotal)}` : ""}
-                  </span>
-                </div>
-              ))}
+              {rows.map((r) => {
+                const basis = basisById.get(r.id)
+                const mult = basis != null && basis > 0 ? r.payout / basis : null
+                const wholeAt = wholeAtById.get(r.id)
+                return (
+                  <div key={r.id} className="flex items-center gap-3 py-2 text-[13px]">
+                    {/* whole-at rides with the name — it depends on the structure,
+                        not the exit box, so it reads like the assumption tags.
+                        title carries the full text past the truncation. */}
+                    <span
+                      className="w-56 shrink-0 truncate text-slate-700"
+                      title={[wholeAt != null ? `whole ≥ ${fmtMoney(wholeAt)} — smallest exit returning its money in` : null, r.assumed].filter(Boolean).join(" · ") || undefined}
+                    >
+                      {r.name}
+                      {wholeAt != null && <span className="text-slate-400 text-xs"> · whole ≥ {fmtMoney(wholeAt)}</span>}
+                      {r.assumed && <span className="text-slate-400 text-xs"> · {r.assumed}</span>}
+                    </span>
+                    <span className="text-xs px-2 py-0.5 rounded-md shrink-0" style={{ backgroundColor: MODE_STYLE[r.mode].bg, color: MODE_STYLE[r.mode].fg }}>{r.mode}</span>
+                    <span className="flex-1" />
+                    <span className="text-xs tabular-nums w-14 text-right shrink-0 font-medium" style={{ color: mult == null ? undefined : mult >= 1 ? "#3b6d11" : "#9a5b13" }}>
+                      {mult != null ? fmtMult(mult) : ""}
+                    </span>
+                    <span className="text-slate-600 tabular-nums w-24 text-right">{fmtMoney(r.payout)}</span>
+                    <span className="text-xs text-slate-400 tabular-nums w-24 text-right">
+                      {r.solas > 0 && r.unitTotal > 0 ? `Solas ${fmtMoney((r.payout * r.solas) / r.unitTotal)}` : ""}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           )}
 
@@ -557,6 +596,9 @@ function WaterfallSection({ classes, impliedValue }: { classes: ShareClassWithHo
           <p className="text-xs text-slate-400">
             Class-level: each preferred takes the better of its preference or converting; proceeds short of the
             stack pay down seniority order. Options and warrants count as shares with strikes ignored.
+            {" "}Implied multiple = payout ÷ money in (shares × original-issue price; a note&apos;s balance — liq-pref
+            multiples don&apos;t inflate it); “whole ≥” is the smallest exit that returns that basis. Both apply
+            pro-rata to the Solas slice of the class.
             {modeledNotes.length > 0 && " Unconverted notes convert at documented terms where stated, else at the discount to the last round price, with a floor at their balance (debt-like, ahead of the stack). Balances are as of the cap table date — interest accrued since is not added."}
             {unmodeledNotes.length > 0 && " Some convertibles here have no balance entered and are NOT modeled — edit the row and set its convertible balance."}
             {!anySolas && " No Solas holdings entered on the classes yet — add them per entity (pencil → Solas holdings) to see our proceeds."}

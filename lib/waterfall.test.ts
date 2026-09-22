@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { computeWaterfall, lastRoundPrice, ShareClassWithHoldings } from "./waterfall"
+import { computeWaterfall, lastRoundPrice, investedBasis, breakEvenExit, solasCost, solasBreakEven, ShareClassWithHoldings } from "./waterfall"
 
 // Minimal class builder — only the fields the waterfall reads.
 let nextId = 0
@@ -228,5 +228,62 @@ describe("computeWaterfall — unconverted notes", () => {
     expect(rows.find((r) => r.name === "Note")).toBeUndefined()
     expect(rows.find((r) => r.name === "Empty CN")).toBeUndefined()
     expect(total(rows)).toBeCloseTo(10_000_000, 3)
+  })
+})
+
+describe("investedBasis / breakEvenExit — make-whole exits and multiples", () => {
+  it("basis is money in: multiples don't inflate it; pools, warrants, unpriced rows have none", () => {
+    expect(investedBasis(cls({ shares_outstanding: 1_000_000, price_per_share: 2, liq_pref_multiple: 2 }))).toBe(2_000_000)
+    expect(investedBasis(cls({ class_type: "Option pool", shares_outstanding: 500_000, price_per_share: 1 }))).toBeNull()
+    expect(investedBasis(cls({ class_type: "Common", shares_outstanding: 500_000 }))).toBeNull()
+    expect(investedBasis(cls({ class_type: "Other", convertible_balance: 750_000 }))).toBe(750_000)
+  })
+
+  it("prefs come whole as the pay-down reaches them, in seniority order", () => {
+    const A = cls({ name: "A", shares_outstanding: 1_000_000, price_per_share: 10, seniority: 1 }) // basis 10M
+    const B = cls({ name: "B", shares_outstanding: 1_000_000, price_per_share: 0.5, seniority: 2 }) // basis 0.5M
+    const classes = [A, B, cls({ name: "Common", class_type: "Common", shares_outstanding: 1_000_000 })]
+    expect(breakEvenExit(A.id, classes, 0.2)).toBeCloseTo(10_000_000, 0)
+    expect(breakEvenExit(B.id, classes, 0.2)).toBeCloseTo(10_500_000, 0)
+  })
+
+  it("a 2× pref is whole at its money back, not its preference", () => {
+    const P = cls({ name: "P", shares_outstanding: 1_000_000, price_per_share: 2, liq_pref_multiple: 2, seniority: 1 }) // in 2M, pref 4M
+    const classes = [P, cls({ name: "Common", class_type: "Common", shares_outstanding: 1_000_000 })]
+    expect(breakEvenExit(P.id, classes, 0.2)).toBeCloseTo(2_000_000, 0)
+  })
+
+  it("a note's debt-like floor makes it whole first; an unpriceable note is null", () => {
+    const Note = cls({ name: "Note", class_type: "Other", convertible_balance: 1_000_000 })
+    const classes = [
+      cls({ name: "B", shares_outstanding: 1_000_000, price_per_share: 2, seniority: 1 }),
+      cls({ name: "Common", class_type: "Common", shares_outstanding: 1_000_000 }),
+      Note,
+    ]
+    expect(breakEvenExit(Note.id, classes, 0.2)).toBeCloseTo(1_000_000, 0)
+    const Orphan = cls({ name: "Orphan", class_type: "Other", convertible_balance: 1_000_000 })
+    // no priced preferred and no documented price → the model skips it, so no exit reaches its balance
+    expect(breakEvenExit(Orphan.id, [Orphan, cls({ name: "Common", class_type: "Common", shares_outstanding: 1_000_000 })], 0.2)).toBeNull()
+  })
+
+  it("solasCost slices each held class's basis; null when a held class has no basis", () => {
+    const B = cls({
+      name: "B", shares_outstanding: 1_000_000, price_per_share: 0.5, seniority: 2,
+      portfolio_class_holdings: [{ id: "h1", class_id: "c", entity: "Fund II", shares: 400_000, created_at: "" }],
+    })
+    const classes = [
+      cls({ name: "A", shares_outstanding: 1_000_000, price_per_share: 10, seniority: 1 }),
+      B,
+      cls({ name: "Common", class_type: "Common", shares_outstanding: 1_000_000 }),
+    ]
+    expect(solasCost(classes)).toBeCloseTo(200_000, 3) // 400k sh × $0.50
+    // Solas is whole exactly when B is: the slice is proportional
+    expect(solasBreakEven(classes, 0.2)).toBeCloseTo(10_500_000, 0)
+    const withUnpricedHolding = [
+      ...classes,
+      cls({ name: "Old common", class_type: "Common", shares_outstanding: 100_000, portfolio_class_holdings: [{ id: "h2", class_id: "c", entity: "Fund II", shares: 10_000, created_at: "" }] }),
+    ]
+    expect(solasCost(withUnpricedHolding)).toBeNull()
+    expect(solasBreakEven(withUnpricedHolding, 0.2)).toBeNull()
   })
 })
