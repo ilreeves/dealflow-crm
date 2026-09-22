@@ -552,16 +552,19 @@ function WaterfallSection({ classes, impliedValue }: { classes: ShareClassWithHo
                 const wholeAt = wholeAtById.get(r.id)
                 return (
                   <div key={r.id} className="flex items-center gap-3 py-2 text-[13px]">
-                    {/* whole-at rides with the name — it depends on the structure,
-                        not the exit box, so it reads like the assumption tags.
-                        title carries the full text past the truncation. */}
-                    <span
-                      className="w-56 shrink-0 truncate text-slate-700"
-                      title={[wholeAt != null ? `whole ≥ ${fmtMoney(wholeAt)} — smallest exit returning its money in` : null, r.assumed].filter(Boolean).join(" · ") || undefined}
-                    >
-                      {r.name}
-                      {wholeAt != null && <span className="text-slate-400 text-xs"> · whole ≥ {fmtMoney(wholeAt)}</span>}
-                      {r.assumed && <span className="text-slate-400 text-xs"> · {r.assumed}</span>}
+                    {/* whole-at gets its own line under the name — it depends on
+                        the structure, not the exit box, and inline it truncated
+                        behind longer class names. title carries the full text. */}
+                    <span className="w-56 shrink-0 min-w-0">
+                      <span className="block truncate text-slate-700">{r.name}</span>
+                      {(wholeAt != null || r.assumed) && (
+                        <span
+                          className="block truncate text-slate-400 text-xs"
+                          title={[wholeAt != null ? `whole ≥ ${fmtMoney(wholeAt)} — smallest exit returning its money in` : null, r.assumed].filter(Boolean).join(" · ")}
+                        >
+                          {[wholeAt != null ? `whole ≥ ${fmtMoney(wholeAt)}` : null, r.assumed].filter(Boolean).join(" · ")}
+                        </span>
+                      )}
                     </span>
                     <span className="text-xs px-2 py-0.5 rounded-md shrink-0" style={{ backgroundColor: MODE_STYLE[r.mode].bg, color: MODE_STYLE[r.mode].fg }}>{r.mode}</span>
                     <span className="flex-1" />

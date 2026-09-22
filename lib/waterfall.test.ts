@@ -231,6 +231,29 @@ describe("computeWaterfall — unconverted notes", () => {
   })
 })
 
+describe("computeWaterfall — conversion equilibrium order", () => {
+  it("regression: a pricey senior pref must not regret converting after cheap juniors dilute the pool", () => {
+    // Judged seniority-first, B "converts" against a pool still holding A's $8M
+    // preference (per-share-if 3.36 > $3 basis/share), then A's conversion
+    // dilutes the final per-share to $2.50 — below B's own preference. The
+    // equilibrium is B on its preference, A converted.
+    const classes = [
+      cls({ name: "B", shares_outstanding: 4_000_000, price_per_share: 3, seniority: 1 }), // basis 12M, $3/sh
+      cls({ name: "A", shares_outstanding: 8_000_000, price_per_share: 1, seniority: 2 }), // basis 8M, $1/sh
+      cls({ name: "Common", class_type: "Common", shares_outstanding: 10_000_000 }),
+    ]
+    const rows = computeWaterfall(55_000_000, classes, 0.2)
+    expect(payoutOf(rows, "B").mode).toBe("preference")
+    expect(payoutOf(rows, "B").payout).toBeCloseTo(12_000_000, 3)
+    const perShare = (55_000_000 - 12_000_000) / 18_000_000 // residual over common + converted A
+    expect(payoutOf(rows, "A").payout).toBeCloseTo(8_000_000 * perShare, 3)
+    expect(payoutOf(rows, "Common").payout).toBeCloseTo(10_000_000 * perShare, 3)
+    expect(total(rows)).toBeCloseTo(55_000_000, 3)
+    // No class converts into less than its preference — the invariant the bug broke
+    for (const r of rows) if (r.mode === "converted") expect(r.payout).toBeGreaterThanOrEqual(r.prefBasis! - 0.01)
+  })
+})
+
 describe("investedBasis / breakEvenExit — make-whole exits and multiples", () => {
   it("basis is money in: multiples don't inflate it; pools, warrants, unpriced rows have none", () => {
     expect(investedBasis(cls({ shares_outstanding: 1_000_000, price_per_share: 2, liq_pref_multiple: 2 }))).toBe(2_000_000)

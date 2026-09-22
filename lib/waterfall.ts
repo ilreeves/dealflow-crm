@@ -98,7 +98,15 @@ export function computeWaterfall(exitValue: number, classes: ShareClassWithHoldi
   }
   if (exitValue <= 0 || rows.length === 0) return rows.map((r) => ({ ...r, mode: "wiped" }))
 
-  const prefs = rows.filter((r) => r.prefBasis != null && !r.participating)
+  // Judged cheapest basis-per-share first: each conversion dilutes the pool, so
+  // an expensive class judged early — against a pool still holding the juniors'
+  // preferences — can "convert" into a payout below its own preference once the
+  // cheap classes follow it in. Ascending order keeps every conversion rational
+  // against the final pool (a later, pricier conversion only ever raises the
+  // per-share above an earlier converter's threshold).
+  const prefs = rows
+    .filter((r) => r.prefBasis != null && !r.participating)
+    .sort((a, b) => a.prefBasis! / a.shares - b.prefBasis! / b.shares)
   // Participating preferred takes its preference AND shares pro-rata, so its
   // shares always sit in the pro-rata pool and its basis always comes off the top.
   const parts = rows.filter((r) => r.participating)
