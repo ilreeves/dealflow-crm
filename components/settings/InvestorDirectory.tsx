@@ -10,6 +10,9 @@ const empty = { name: '', firm: '', contact_email: '' }
 export default function InvestorDirectory() {
   const [contacts, setContacts] = useState<InvestorContact[]>([])
   const [loading, setLoading] = useState(true)
+  // Kept apart from `error` (add/edit/remove failures): a failed load must not
+  // read as "No investors yet", which invites re-adding the whole directory.
+  const [loadError, setLoadError] = useState('')
   const [query, setQuery] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState(empty)
@@ -20,7 +23,11 @@ export default function InvestorDirectory() {
 
   useEffect(() => {
     supabase.from('investor_contacts').select('*').order('name')
-      .then(({ data }) => { setContacts((data as InvestorContact[]) ?? []); setLoading(false) })
+      .then(({ data, error: e }) => {
+        setContacts((data as InvestorContact[]) ?? [])
+        setLoadError(e ? e.message : '')
+        setLoading(false)
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -101,6 +108,8 @@ export default function InvestorDirectory() {
 
       {loading ? (
         <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+      ) : loadError ? (
+        <p className="px-5 py-8 text-center text-sm text-red-600">Couldn&apos;t load investors: {loadError}</p>
       ) : contacts.length === 0 ? (
         <div className="px-5 py-8 text-center">
           <p className="text-sm text-slate-400">No investors yet.</p>

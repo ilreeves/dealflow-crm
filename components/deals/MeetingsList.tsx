@@ -4,8 +4,9 @@ import { useState, useEffect, useRef } from 'react'
 import { Plus, ChevronDown, ChevronRight, Calendar, Users, Send, FileText, Trash2, Download, Upload, Loader2 } from 'lucide-react'
 import { DealMeeting, MeetingNote, MeetingFile } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
-import { getActorName } from '@/lib/useActorName'
+import { getActor } from '@/lib/useActorName'
 import { formatDate } from '@/lib/utils'
+import { safeStorageName } from '@/lib/storage'
 
 interface Props {
   dealId: string
@@ -133,16 +134,14 @@ function MeetingNotes({ meetingId }: { meetingId: string }) {
     if (!newNote.trim()) return
     setSubmitting(true)
     setError('')
-    const { data: userData } = await supabase.auth.getUser()
-    const user = userData.user
     // Resolved once per session and shared across components — no per-submit
-    // profiles round-trip (and no eq('id', undefined) when signed out).
-    const actorName = user ? await getActorName(supabase) : null
+    // auth/profiles round-trip (and no eq('id', undefined) when signed out).
+    const actor = await getActor(supabase)
     const { data, error: insertError } = await supabase.from('meeting_notes').insert({
       meeting_id: meetingId,
       content: newNote.trim(),
-      author_id: user?.id,
-      author_name: user ? actorName ?? 'Unknown' : null,
+      author_id: actor?.id,
+      author_name: actor ? actor.name ?? 'Unknown' : null,
     }).select().single()
     if (insertError || !data) {
       // Keep the typed text in the box — clearing it would discard the note.
@@ -231,7 +230,7 @@ function MeetingFiles({ meetingId }: { meetingId: string }) {
     setUploading(true)
     setError('')
     for (const file of selected) {
-      const path = `meetings/${meetingId}/${Date.now()}-${file.name}`
+      const path = `meetings/${meetingId}/${Date.now()}-${safeStorageName(file.name)}`
       const { error: uploadError } = await supabase.storage.from('deal-files').upload(path, file)
       if (uploadError) {
         setError(`Failed to upload ${file.name}: ${uploadError.message}`)

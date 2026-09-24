@@ -54,6 +54,9 @@ export default function ClinicalContextSection({ entityType, entityId, name, dru
       setTrials((json.trials as Trial[]) ?? [])
       setPubs((json.publications as Pub[]) ?? [])
       setFetchedAt(json.fetched_at as string)
+      // One source was down and its cached value was kept — say so, or stale
+      // rows would look freshly pulled.
+      if (json.warning) setError(json.warning as string)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Lookup failed')
     } finally {

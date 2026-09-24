@@ -34,16 +34,26 @@ export default function DataExport() {
   async function run(key: string, table: string, filename: string, select = '*') {
     setBusy(key)
     setError('')
-    const { data, error: qErr } = await supabase.from(table).select(select)
-    if (qErr) {
-      // Never download an empty CSV that looks like a valid backup.
-      setError(`Export failed: ${qErr.message}`)
-      setBusy(null)
-      return
+    // PostgREST caps a response at 1000 rows (the project's max-rows), so a
+    // single select silently truncates the "backup". Page until a short page.
+    // Ordered by id so pages can't overlap or skip while paging.
+    const PAGE = 1000
+    let rows: Record<string, unknown>[] = []
+    for (let from = 0; ; from += PAGE) {
+      const { data, error: qErr } = await supabase.from(table).select(select)
+        .order('id', { ascending: true }).range(from, from + PAGE - 1)
+      if (qErr) {
+        // Never download a partial or empty CSV that looks like a valid backup.
+        setError(`Export failed: ${qErr.message}`)
+        setBusy(null)
+        return
+      }
+      // Cast via unknown: a runtime-built select string leaves supabase-js unable
+      // to infer a row shape, so it widens to its error union.
+      const page = (data as unknown as Record<string, unknown>[]) ?? []
+      rows = rows.concat(page)
+      if (page.length < PAGE) break
     }
-    // Cast via unknown: a runtime-built select string leaves supabase-js unable
-    // to infer a row shape, so it widens to its error union.
-    let rows = (data as unknown as Record<string, unknown>[]) ?? []
     // Flatten an embedded parent (revenue rows key on company_id, which is a UUID
     // and useless in a spreadsheet) into a plain `company` column.
     rows = rows.map((r) => {

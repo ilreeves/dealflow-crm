@@ -14,9 +14,18 @@ interface Results {
   deals: DealHit[]
   portfolio: PortfolioHit[]
   catalysts: CatalystHit[]
+  // Set when any of the three queries errored — so a failure reads as
+  // "Search failed", not as a confident "No matches".
+  failed: boolean
 }
 
-const NO_RESULTS: Results = { q: '', deals: [], portfolio: [], catalysts: [] }
+const NO_RESULTS: Results = { q: '', deals: [], portfolio: [], catalysts: [], failed: false }
+
+// Backslash-escape LIKE metacharacters so "acme_bio" matches only that literal
+// text, not "acmeXbio" (Postgres's default LIKE escape is backslash).
+function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`)
+}
 
 export default function GlobalSearch() {
   const [open, setOpen] = useState(false)
@@ -26,10 +35,14 @@ export default function GlobalSearch() {
   const router = useRouter()
   const supabase = createClient()
 
-  const clean = q.trim().replace(/[,()%*]/g, '')
+  // Strip what can't be escaped: `,` `(` `)` delimit PostgREST's .or() filter
+  // string (an unquoted value ends at `,` or `)`), and `*` is PostgREST's
+  // wildcard alias for `%` in (i)like values — neither has an escape there.
+  // `%` `_` `\` are LIKE-escaped below instead of stripped.
+  const clean = q.trim().replace(/[,()*]/g, '')
   // Results carry the query they answer, so an empty box or a query still in flight
   // shows nothing without an effect that clears state synchronously.
-  const { deals, portfolio, catalysts } = results.q === clean ? results : NO_RESULTS
+  const { deals, portfolio, catalysts, failed } = results.q === clean ? results : NO_RESULTS
   const loading = clean !== '' && results.q !== clean
 
   // Reopening the palette should start from a blank box, so the reset rides along
@@ -67,7 +80,7 @@ export default function GlobalSearch() {
     if (!clean) return
     let cancelled = false
     const t = setTimeout(async () => {
-      const term = `*${clean}*`
+      const term = `*${escapeLike(clean)}*`
       const [d, p, c] = await Promise.all([
         supabase.from('deals').select('id,name,stage,sector,category').or(`name.ilike.${term},sector.ilike.${term}`).limit(6),
         supabase.from('portfolio_companies').select('id,name,sector,category').or(`name.ilike.${term},sector.ilike.${term}`).limit(6),
@@ -79,6 +92,7 @@ export default function GlobalSearch() {
         deals: (d.data as DealHit[]) ?? [],
         portfolio: (p.data as PortfolioHit[]) ?? [],
         catalysts: (c.data as CatalystHit[]) ?? [],
+        failed: !!(d.error || p.error || c.error),
       })
     }, 180)
     return () => { cancelled = true; clearTimeout(t) }
@@ -113,10 +127,15 @@ export default function GlobalSearch() {
         <div className="max-h-[60vh] overflow-y-auto p-2">
           {!q.trim() ? (
             <p className="text-sm text-slate-400 text-center py-8">Type to search across deals, portfolio companies, and catalysts.</p>
+          ) : failed && !hasResults && !loading ? (
+            <p className="text-sm text-red-500 text-center py-8">Search failed — try again.</p>
           ) : !hasResults && !loading ? (
             <p className="text-sm text-slate-400 text-center py-8">No matches for &quot;{q}&quot;.</p>
           ) : (
             <>
+              {failed && !loading && (
+                <p className="text-xs text-red-500 px-2 py-1">Some results couldn&apos;t load — the list may be incomplete.</p>
+              )}
               {deals.length > 0 && (
                 <Group label="Deals">
                   {deals.map((d) => (

@@ -5,6 +5,7 @@ import { X, Upload } from 'lucide-react'
 import { PortfolioCompany } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { fetchListOptions, ABMS_SPECIALTIES, FALLBACK_LISTS, ListKey } from '@/lib/listOptions'
+import { safeStorageName } from '@/lib/storage'
 
 interface Props {
   company?: PortfolioCompany
@@ -128,7 +129,7 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
 
     // Attach the optional non-con deck now that the company (and its id) exists
     if (!company && deckFile) {
-      const storagePath = `portfolio/${saved.id}/noncon-deck/${Date.now()}-${deckFile.name}`
+      const storagePath = `portfolio/${saved.id}/noncon-deck/${Date.now()}-${safeStorageName(deckFile.name)}`
       const { error: upErr } = await supabase.storage.from('deal-files').upload(storagePath, deckFile)
       if (upErr) {
         // The company itself saved — don't block on the deck, but don't let the

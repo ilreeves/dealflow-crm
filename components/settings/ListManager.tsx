@@ -9,6 +9,9 @@ interface Opt { id: string; value: string; sort_order: number }
 export default function ListManager({ listKey, title, description }: { listKey: string; title: string; description: string }) {
   const [opts, setOpts] = useState<Opt[]>([])
   const [loading, setLoading] = useState(true)
+  // A failed load must not read as an empty list — adding "missing" options
+  // back would duplicate the real ones.
+  const [loadError, setLoadError] = useState('')
   const [newVal, setNewVal] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -16,7 +19,11 @@ export default function ListManager({ listKey, title, description }: { listKey: 
 
   useEffect(() => {
     supabase.from('list_options').select('id,value,sort_order').eq('list_key', listKey).order('sort_order')
-      .then(({ data }) => { setOpts((data as Opt[]) ?? []); setLoading(false) })
+      .then(({ data, error: e }) => {
+        setOpts((data as Opt[]) ?? [])
+        setLoadError(e ? e.message : '')
+        setLoading(false)
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -69,6 +76,8 @@ export default function ListManager({ listKey, title, description }: { listKey: 
       </div>
       {loading ? (
         <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+      ) : loadError ? (
+        <p className="px-5 py-6 text-sm text-red-600">Couldn&apos;t load options: {loadError}</p>
       ) : (
         <div className="divide-y divide-slate-100">
           {opts.map((o, i) => (

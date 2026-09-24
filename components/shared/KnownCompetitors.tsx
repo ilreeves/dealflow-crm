@@ -19,6 +19,8 @@ export default function KnownCompetitors({ entityType, entityId }: Props) {
   const supabase = createClient()
   const [rows, setRows] = useState<CompanyCompetitor[]>([])
   const [loading, setLoading] = useState(true)
+  // A failed load must not read as "No competitors added yet".
+  const [loadError, setLoadError] = useState('')
   const [adding, setAdding] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -31,9 +33,10 @@ export default function KnownCompetitors({ entityType, entityId }: Props) {
     supabase.from('company_competitors').select('*')
       .eq('entity_type', entityType).eq('entity_id', entityId)
       .order('created_at', { ascending: true })
-      .then(({ data }) => {
+      .then(({ data, error: e }) => {
         if (!active) return
         setRows((data as CompanyCompetitor[]) ?? [])
+        setLoadError(e ? e.message : '')
         setLoading(false)
       })
     return () => { active = false }
@@ -109,6 +112,8 @@ export default function KnownCompetitors({ entityType, entityId }: Props) {
 
       {loading ? (
         <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-slate-400" /></div>
+      ) : loadError ? (
+        <p className="text-xs text-red-600">Couldn&apos;t load competitors: {loadError}</p>
       ) : (
         <div className="space-y-1.5">
           {rows.map((c) => {

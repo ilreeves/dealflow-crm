@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { Plus, Trash2, Loader2, Pencil, Layers, ChevronDown, ChevronRight, TrendingDown } from "lucide-react"
-import { PortfolioCompany, PortfolioPosition, PortfolioFundraiseRound, SHARE_CLASS_TYPES } from "@/lib/types"
+import { PortfolioCompany, PortfolioPosition, PortfolioFundraiseRound, PortfolioClassHolding, SHARE_CLASS_TYPES } from "@/lib/types"
 import { computeWaterfall, lastRoundPrice as lastRoundPriceOf, fmtPrice, WaterfallRow, ShareClassWithHoldings, investedBasis, breakEvenExit, solasProceeds, solasCost, solasBreakEven } from "@/lib/waterfall"
 export type { ShareClassWithHoldings } from "@/lib/waterfall"
 import { createClient } from "@/lib/supabase/client"
-import { parseNum, numToStr, fmtMoney, fmtPct, saveHint, inputCls, noteAccruedInterest, exactDate } from "@/lib/rounds"
+import { parseNum, numError, numToStr, fmtMoney, fmtPct, saveHint, inputCls, noteAccruedInterest, exactDate, calendarDaysUntil, dayCount } from "@/lib/rounds"
 import Field from "@/components/shared/Field"
 
 // Share-class structure: Common, each preferred series, the option pool —
@@ -116,9 +116,9 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
     })
     .filter((d): d is string => d != null)
     .sort()[0]
-  const maturityDays = earliestMaturity != null
-    ? Math.round((new Date(earliestMaturity + "T00:00:00").getTime() - Date.now()) / 86400000)
-    : null
+  // Whole calendar days, not a ms diff rounded by time of day (which read
+  // "overdue by 1 days" on maturity day itself after noon).
+  const maturityDays = calendarDaysUntil(earliestMaturity)
   const noteClassRows = classes.filter((c) => c.shares_outstanding == null && Number(c.convertible_balance) > 0)
   // Cap table says a note is outstanding, the books say everything converted:
   // the strongest stale signal there is.
@@ -142,11 +142,9 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
     const rows = Array.from(liveByFund.entries()).map(([entity, dollars]) => ({
       class_id: adoptTarget.id, entity, shares: Math.round(dollars),
     }))
-    const { error: delErr } = await supabase.from("portfolio_class_holdings").delete().eq("class_id", adoptTarget.id)
-    if (delErr) { setError(saveHint(delErr.message)); setAdopting(false); return }
-    const { error: insErr } = await supabase.from("portfolio_class_holdings").insert(rows)
-    if (insErr) { setError(saveHint(insErr.message)); setAdopting(false); return }
+    const err = await replaceHoldings(supabase, adoptTarget.id, rows)
     setAdopting(false)
+    if (err) { setError(err.message); if (err.lost) load(); return }
     load()
   }
 
@@ -275,8 +273,10 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
             Solas principal + accrued ≈ <span className="font-medium">{fmtMoney(liveSolasNotes)}</span> (accrues daily
             {earliestMaturity != null && maturityDays != null && (
               maturityDays < 0
-                ? <>; earliest maturity {exactDate(earliestMaturity)}, <span className="font-medium">overdue by {Math.abs(maturityDays)} days</span></>
-                : <>; earliest maturity {exactDate(earliestMaturity)}, in {maturityDays} days</>
+                ? <>; earliest maturity {exactDate(earliestMaturity)}, <span className="font-medium">overdue by {dayCount(Math.abs(maturityDays))}</span></>
+                : maturityDays === 0
+                  ? <>; earliest maturity {exactDate(earliestMaturity)}, <span className="font-medium">today</span></>
+                  : <>; earliest maturity {exactDate(earliestMaturity)}, in {dayCount(maturityDays)}</>
             )}).
             {noteDrift && <> The note {noteClassRows.length === 1 ? "row carries" : "rows carry"} Solas holdings of {fmtMoney(enteredSolasNoteDollars)} — drifted from the live figure.</>}
             {enteredSolasNoteDollars === 0 && <> The note {noteClassRows.length === 1 ? "row has" : "rows have"} no Solas holdings entered.</>}
@@ -296,6 +296,37 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
       </p>
     </div>
   )
+}
+
+type Supa = ReturnType<typeof createClient>
+
+/**
+ * Replace a class's Solas holdings wholesale (delete + insert), snapshotting
+ * first so a failed insert can put the old rows back. Returns null on success;
+ * otherwise the message to show, with `lost` set when even the restore failed
+ * and the old holdings are gone from the database.
+ */
+async function replaceHoldings(
+  supabase: Supa,
+  classId: string,
+  rows: { class_id: string; entity: string; shares: number | null }[],
+): Promise<{ message: string; lost: boolean } | null> {
+  // No snapshot, no delete: without it a failed insert has nothing to restore.
+  const { data: prev, error: snapErr } = await supabase.from("portfolio_class_holdings").select("*").eq("class_id", classId)
+  if (snapErr) return { message: `${saveHint(snapErr.message)} (Holdings were not changed.)`, lost: false }
+  const { error: delErr } = await supabase.from("portfolio_class_holdings").delete().eq("class_id", classId)
+  if (delErr) return { message: saveHint(delErr.message), lost: false }
+  if (!rows.length) return null
+  const { error: insErr } = await supabase.from("portfolio_class_holdings").insert(rows)
+  if (!insErr) return null
+  const prevRows = (prev as PortfolioClassHolding[] | null) ?? []
+  if (!prevRows.length) return { message: saveHint(insErr.message), lost: false }
+  const { error: restoreErr } = await supabase.from("portfolio_class_holdings").insert(prevRows)
+  if (!restoreErr) return { message: `${saveHint(insErr.message)} (Previous holdings restored.)`, lost: false }
+  return {
+    message: `${saveHint(insErr.message)} — AND the previous holdings could not be restored (${restoreErr.message}). They are no longer in the database: ${prevRows.map((h) => `${h.entity} ${Number(h.shares).toLocaleString("en-US")}`).join(", ")}. Re-enter them, or contact whoever administers Supabase to recover them.`,
+    lost: true,
+  }
 }
 
 function fmtShares(n: number | null | undefined): string {
@@ -349,6 +380,19 @@ function ClassEditor({
 
   async function save() {
     if (!f.name.trim()) { setError("Enter a class name."); return }
+    // A typo in a number field would otherwise save as null (or, for a
+    // holding, silently drop the row). Only fields that are saved are checked.
+    const isOther = f.class_type === "Other"
+    const numIssue = [
+      numError("Shares outstanding", f.shares_outstanding),
+      numError("Price per share", f.price_per_share),
+      numError("Liq pref multiple", f.liq_pref_multiple),
+      numError("Seniority", f.seniority),
+      isOther ? numError("Convertible balance", f.convertible_balance) : null,
+      isOther ? numError("Conversion price", f.conversion_price) : null,
+      ...holdings.map((h) => numError(`Holding${h.entity.trim() ? ` (${h.entity.trim()})` : ""} shares`, h.shares)),
+    ].find(Boolean)
+    if (numIssue) { setError(numIssue); return }
     setSaving(true)
     setError("")
     const payload = {
@@ -377,12 +421,9 @@ function ClassEditor({
     const rows = holdings
       .map((h) => ({ class_id: classId!, entity: h.entity.trim(), shares: parseNum(h.shares) }))
       .filter((h) => h.entity && h.shares != null)
-    const { error: delErr } = await supabase.from("portfolio_class_holdings").delete().eq("class_id", classId!)
-    if (delErr) { setError(saveHint(delErr.message)); setSaving(false); return }
-    if (rows.length) {
-      const { error: insErr } = await supabase.from("portfolio_class_holdings").insert(rows)
-      if (insErr) { setError(saveHint(insErr.message)); setSaving(false); return }
-    }
+    // Class fields are already saved by now; a failure here is holdings only.
+    const holdErr = await replaceHoldings(supabase, classId!, rows)
+    if (holdErr) { setError(`Class saved, but holdings failed: ${holdErr.message}`); setSaving(false); return }
     setSaving(false)
     onDone()
   }
@@ -539,8 +580,10 @@ function WaterfallSection({ classes, impliedValue, refPrice }: { classes: ShareC
                 <p className="text-xs text-slate-400">Solas proceeds</p>
                 <p className="text-lg font-semibold" style={{ color: "#3b6d11" }}>{fmtMoney(solasTotal)}</p>
                 {solasIn != null && (
-                  <p className="text-xs tabular-nums" style={{ color: solasTotal >= solasIn ? "#3b6d11" : "#9a5b13" }}>
-                    {fmtMult(solasTotal / solasIn)} on {fmtMoney(solasIn)} in
+                  // A $0 basis is real (e.g. a class priced at $0) but has no
+                  // multiple — dividing by it rendered "∞×" / "NaN×".
+                  <p className="text-xs tabular-nums" style={{ color: solasIn <= 0 ? "#64748b" : solasTotal >= solasIn ? "#3b6d11" : "#9a5b13" }}>
+                    {solasIn > 0 ? fmtMult(solasTotal / solasIn) : "—"} on {fmtMoney(solasIn)} in
                   </p>
                 )}
                 {solasIn != null && solasWholeAt != null && (

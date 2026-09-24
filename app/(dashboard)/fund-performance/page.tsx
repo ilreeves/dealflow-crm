@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { rowsOrThrow } from "@/lib/supabase/unwrap"
 import { latestValuation, positionValue, LatestValuation } from "@/lib/portfolio"
-import { noteAccruedInterest } from "@/lib/rounds"
+import { noteAccruedInterest, calendarDaysUntil, dayCount } from "@/lib/rounds"
 import { PortfolioFundraiseRound, PortfolioPosition } from "@/lib/types"
 import FundPerformanceView, { FundRow, TopPosition, RiskFlag, CompanyInFund } from "@/components/fund/FundPerformanceView"
 import ValuationHistory, { FundSeries } from "@/components/fund/ValuationHistory"
@@ -78,7 +78,10 @@ export default async function FundPerformancePage() {
     if (!fundMap.has(fund)) fundMap.set(fund, new Map())
     const cm = fundMap.get(fund)!
     const cname = nameById[p.company_id] ?? "Unknown"
-    const e = cm.get(cname) ?? { name: cname, invested: 0, value: 0, ownership: 0 }
+    // value starts null, not 0: a company with no fair value and no resolvable
+    // ownership × valuation is "No mark recorded" (grey "—"), not "Written to
+    // zero" (red $0). Null contributes 0 to every sum below, so totals match.
+    const e = cm.get(cname) ?? { name: cname, invested: 0, value: null, ownership: 0 }
     e.invested += Number(p.invested_amount) || 0
     const v = posValue(p)
     if (v != null) e.value = (e.value ?? 0) + v
@@ -122,16 +125,18 @@ export default async function FundPerformancePage() {
   const ownPs = ps.filter((p) => !p.lookthrough_of)
   const lookthroughCost = lookthrough.reduce((s, p) => s + (Number(p.invested_amount) || 0), 0)
 
-  const compMap = new Map<string, { name: string; fund: string; fundInvested: Record<string, number>; invested: number; value: number; ownership: number }>()
+  // `marked` tracks whether any position resolved a value, so Top positions can
+  // tell "no mark" from a genuine $0 write-down (value stays numeric for sums).
+  const compMap = new Map<string, { name: string; fund: string; fundInvested: Record<string, number>; invested: number; value: number; marked: boolean; ownership: number }>()
   for (const p of ownPs) {
     const cname = nameById[p.company_id] ?? "Unknown"
-    const e = compMap.get(cname) ?? { name: cname, fund: "", fundInvested: {}, invested: 0, value: 0, ownership: 0 }
+    const e = compMap.get(cname) ?? { name: cname, fund: "", fundInvested: {}, invested: 0, value: 0, marked: false, ownership: 0 }
     const inv = Number(p.invested_amount) || 0
     e.invested += inv
     const f = p.fund || "Unassigned"
     e.fundInvested[f] = (e.fundInvested[f] ?? 0) + inv
     const v = posValue(p)
-    if (v != null) e.value += v
+    if (v != null) { e.value += v; e.marked = true }
     e.ownership += Number(p.ownership_pct) || 0
     compMap.set(cname, e)
   }
@@ -150,7 +155,7 @@ export default async function FundPerformancePage() {
   }
 
   const top: TopPosition[] = Array.from(compMap.values())
-    .map((c) => ({ name: c.name, fund: c.fund, ownership: c.ownership, invested: c.invested, value: c.value || null, moic: c.invested > 0 && c.value > 0 ? c.value / c.invested : null }))
+    .map((c) => ({ name: c.name, fund: c.fund, ownership: c.ownership, invested: c.invested, value: c.marked ? c.value : null, moic: c.invested > 0 && c.value > 0 ? c.value / c.invested : null }))
     .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
     .slice(0, 6)
 
@@ -162,11 +167,14 @@ export default async function FundPerformancePage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const md = (r.terms as any)?.maturity_date
       if (md) {
-        const d = new Date(String(md) + "T00:00:00")
-        const days = Math.round((d.getTime() - now.getTime()) / 86400000)
+        // Whole calendar days — a ms diff against "now" rounded by time of day,
+        // so maturity day itself read "matured 1 days ago" after noon.
+        const days = calendarDaysUntil(String(md))
         const company = nameById[r.company_id] ?? "A company"
-        if (days < 0) flags.push({ kind: "overdue", company, text: `${r.security_type.toLowerCase()} matured ${Math.abs(days)} days ago and is still unconverted.` })
-        else if (days <= 90) flags.push({ kind: "maturing", company, text: `${r.security_type.toLowerCase()} matures in ${days} days, still unconverted.` })
+        if (days == null) continue
+        if (days < 0) flags.push({ kind: "overdue", company, text: `${r.security_type.toLowerCase()} matured ${dayCount(Math.abs(days))} ago and is still unconverted.` })
+        else if (days === 0) flags.push({ kind: "maturing", company, text: `${r.security_type.toLowerCase()} matures today, still unconverted.` })
+        else if (days <= 90) flags.push({ kind: "maturing", company, text: `${r.security_type.toLowerCase()} matures in ${dayCount(days)}, still unconverted.` })
       }
     }
   }
@@ -203,7 +211,9 @@ export default async function FundPerformancePage() {
   const roundById = new Map(rs.map((r) => [r.id, r]))
   const notes: NotePosition[] = ps
     .map((p) => ({ p, r: roundById.get(p.round_id ?? "") }))
-    .filter(({ r }) => r?.security_type === "Convertible note")
+    // Converted notes are equity now — not principal outstanding, not accruing.
+    // Same exclusion as the risk flags above and the cap table's live check.
+    .filter(({ r }) => r?.security_type === "Convertible note" && r.status !== "Converted")
     .map(({ p, r }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const terms = (r!.terms as any) ?? {}

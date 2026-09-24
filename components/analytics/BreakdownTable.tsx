@@ -48,8 +48,11 @@ export default function BreakdownTable({ title, rows, max, color }: Props) {
                   <tr className="border-b border-slate-50 last:border-0">
                     <td colSpan={3} className="px-4 pb-3 pt-0 bg-slate-50/50">
                       <div className="flex flex-wrap gap-1.5 pl-4.5 pt-2">
-                        {companies.map(({ name, stage }) => (
-                          <span key={name} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200 rounded-full text-xs">
+                        {/* Names aren't unique (two deals can share one), and the
+                            rows carry no id — the index disambiguates. Safe here:
+                            the list arrives pre-sorted and is never reordered. */}
+                        {companies.map(({ name, stage }, i) => (
+                          <span key={`${name}|${i}`} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200 rounded-full text-xs">
                             <span className="font-medium text-slate-700">{name}</span>
                             <span className="text-slate-400">{stage}</span>
                           </span>

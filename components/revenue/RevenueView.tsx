@@ -108,12 +108,18 @@ export default function RevenueView({
   const planYear = rows.reduce((y, r) => Math.max(y, r.planYear), fiscalYear)
 
   const tracked = rows.filter((r) => r.tracked)
-  const fyPlanTotal = tracked.reduce((s, c) => s + (c.fyProjected ?? 0), 0)
-  const fyPlanCount = tracked.filter((c) => c.fyProjected != null).length
+  // The tile is labelled FY {planYear}, and each row's fyProjected is the plan
+  // for its OWN planYear — so only rows on the labelled year may be summed, or
+  // the headline mixes (say) a 2025 plan into a "FY 2026" total. Rows still on
+  // an earlier year are counted and disclosed instead.
+  const onPlanYear = tracked.filter((c) => c.planYear === planYear)
+  const fyPlanTotal = onPlanYear.reduce((s, c) => s + (c.fyProjected ?? 0), 0)
+  const fyPlanCount = onPlanYear.filter((c) => c.fyProjected != null).length
+  const fyOtherYearCount = tracked.filter((c) => c.planYear !== planYear && c.fyProjected != null).length
   // How much of the headline plan has been restated. Disclosed rather than
   // assumed: the same tile reads very differently if half of it was rewritten
   // mid-year, and /analytics is scoring these companies against the original.
-  const fyRevisedCount = tracked.filter((c) => c.fyRevised).length
+  const fyRevisedCount = onPlanYear.filter((c) => c.fyRevised).length
   // Only companies whose prior year is FULLY reported contribute, so the total is
   // a real annual figure rather than a mix of full and partial years.
   const priorTotal = tracked.reduce((s, c) => s + (c.priorYearActual ?? 0), 0)
@@ -143,9 +149,13 @@ export default function RevenueView({
               label={`FY ${planYear} plan`}
               value={fmtMoney(fyPlanTotal)}
               sub={
-                fyRevisedCount
-                  ? `${fyPlanCount} with a plan set · ${fyRevisedCount} revised`
-                  : `${fyPlanCount} with a plan set`
+                [
+                  `${fyPlanCount} with a plan set`,
+                  fyRevisedCount ? `${fyRevisedCount} revised` : null,
+                  fyOtherYearCount
+                    ? `(${fyOtherYearCount} ${fyOtherYearCount === 1 ? "company" : "companies"} on other plan years excluded)`
+                    : null,
+                ].filter(Boolean).join(" · ")
               }
             />
             <Tile

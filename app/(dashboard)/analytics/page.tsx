@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function AnalyticsPage() {
   const supabase = await createClient()
-  const [dealsRes, activityRes, catalystRes, portfolioRes, legacyRes, listRes, { data: revenueData }] = await Promise.all([
+  const [dealsRes, activityRes, catalystRes, portfolioRes, legacyRes, listRes, { data: revenueData }, { data: pitchCountData }] = await Promise.all([
     supabase.from('deals').select('id,name,stage,category,source,sector,clinical_stage,series,stage_entered_at,created_at'),
     supabase.from('deal_activity').select('deal_id,details,created_at').eq('action', 'Stage changed').order('created_at', { ascending: true }),
     supabase.from('catalysts').select('company_name,catalyst_date,original_date,status,resolved_date'),
@@ -25,12 +25,10 @@ export default async function AnalyticsPage() {
     // Returns null data if the revenue migration hasn't been run — the section
     // then simply doesn't render rather than breaking the page.
     supabase.from('portfolio_revenue').select('company_id,period_type,fiscal_year,projected,revised_projected,actual,projected_source'),
+    // Soft, same reasoning: if the pitch-funnel migration hasn't run, this
+    // errors and the funnel skips rendering instead of taking the page down.
+    supabase.from('monthly_pitch_counts').select('month,pitches'),
   ])
-  // Separate soft queries, same reasoning: if the features migrations haven't
-  // run yet, these error and their sections skip rendering instead of taking
-  // the page down.
-  const { data: dealflowData } = await supabase.from('deals').select('created_at')
-  const { data: pitchCountData } = await supabase.from('monthly_pitch_counts').select('month,pitches')
 
   const deals = rowsOrThrow(dealsRes, 'deals') as Deal[]
   const total = deals.length
@@ -116,7 +114,8 @@ export default async function AnalyticsPage() {
   // still dealflow. Needs no per-deal classification: created_at is on every
   // row. There is no inbound/outbound split: Solas doesn't source companies
   // itself, so every deal here arrived inbound by definition.
-  const dealflowRows = (dealflowData as { created_at: string }[] | null) ?? null
+  // The deals query above already carries created_at — no second fetch.
+  const dealflowRows = deals
   const pitchMonths: { key: string; label: string; count: number }[] = []
   let dealsAdded12mo = 0
   if (dealflowRows) {

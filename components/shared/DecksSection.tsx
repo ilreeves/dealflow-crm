@@ -6,6 +6,8 @@ import { CompanyDeck, DeckView, DealFile } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
 import { isExpired, DECK_LINK_TTL_MS } from '@/lib/deck'
+import { logError } from '@/lib/log'
+import { safeStorageName } from '@/lib/storage'
 import PdfViewer from '@/components/deals/PdfViewer'
 
 interface Props {
@@ -26,6 +28,8 @@ export default function DecksSection({ entityType, entityId, entityName, buildEm
   const [decks, setDecks] = useState<CompanyDeck[]>([])
   const [rounds, setRounds] = useState<RoundOption[]>([])
   const [loading, setLoading] = useState(true)
+  // A failed load must not read as "No decks yet" — someone would re-upload.
+  const [loadError, setLoadError] = useState('')
   const [adding, setAdding] = useState(false)
   const [newRoundId, setNewRoundId] = useState('')
   const [newLabel, setNewLabel] = useState('')
@@ -37,7 +41,11 @@ export default function DecksSection({ entityType, entityId, entityName, buildEm
   useEffect(() => {
     supabase.from('company_decks').select('*').eq('entity_type', entityType).eq('entity_id', entityId)
       .order('sort_order', { ascending: true }).order('created_at', { ascending: true })
-      .then(({ data }) => { setDecks((data as CompanyDeck[]) ?? []); setLoading(false) })
+      .then(({ data, error: loadErr }) => {
+        setDecks((data as CompanyDeck[]) ?? [])
+        setLoadError(loadErr ? loadErr.message : '')
+        setLoading(false)
+      })
   }, [entityType, entityId, supabase])
 
   // Fundraising rounds a deck can be tied to, so the label follows the round.
@@ -55,7 +63,7 @@ export default function DecksSection({ entityType, entityId, entityName, buildEm
     const round = rounds.find((r) => r.id === newRoundId)
     const label = round ? round.round_name : (newLabel.trim() || 'Deck')
     const prefix = entityType === 'deal' ? entityId : `portfolio/${entityId}`
-    const storagePath = `${prefix}/noncon-deck/${Date.now()}-${file.name}`
+    const storagePath = `${prefix}/noncon-deck/${Date.now()}-${safeStorageName(file.name)}`
     const { error: upErr } = await supabase.storage.from('deal-files').upload(storagePath, file)
     if (upErr) { setError(`Upload failed: ${upErr.message}`); setUploadingNew(false); return }
     const { data, error: insErr } = await supabase.from('company_decks').insert({
@@ -87,6 +95,8 @@ export default function DecksSection({ entityType, entityId, entityName, buildEm
 
       {loading ? (
         <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+      ) : loadError ? (
+        <p className="text-sm text-red-600 py-2">Couldn&apos;t load decks: {loadError}</p>
       ) : (
         <div className="space-y-2">
           {decks.map((deck) => (
@@ -176,7 +186,7 @@ function DeckItem({ deck, rounds, entityName, buildEmail, onUpdated, onDeleted }
   const [editingLabel, setEditingLabel] = useState(false)
   const [labelDraft, setLabelDraft] = useState(deck.label)
   const [roundDraft, setRoundDraft] = useState(deck.round_id ?? '')
-  const [loadedViews, setLoadedViews] = useState<{ token: string; rows: DeckView[] } | null>(null)
+  const [loadedViews, setLoadedViews] = useState<{ token: string; rows: DeckView[]; error: string } | null>(null)
   const [showViews, setShowViews] = useState(false)
   const [rowError, setRowError] = useState('')
   const replaceRef = useRef<HTMLInputElement>(null)
@@ -195,13 +205,16 @@ function DeckItem({ deck, rounds, entityName, buildEmail, onUpdated, onDeleted }
   // whose link was just regenerated — reads as zero views without an effect that
   // clears state synchronously.
   const views = loadedViews?.token === deck.token ? loadedViews.rows : []
+  const viewsError = loadedViews?.token === deck.token ? loadedViews.error : ''
 
   useEffect(() => {
     const token = deck.token
     if (!token) return
     let cancelled = false
     supabase.from('deck_views').select('*').eq('token', token).order('viewed_at', { ascending: false })
-      .then(({ data }) => { if (!cancelled) setLoadedViews({ token, rows: (data as DeckView[]) ?? [] }) })
+      .then(({ data, error: viewsErr }) => {
+        if (!cancelled) setLoadedViews({ token, rows: (data as DeckView[]) ?? [], error: viewsErr ? viewsErr.message : '' })
+      })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deck.token])
@@ -215,7 +228,7 @@ function DeckItem({ deck, rounds, entityName, buildEmail, onUpdated, onDeleted }
     setReplacing(true)
     setRowError('')
     const prefix = deck.entity_type === 'deal' ? deck.entity_id : `portfolio/${deck.entity_id}`
-    const storagePath = `${prefix}/noncon-deck/${Date.now()}-${file.name}`
+    const storagePath = `${prefix}/noncon-deck/${Date.now()}-${safeStorageName(file.name)}`
     const { error: upErr } = await supabase.storage.from('deal-files').upload(storagePath, file)
     if (upErr) { setRowError(`Upload failed: ${upErr.message}`); setReplacing(false); return }
     const previous = deck.storage_path
@@ -228,7 +241,11 @@ function DeckItem({ deck, rounds, entityName, buildEmail, onUpdated, onDeleted }
       return
     }
     // Only remove the previous file once the row is confirmed to point at the new one.
-    if (previous && previous !== storagePath) await supabase.storage.from('deal-files').remove([previous])
+    // A failed remove only orphans the old file — log it, don't fail the replace.
+    if (previous && previous !== storagePath) {
+      const { error: rmErr } = await supabase.storage.from('deal-files').remove([previous])
+      if (rmErr) logError('decks', `replace: couldn't remove old file ${previous}: ${rmErr.message}`, supabase)
+    }
     onUpdated(data as CompanyDeck)
     setReplacing(false)
   }
@@ -243,16 +260,30 @@ function DeckItem({ deck, rounds, entityName, buildEmail, onUpdated, onDeleted }
 
   // Persists the token and restarts the 4-week expiry window. Returns null (with
   // rowError set) if the update failed — never hand out a link that isn't live.
+  //
+  // The token is written only while the stored one is still null: a double
+  // click, or a teammate's stale tab that still sees token=null, must never
+  // replace a token that's already been emailed out (that would kill the sent
+  // link). The link handed out is always the STORED token from the re-select,
+  // not the one generated here.
   async function ensureShareLink(): Promise<string | null> {
-    const token = deck.token ?? makeToken()
+    if (!deck.token) {
+      const { error: tokErr } = await supabase.from('company_decks')
+        .update({ token: makeToken() }).eq('id', deck.id).is('token', null)
+      if (tokErr) {
+        setRowError(`Could not create share link: ${tokErr.message}`)
+        return null
+      }
+    }
     const now = new Date().toISOString()
-    const { data, error: updErr } = await supabase.from('company_decks').update({ token, shared_at: now }).eq('id', deck.id).select().single()
-    if (updErr || !data) {
+    const { data, error: updErr } = await supabase.from('company_decks').update({ shared_at: now }).eq('id', deck.id).select().single()
+    const stored = (data as CompanyDeck | null)?.token
+    if (updErr || !data || !stored) {
       setRowError(`Could not create share link: ${updErr?.message ?? 'update failed'}`)
       return null
     }
     onUpdated(data as CompanyDeck)
-    return `${window.location.origin}/deck/${token}`
+    return `${window.location.origin}/deck/${stored}`
   }
 
   async function handleEmail() {
@@ -302,7 +333,10 @@ function DeckItem({ deck, rounds, entityName, buildEmail, onUpdated, onDeleted }
     // failed delete never leaves a live row pointing at a missing file.
     const { error: delErr } = await supabase.from('company_decks').delete().eq('id', deck.id)
     if (delErr) { setRowError(`Remove failed: ${delErr.message}`); return }
-    await supabase.storage.from('deal-files').remove([deck.storage_path])
+    // The deck is gone either way; a failed remove just orphans the file, so
+    // record it for System Health rather than blocking the UI.
+    const { error: rmErr } = await supabase.storage.from('deal-files').remove([deck.storage_path])
+    if (rmErr) logError('decks', `remove: couldn't delete file ${deck.storage_path}: ${rmErr.message}`, supabase)
     onDeleted(deck.id)
   }
 
@@ -390,7 +424,7 @@ function DeckItem({ deck, rounds, entityName, buildEmail, onUpdated, onDeleted }
       <button onClick={() => setShowViews((v) => !v)} className="flex items-center gap-1.5 mt-1.5 text-xs text-slate-500 hover:text-slate-700 transition">
         {showViews ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
         <Users className="w-3.5 h-3.5" />
-        {views.length === 0 ? 'No views yet' : `Viewed ${views.length} ${views.length === 1 ? 'time' : 'times'}`}
+        {viewsError ? "Couldn't load views" : views.length === 0 ? 'No views yet' : `Viewed ${views.length} ${views.length === 1 ? 'time' : 'times'}`}
       </button>
       {showViews && views.length > 0 && (
         <div className="mt-2 border border-slate-100 rounded-lg divide-y divide-slate-50 overflow-hidden">

@@ -78,6 +78,29 @@ export function noteAccruedInterest(
   return Number(principal) * (Number(annualRatePct) / 100) * (days / 365)
 }
 
+/**
+ * Whole calendar days from `asOf` (default: today, local) to a YYYY-MM-DD date —
+ * negative once it has passed, 0 on the day itself. Counted via Date.UTC of the
+ * date parts, as noteAccruedInterest does: a raw millisecond diff against
+ * "now" rounds by time of day, so after noon on maturity day it read
+ * "matured 1 days ago". Null for a missing or unreadable date.
+ */
+export function calendarDaysUntil(date: string | null | undefined, asOf?: string): number | null {
+  if (!date) return null
+  const target = new Date(date + "T00:00:00")
+  const from = asOf ? new Date(asOf + "T00:00:00") : new Date()
+  if (isNaN(target.getTime()) || isNaN(from.getTime())) return null
+  return Math.round(
+    (Date.UTC(target.getFullYear(), target.getMonth(), target.getDate()) -
+      Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())) / 86_400_000,
+  )
+}
+
+/** "1 day" / "3 days" — the count is taken as-is (pass Math.abs for overdue). */
+export function dayCount(n: number): string {
+  return `${n} ${n === 1 ? "day" : "days"}`
+}
+
 export function fmtPct(n: number | null | undefined): string {
   if (n == null || isNaN(Number(n))) return "—"
   return `${Number(n).toFixed(1)}%`

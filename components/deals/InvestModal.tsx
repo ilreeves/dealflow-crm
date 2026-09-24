@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client"
 import { logActivity } from "@/lib/activity"
 // Shared parser so "$25M"-style shorthand works here too.
 import { parseNum, numError, fmtMoney, inputCls } from "@/lib/rounds"
+import { todayISO } from "@/lib/runway"
 import Field from "@/components/shared/Field"
 
 interface Props {
@@ -26,7 +27,8 @@ export default function InvestModal({ deal, actorName, onCancel, onDone }: Props
   const [f, setF] = useState({
     round_name: seriesRound,
     security_type: "Priced equity",
-    date: new Date().toISOString().slice(0, 10),
+    // Local date — toISOString() is UTC, so after 8pm Eastern it's tomorrow.
+    date: todayISO(),
     round_size: "",
     pre_money: "",
     post_money: "",
@@ -84,12 +86,21 @@ export default function InvestModal({ deal, actorName, onCancel, onDone }: Props
     let createdPositionId: string | null = null
     try {
       // 1) create or fetch the portfolio company
-      const { data: existing } = await supabase.from("portfolio_companies").select("id,funds").ilike("name", deal.name).limit(1)
+      // Same matching rules as addDealToPortfolio (lib/portfolio.ts), inlined
+      // because that helper doesn't hand back the company id or funds we need.
+      // Escape LIKE wildcards: a name like "Acme_Bio" must not match "AcmeXBio".
+      const namePattern = deal.name.replace(/[\\%_]/g, (c) => `\\${c}`)
+      const { data: existing, error: e0 } = await supabase.from("portfolio_companies").select("id,funds").ilike("name", namePattern).limit(1)
+      // A failed lookup must not be read as "no match" — that inserts a duplicate.
+      if (e0) throw new Error(`Couldn't check the portfolio for ${deal.name}: ${e0.message}`)
       let companyId: string
       if (existing && existing.length > 0) {
         companyId = (existing[0] as { id: string }).id
         const cur = ((existing[0] as PortfolioCompany).funds) ?? []
-        if (!cur.includes(f.fund)) await supabase.from("portfolio_companies").update({ funds: [...cur, f.fund] }).eq("id", companyId)
+        if (!cur.includes(f.fund)) {
+          const { error: eF } = await supabase.from("portfolio_companies").update({ funds: [...cur, f.fund] }).eq("id", companyId)
+          if (eF) throw new Error(`Couldn't add ${f.fund} to ${deal.name}'s funds: ${eF.message}`)
+        }
       } else {
         const { data: co, error: e1 } = await supabase.from("portfolio_companies").insert({
           name: deal.name, sector: deal.sector, category: deal.category, funds: [f.fund],
@@ -97,6 +108,9 @@ export default function InvestModal({ deal, actorName, onCancel, onDone }: Props
           contact_email: deal.contact_email, description: deal.description,
           current_valuation: deal.current_valuation, current_fundraise: deal.current_fundraise,
           sharepoint_link: deal.sharepoint_link, city: deal.city, state: deal.state, country: deal.country,
+          // Carry the curated clinical-trial identifiers across, as
+          // addDealToPortfolio does — re-keying them by hand is easy to miss.
+          indication: deal.indication, drug_names: deal.drug_names, ct_sponsor_name: deal.ct_sponsor_name,
           status: "Active",
         }).select("id").single()
         if (e1 || !co) throw new Error(e1?.message || "Could not create portfolio company")
@@ -155,7 +169,9 @@ export default function InvestModal({ deal, actorName, onCancel, onDone }: Props
       // 4) move the deal to Invested + log
       const now = new Date().toISOString()
       const { data: updated, error: e4 } = await supabase.from("deals")
-        .update({ stage: "Invested", stage_entered_at: now }).eq("id", deal.id).select().single()
+        // Clear any earlier pass, as the other stage-change paths do — otherwise
+        // a revived-then-invested deal keeps showing its red "Passed" banner.
+        .update({ stage: "Invested", stage_entered_at: now, pass_reason: null, passed_at: null }).eq("id", deal.id).select().single()
       if (e4 || !updated) throw new Error(e4?.message || "Could not update deal")
       await logActivity(deal.id, deal.name, "Stage changed", `${deal.stage} → Invested`, actorName)
       await logActivity(deal.id, deal.name, "Added to portfolio", `Invested via ${f.fund}${invested != null ? ` — ${fmtMoney(invested)}` : ""}`, actorName)

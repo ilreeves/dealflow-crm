@@ -19,11 +19,14 @@ export default function ProfileSettings() {
   const [pwMsg, setPwMsg] = useState('')
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return
-      setEmail(user.email ?? '')
-      setUserId(user.id)
-      const { data } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+    // getClaims() verifies the JWT locally — id (sub) and email are both in the
+    // claims, so there's no need for getUser()'s Auth-server round-trip.
+    supabase.auth.getClaims().then(async ({ data: claimsData }) => {
+      const claims = claimsData?.claims
+      if (!claims?.sub) return
+      setEmail(claims.email ?? '')
+      setUserId(claims.sub)
+      const { data } = await supabase.from('profiles').select('full_name').eq('id', claims.sub).maybeSingle()
       setName(data?.full_name ?? '')
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -33,10 +36,17 @@ export default function ProfileSettings() {
   useEffect(() => () => { if (savedTimer.current) clearTimeout(savedTimer.current) }, [])
 
   async function saveName() {
+    if (!userId) { setNameError('Not signed in — reload the page and try again.'); return }
     setSavingName(true); setNameSaved(false); setNameError('')
-    const { error } = await supabase.from('profiles').update({ full_name: name.trim() || null }).eq('id', userId)
+    // Upsert, not update: a user with no profiles row (created before the
+    // signup trigger, or the trigger failed) matched zero rows and still got
+    // "Saved". The returned row proves the write landed.
+    const { data, error } = await supabase.from('profiles')
+      .upsert({ id: userId, full_name: name.trim() || null }, { onConflict: 'id' })
+      .select('id').maybeSingle()
     setSavingName(false)
     if (error) { setNameError(error.message); return }
+    if (!data) { setNameError("Couldn't save — no profile row was written."); return }
     setNameSaved(true)
     if (savedTimer.current) clearTimeout(savedTimer.current)
     savedTimer.current = setTimeout(() => setNameSaved(false), 2000)

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Send, Pencil, Trash2, Check, X, Loader2 } from 'lucide-react'
 import { DealNote } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
-import { getActorName } from '@/lib/useActorName'
+import { getActor } from '@/lib/useActorName'
 import { formatDate } from '@/lib/utils'
 
 interface Props {
@@ -47,19 +47,17 @@ export default function NotesList({ dealId }: Props) {
     setSubmitting(true)
     setError('')
 
-    const { data: userData } = await supabase.auth.getUser()
-    const user = userData.user
     // Resolved once per session and shared across components — no per-submit
-    // profiles round-trip (and no eq('id', undefined) when signed out).
-    const actorName = user ? await getActorName(supabase) : null
+    // auth/profiles round-trip (and no eq('id', undefined) when signed out).
+    const actor = await getActor(supabase)
 
     const { data, error: insertError } = await supabase
       .from('deal_notes')
       .insert({
         deal_id: dealId,
         content: newNote.trim(),
-        author_id: user?.id,
-        author_name: user ? actorName ?? 'Unknown' : null,
+        author_id: actor?.id,
+        author_name: actor ? actor.name ?? 'Unknown' : null,
       })
       .select()
       .single()
@@ -110,7 +108,9 @@ export default function NotesList({ dealId }: Props) {
           placeholder="Add a note…"
           className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 resize-none"
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmit(e)
+            // Same guard as the button's `disabled` — a second Cmd+Enter while
+            // the first insert is in flight would otherwise save the note twice.
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !submitting) handleSubmit(e)
           }}
         />
         <div className="flex justify-end">

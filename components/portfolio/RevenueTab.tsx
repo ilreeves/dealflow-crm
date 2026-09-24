@@ -676,7 +676,9 @@ function RevenueBars({ rows }: { rows: PortfolioRevenue[] }) {
           const v = variance({ projected: p, actual: a })
           const fill = varianceBandColor(v?.pct)
           const tip = [
-            mode === "quarterly" ? `${pt.label} ${pt.group || ""}`.trim() : `FY ${pt.label}`,
+            // "near" is a window onto the quarterly points, so it takes the
+            // quarter label too — only the annual view is fiscal years.
+            mode !== "annual" ? `${pt.label} ${pt.group || ""}`.trim() : `FY ${pt.label}`,
             `Plan${orig != null ? " (revised)" : ""}: ${p != null ? fmtMoney(p) : "not recorded"}`,
             orig != null ? `Original plan: ${fmtMoney(orig)}` : null,
             `Actual: ${a != null ? fmtMoney(a) : "not reported yet"}`,

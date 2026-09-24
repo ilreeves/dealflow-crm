@@ -40,8 +40,15 @@ export default async function CatalystsPage() {
   const legacyNames = new Set(
     (rowsOrThrow(legacyRes, 'legacy companies') as { company_name: string }[]).map((l) => l.company_name)
   )
+  // Kept separately too: the calendar's "Restore to active" only deletes from the
+  // roster, which can't undo a status-derived Legacy — for these it shows a
+  // pointer to the Portfolio tab instead of a button that silently does nothing.
+  const statusLegacyNames: string[] = []
   for (const p of portfolioCompanies) {
-    if (p.status === 'Legacy' || p.status === 'Exited') legacyNames.add(p.name)
+    if (p.status === 'Legacy' || p.status === 'Exited') {
+      legacyNames.add(p.name)
+      statusLegacyNames.push(p.name)
+    }
   }
 
   // The reminder bar's overdue / due-soon windows are measured from today. The clock
@@ -52,7 +59,11 @@ export default async function CatalystsPage() {
   //
   // ⚠️ If this route were ever made statically rendered, `today` would freeze at build
   // time and every catalyst would drift toward "overdue" silently. Keep it dynamic.
-  const today = new Date().toISOString().slice(0, 10)
+  //
+  // Eastern, not UTC: the server runs in UTC, so toISOString() rolled "today" over
+  // at 8pm New York time and pulled tomorrow's reminders in early. en-CA formats
+  // as YYYY-MM-DD.
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date())
 
   return (
     <CatalystCalendar
@@ -60,6 +71,7 @@ export default async function CatalystsPage() {
       initialCatalysts={rowsOrThrow(catalystsRes, 'catalysts') as Catalyst[]}
       companyNames={companyNames}
       initialLegacy={Array.from(legacyNames)}
+      statusLegacy={statusLegacyNames}
       initialDismissed={(rowsOrThrow(dismissedRes, 'dismissed reminders') as { signature: string }[]).map((d) => d.signature)}
       portfolioIdByName={portfolioIdByName}
     />

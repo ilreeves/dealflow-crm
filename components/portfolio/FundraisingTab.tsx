@@ -18,6 +18,12 @@ type Staged = {
   fair_value: string
   fair_value_date: string
   fair_value_source: string
+  // Not editable here, but the save below deletes and re-inserts the round's
+  // positions, so anything the editor doesn't carry is wiped. Losing
+  // lookthrough_of re-adds a look-through interest to company totals and
+  // double counts AUM (e.g. Basking EHF $3.5M), so both ride through untouched.
+  lookthrough_of: string | null
+  notes: string | null
 }
 
 // Company financing rounds. Solas positions stay nested under the round they
@@ -33,6 +39,7 @@ export default function FundraisingTab({ companyId }: { companyId: string }) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState("")
+  const [loadError, setLoadError] = useState("")
 
   useEffect(() => {
     load()
@@ -41,11 +48,15 @@ export default function FundraisingTab({ companyId }: { companyId: string }) {
 
   async function load() {
     setLoading(true)
-    const [{ data: rd }, { data: ps }, { data: fu }] = await Promise.all([
+    const [{ data: rd, error: rdErr }, { data: ps, error: psErr }, { data: fu }] = await Promise.all([
       supabase.from("portfolio_fundraise_rounds").select("*").eq("company_id", companyId).order("date", { ascending: false }),
       supabase.from("portfolio_positions").select("*").eq("company_id", companyId),
       supabase.from("list_options").select("value,sort_order").eq("list_key", "fund").order("sort_order"),
     ])
+    // A failed read must not render as "No rounds recorded yet" — that reads
+    // as data, not an outage.
+    const readErr = rdErr ?? psErr
+    setLoadError(readErr ? `Couldn't load rounds: ${readErr.message}` : "")
     setRounds((rd as PortfolioFundraiseRound[]) ?? [])
     setPositions((ps as PortfolioPosition[]) ?? [])
     setFunds(((fu as { value: string }[]) ?? []).map((f) => f.value))
@@ -66,7 +77,15 @@ export default function FundraisingTab({ companyId }: { companyId: string }) {
     const { error: rndErr } = await supabase.from("portfolio_fundraise_rounds").delete().eq("id", id)
     if (rndErr) {
       // Restore the positions we just deleted so the surviving round keeps them.
-      if (prevPositions && prevPositions.length) await supabase.from("portfolio_positions").insert(prevPositions)
+      // If that fails too the data is gone from the DB — say so loudly.
+      if (prevPositions && prevPositions.length) {
+        const { error: restoreErr } = await supabase.from("portfolio_positions").insert(prevPositions)
+        if (restoreErr) {
+          setDeleteError(`${saveHint(rndErr.message)} — AND the round's ${prevPositions.length} Solas position(s) could not be restored (${restoreErr.message}). They are no longer in the database; re-enter them from the source documents or contact whoever administers Supabase to recover them.`)
+          await load()
+          return
+        }
+      }
       setDeleteError(saveHint(rndErr.message))
       return
     }
@@ -107,9 +126,10 @@ export default function FundraisingTab({ companyId }: { companyId: string }) {
         />
       )}
 
+      {loadError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{loadError}</p>}
       {deleteError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{deleteError}</p>}
 
-      {rounds.length === 0 && !adding ? (
+      {loadError ? null : rounds.length === 0 && !adding ? (
         <p className="text-center text-sm text-slate-400 py-6">No rounds recorded yet</p>
       ) : (
         <div className="space-y-2.5">
@@ -189,6 +209,8 @@ export default function FundraisingTab({ companyId }: { companyId: string }) {
                         fair_value: numToStr(p.fair_value),
                         fair_value_date: p.fair_value_date ?? "",
                         fair_value_source: p.fair_value_source ?? "",
+                        lookthrough_of: p.lookthrough_of ?? null,
+                        notes: p.notes ?? null,
                       }))}
                       onCancel={() => setEditingId(null)}
                       onDone={() => { setEditingId(null); load() }}
@@ -355,7 +377,7 @@ function RoundEditor({
   const roundSizeLabel = isNote ? "Principal" : "Total round size"
 
   function addPos() {
-    setPosList((p) => [...p, { _k: keyCounter, fund: funds[0] ?? "", invested_amount: "", shares: "", ownership_pct: "", accrued_interest: "", fair_value: "", fair_value_date: "", fair_value_source: "" }])
+    setPosList((p) => [...p, { _k: keyCounter, fund: funds[0] ?? "", invested_amount: "", shares: "", ownership_pct: "", accrued_interest: "", fair_value: "", fair_value_date: "", fair_value_source: "", lookthrough_of: null, notes: null }])
     setKeyCounter((c) => c + 1)
   }
   function setPos(k: number, key: keyof Staged, v: string) {
@@ -376,6 +398,21 @@ function RoundEditor({
       numError("Price / share", f.price_per_share),
       numError("Valuation cap", f.valuation_cap),
       numError("Discount", f.discount),
+      // Only the note fields that are actually saved for this security type —
+      // a stale value in a hidden field shouldn't block the save.
+      isNote ? numError("Interest rate", f.interest_rate) : null,
+      isNote ? numError("Warrant coverage", f.warrant_coverage) : null,
+      // Position fields: same silent-null trap, one position at a time.
+      ...posList.flatMap((p, i) => {
+        const who = `Position ${i + 1}${p.fund ? ` (${p.fund})` : ""}`
+        return [
+          numError(`${who} invested`, p.invested_amount),
+          numError(`${who} shares`, p.shares),
+          numError(`${who} ownership %`, p.ownership_pct),
+          isNote ? numError(`${who} accrued interest`, p.accrued_interest) : null,
+          numError(`${who} fair value`, p.fair_value),
+        ]
+      }),
     ].find(Boolean)
     if (numIssue) { setError(numIssue); return }
 
@@ -435,7 +472,16 @@ function RoundEditor({
       // sync positions: replace all for this round. Snapshot the existing rows
       // first so we can restore them if the re-insert fails — otherwise a failed
       // insert after the delete would silently lose the round's positions.
-      const { data: prevPositions } = await supabase.from("portfolio_positions").select("*").eq("round_id", roundId)
+      // If the snapshot itself fails, stop before deleting: without it a failed
+      // re-insert would have nothing to restore from.
+      const { data: prevPositions, error: snapErr } = await supabase.from("portfolio_positions").select("*").eq("round_id", roundId)
+      if (snapErr) {
+        if (createdNewRound) await supabase.from("portfolio_fundraise_rounds").delete().eq("id", roundId)
+        // An edited round's own fields are already saved at this point; only
+        // the positions were left untouched.
+        setError(`${saveHint(snapErr.message)}${createdNewRound ? "" : " (Round details saved; positions were not changed.)"}`)
+        setSaving(false); return
+      }
       const { error: delErr } = await supabase.from("portfolio_positions").delete().eq("round_id", roundId)
       if (delErr) {
         if (createdNewRound) await supabase.from("portfolio_fundraise_rounds").delete().eq("id", roundId)
@@ -447,6 +493,10 @@ function RoundEditor({
           company_id: companyId,
           round_id: roundId,
           fund: p.fund || null,
+          // Look-through marker and notes aren't editable here; carried from the
+          // original row (null for a newly added position).
+          lookthrough_of: p.lookthrough_of,
+          notes: p.notes,
           invested_amount: parseNum(p.invested_amount),
           shares: parseNum(p.shares),
           ownership_pct: parseNum(p.ownership_pct),
@@ -459,7 +509,13 @@ function RoundEditor({
         const { error: e } = await supabase.from("portfolio_positions").insert(rows)
         if (e) {
           // Restore the positions we just deleted (edit), or drop the empty new round.
-          if (prevPositions && prevPositions.length) await supabase.from("portfolio_positions").insert(prevPositions)
+          if (prevPositions && prevPositions.length) {
+            const { error: restoreErr } = await supabase.from("portfolio_positions").insert(prevPositions)
+            if (restoreErr) {
+              setError(`${saveHint(e.message)} — AND the round's previous ${prevPositions.length} Solas position(s) could not be restored (${restoreErr.message}). They are no longer in the database: ${prevPositions.map((pp) => `${pp.fund ?? "no fund"} ${fmtMoney(pp.invested_amount)}`).join(", ")}. Re-enter them before leaving this page, or contact whoever administers Supabase to recover them.`)
+              setSaving(false); return
+            }
+          }
           if (createdNewRound) await supabase.from("portfolio_fundraise_rounds").delete().eq("id", roundId)
           setError(saveHint(e.message)); setSaving(false); return
         }
@@ -563,10 +619,15 @@ function RoundEditor({
           {posList.map((p) => (
             <div key={p._k} className="border border-slate-100 rounded-lg p-2 bg-white space-y-2">
               <div className="grid grid-cols-12 gap-2 items-center">
-                <select value={p.fund} onChange={(e) => setPos(p._k, "fund", e.target.value)} className={`${inputCls} col-span-3`}>
-                  <option value="">Fund…</option>
-                  {funds.map((fd) => <option key={fd} value={fd}>{fd}</option>)}
-                </select>
+                <div className="col-span-3 min-w-0">
+                  <select value={p.fund} onChange={(e) => setPos(p._k, "fund", e.target.value)} className={inputCls}>
+                    <option value="">Fund…</option>
+                    {funds.map((fd) => <option key={fd} value={fd}>{fd}</option>)}
+                  </select>
+                  {p.lookthrough_of && (
+                    <p className="text-[10px] text-slate-400 pl-1 pt-0.5 truncate" title="Look-through interest — kept out of the round's total">via {p.lookthrough_of}</p>
+                  )}
+                </div>
                 <input placeholder="$ invested" value={p.invested_amount} onChange={(e) => setPos(p._k, "invested_amount", e.target.value)} className={`${inputCls} col-span-3`} />
                 <input placeholder="Shares" value={p.shares} onChange={(e) => setPos(p._k, "shares", e.target.value)} className={`${inputCls} col-span-2`} />
                 <input placeholder="Own %" value={p.ownership_pct} onChange={(e) => setPos(p._k, "ownership_pct", e.target.value)} className={`${inputCls} col-span-2`} />

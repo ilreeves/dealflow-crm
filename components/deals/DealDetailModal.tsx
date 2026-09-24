@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { X, Pencil, Trash2, Globe, Building2, User, DollarSign, Tag, Mail, Send, Link, MapPin } from 'lucide-react'
 import { Deal, DEAL_STAGES, STAGE_COLORS } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
-import { useActorName } from '@/lib/useActorName'
+import { useActorName, getActor } from '@/lib/useActorName'
 import { formatDate } from '@/lib/utils'
 import DealForm from './DealForm'
 import { logActivity } from '@/lib/activity'
@@ -63,6 +63,10 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
   }, [initialDeal.id, supabase])
 
   async function handleStageChange(newStage: string, passReason?: string) {
+    // Clicking the pill that's already selected is a no-op — otherwise it
+    // re-stamps stage_entered_at (resetting the aging clock), re-stamps
+    // passed_at, and logs a meaningless "X → X" activity row.
+    if (newStage === deal.stage) return
     if (newStage === 'Passed' && deal.stage !== 'Passed' && !passReason) {
       setShowPassReason(true)
       return
@@ -107,11 +111,11 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
       }
     }
     if (passReason) {
-      const { data: { user } } = await supabase.auth.getUser()
+      const actor = await getActor(supabase)
       await supabase.from('deal_notes').insert({
         deal_id: deal.id,
         content: `Passed: ${passReason}`,
-        author_id: user?.id ?? null,
+        author_id: actor?.id ?? null,
         author_name: actorName,
       })
     }
@@ -237,7 +241,13 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
                   <button
                     key={stage}
                     onClick={() => handleStageChange(stage)}
-                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition ${
+                    // Same gate as Edit: Invested hands `deal` to InvestModal,
+                    // which copies description/website/etc. into the new
+                    // portfolio company — from the slim board row those are
+                    // all undefined and the company would be created blank.
+                    disabled={!hydrated}
+                    title={hydrated ? undefined : 'Loading full deal…'}
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition disabled:opacity-40 ${
                       isActive
                         ? `${sc.bg} ${sc.text} ring-1 ring-current`
                         : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'

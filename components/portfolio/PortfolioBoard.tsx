@@ -262,6 +262,10 @@ export default function PortfolioBoard({ initialCompanies, fundOrder }: Props) {
 
       {selected && (
         <PortfolioCompanyDetail
+          // Keyed by company: the detail seeds useState from its props, so
+          // without a remount, opening another company via Cmd+K while this
+          // modal is open kept showing the previous one.
+          key={selected.id}
           company={selected}
           onClose={() => {
             setSelected(null)

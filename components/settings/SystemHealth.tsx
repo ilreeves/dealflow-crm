@@ -6,6 +6,14 @@ import { createClient } from '@/lib/supabase/client'
 import { LogEvent } from '@/lib/types'
 import { formatDate } from '@/lib/utils'
 
+// Only a genuinely missing table means "run the migration" — PostgREST's
+// schema-cache miss (PGRST205) or Postgres' undefined_table (42P01). Anything
+// else (RLS, network, a bad column) must show its real message, or a
+// transient failure sends someone off to re-run a migration that's fine.
+function isMissingTable(e: { code?: string; message?: string }): boolean {
+  return e.code === 'PGRST205' || e.code === '42P01' || /could not find the table/i.test(e.message ?? '')
+}
+
 // Background failures (activity logging, delete cleanup, deck serving) land in
 // log_events instead of evaporating in Vercel's console. This card is how a
 // human — or a future coding session — finds out something has been quietly
@@ -15,6 +23,7 @@ export default function SystemHealth() {
   const [events, setEvents] = useState<LogEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [tableMissing, setTableMissing] = useState(false)
+  const [loadError, setLoadError] = useState('')
   const [clearing, setClearing] = useState(false)
   const [error, setError] = useState('')
 
@@ -28,8 +37,10 @@ export default function SystemHealth() {
       .then(({ data, error: e }) => {
         if (!active) return
         // Missing table = migration_features_1.sql not run yet; say so rather
-        // than pretending everything is healthy.
-        if (e) setTableMissing(true)
+        // than pretending everything is healthy. Any other error is shown as
+        // itself — "No recorded failures" would be a lie.
+        if (e && isMissingTable(e)) setTableMissing(true)
+        else if (e) setLoadError(e.message)
         setEvents((data as LogEvent[]) ?? [])
         setLoading(false)
       })
@@ -72,6 +83,8 @@ export default function SystemHealth() {
           <p className="text-xs text-amber-700 bg-amber-50 px-3 py-2 rounded-lg">
             The error log table doesn&apos;t exist yet — run supabase/migration_features_1.sql in the SQL Editor.
           </p>
+        ) : loadError ? (
+          <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">Couldn&apos;t load the error log: {loadError}</p>
         ) : events.length === 0 ? (
           <p className="flex items-center gap-2 text-sm text-slate-500">
             <CheckCircle2 className="w-4 h-4 text-green-600" /> No recorded failures.

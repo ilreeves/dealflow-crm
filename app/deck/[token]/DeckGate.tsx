@@ -53,6 +53,8 @@ export default function DeckGate({ token, company, label, expired }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [deckUrl, setDeckUrl] = useState<string | null>(null)
+  const [downloading, setDownloading] = useState(false)
+  const [downloadError, setDownloadError] = useState('')
 
   const name = nameInput ?? saved.name ?? ''
   const email = emailInput ?? saved.email ?? ''
@@ -82,6 +84,33 @@ export default function DeckGate({ token, company, label, expired }: Props) {
       setError('Network error. Please try again.')
     }
     setSubmitting(false)
+  }
+
+  // The URL from submit is only signed for 10 minutes, so reusing it here would
+  // break for anyone who reads the deck for longer than that. Ask for a fresh
+  // one, signed as an attachment (so it downloads rather than opening another
+  // tab). Same name/email as the submit, so the server's view dedupe doesn't
+  // count it as a second view.
+  async function handleDownload() {
+    setDownloading(true)
+    setDownloadError('')
+    try {
+      const res = await fetch(`/api/deck/${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), download: true }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.url) {
+        setDownloadError(data.error || 'Download failed. Please try again.')
+      } else {
+        // Content-Disposition: attachment — the browser saves it and stays here.
+        window.location.assign(data.url as string)
+      }
+    } catch {
+      setDownloadError('Network error. Please try again.')
+    }
+    setDownloading(false)
   }
 
   // Unknown token
@@ -118,15 +147,17 @@ export default function DeckGate({ token, company, label, expired }: Props) {
             <FileText className="w-4 h-4 text-white shrink-0" style={{ color: '#5ba200' }} />
             <p className="text-sm font-medium text-white truncate">{company} — {deckLabel} Deck</p>
           </div>
-          <a
-            href={deckUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            download
-            className="flex items-center gap-1.5 text-xs text-white border border-white/25 hover:bg-white/10 rounded-lg px-2.5 py-1.5 transition shrink-0"
-          >
-            <Download className="w-3.5 h-3.5" /> Download
-          </a>
+          <div className="flex items-center gap-2 shrink-0">
+            {downloadError && <p className="text-xs text-red-300">{downloadError}</p>}
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={downloading}
+              className="flex items-center gap-1.5 text-xs text-white border border-white/25 hover:bg-white/10 rounded-lg px-2.5 py-1.5 transition shrink-0 disabled:opacity-50"
+            >
+              {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} Download
+            </button>
+          </div>
         </div>
         <iframe src={deckUrl} title={`${company} deck`} className="flex-1 w-full border-0" />
       </div>

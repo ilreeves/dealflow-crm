@@ -5,6 +5,14 @@ import { Loader2, Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { MonthlyPitchCount } from '@/lib/types'
 
+// Only a genuinely missing table means "run the migration" — PostgREST's
+// schema-cache miss (PGRST205) or Postgres' undefined_table (42P01). Anything
+// else (RLS, network, a bad column) must show its real message, or a
+// transient failure sends someone off to re-run a migration that's fine.
+function isMissingTable(e: { code?: string; message?: string }): boolean {
+  return e.code === 'PGRST205' || e.code === '42P01' || /could not find the table/i.test(e.message ?? '')
+}
+
 // The top of the dealflow funnel: one number per month from the inbound-pitch
 // email audit (distinct companies, not raw messages). The trailing 13 months
 // are always shown so the current month can be filled in as soon as the audit
@@ -15,6 +23,7 @@ export default function PitchCounts() {
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [tableMissing, setTableMissing] = useState(false)
+  const [loadError, setLoadError] = useState('')
   const [savingKey, setSavingKey] = useState<string | null>(null)
   const [savedKey, setSavedKey] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -40,7 +49,8 @@ export default function PitchCounts() {
       .order('month', { ascending: false })
       .then(({ data, error: e }) => {
         if (!active) return
-        if (e) setTableMissing(true)
+        if (e && isMissingTable(e)) setTableMissing(true)
+        else if (e) setLoadError(e.message)
         const map = new Map<string, MonthlyPitchCount>()
         for (const r of (data as MonthlyPitchCount[]) ?? []) map.set(r.month, r)
         setRows(map)
@@ -83,6 +93,10 @@ export default function PitchCounts() {
           <p className="text-xs text-amber-700 bg-amber-50 px-3 py-2 rounded-lg">
             The pitch-counts table doesn&apos;t exist yet — run supabase/migration_pitch_funnel.sql in the SQL Editor.
           </p>
+        ) : loadError ? (
+          // Not an empty grid: blank months would invite re-entering counts
+          // that are already saved.
+          <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">Couldn&apos;t load pitch counts: {loadError}</p>
         ) : (
           <div className="space-y-1.5">
             {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}

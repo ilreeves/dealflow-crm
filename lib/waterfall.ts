@@ -230,7 +230,8 @@ export function solasProceeds(rows: WaterfallRow[]): number {
 
 /** Solas money in: our slice of each held class's invested basis. Null when a
  * Solas-held class has no basis — a partial cost would flatter the blended
- * multiple and understate the make-whole exit. */
+ * multiple and understate the make-whole exit. Can be exactly 0 (a class
+ * priced at $0 is a real basis), so callers must guard before dividing. */
 export function solasCost(classes: ShareClassWithHoldings[]): number | null {
   let cost = 0
   let any = false

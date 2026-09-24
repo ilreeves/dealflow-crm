@@ -14,6 +14,8 @@ interface Props {
   /** Failed writes surface here — otherwise a dragged bar snapping back looks like a UI bug. */
   onError?: (msg: string) => void
   legacyCompanies: string[]
+  /** Legacy via portfolio_companies.status — Restore can't undo that from here. */
+  statusLegacyCompanies?: string[]
   onToggleLegacy: (name: string, makeLegacy: boolean) => void
 }
 
@@ -48,7 +50,7 @@ function dateQuarterPos(dateStr: string, minYear: number): number {
 const QUARTER_W = 48
 const LABEL_W = 260
 
-export default function CatalystGantt({ catalysts, onUpdated, onDeleted, onError, legacyCompanies, onToggleLegacy }: Props) {
+export default function CatalystGantt({ catalysts, onUpdated, onDeleted, onError, legacyCompanies, statusLegacyCompanies, onToggleLegacy }: Props) {
   // Inverted set: companies default to COLLAPSED, including ones added after
   // mount — seeding a collapsed-set from the initial catalysts left any
   // later-added company expanded while everything else was folded.
@@ -261,13 +263,21 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, onError
                   <span className={`text-xs font-bold uppercase tracking-wide truncate ${isLegacy ? 'text-slate-400' : 'text-slate-700'}`}>{name}</span>
                   <span className="text-xs text-slate-400 font-medium ml-auto">{items.length}</span>
                 </button>
-                <button
-                  onClick={() => onToggleLegacy(name, !isLegacy)}
-                  title={isLegacy ? 'Restore to active' : 'Move to Legacy Companies'}
-                  className="px-2 py-1.5 shrink-0 text-slate-300 hover:text-slate-600 opacity-0 group-hover/co:opacity-100 transition"
-                >
-                  {isLegacy ? <RotateCcw className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
-                </button>
+                {isLegacy && statusLegacyCompanies?.includes(name) ? (
+                  // Legacy because the portfolio status says so — deleting from
+                  // legacy_companies (all Restore does) wouldn't change that.
+                  <span className="px-2 py-1.5 shrink-0 text-[10px] text-slate-400 whitespace-nowrap opacity-0 group-hover/co:opacity-100 transition">
+                    Change status on the Portfolio tab
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => onToggleLegacy(name, !isLegacy)}
+                    title={isLegacy ? 'Restore to active' : 'Move to Legacy Companies'}
+                    className="px-2 py-1.5 shrink-0 text-slate-300 hover:text-slate-600 opacity-0 group-hover/co:opacity-100 transition"
+                  >
+                    {isLegacy ? <RotateCcw className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
+                  </button>
+                )}
               </div>
               <div className="flex-1 h-7 relative">
                 <GridLines totalQuarters={totalQuarters} nowQ={nowQ} />

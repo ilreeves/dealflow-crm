@@ -15,10 +15,14 @@ export function formatBytes(bytes: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
 }
 
-export function formatDate(dateStr: string): string {
+// `timeZone` is for server components: they run in UTC, so a timestamp from
+// an Eastern evening would otherwise print as the next day. Omitted, it keeps
+// the runtime's zone — the browser's local time for client callers.
+export function formatDate(dateStr: string, timeZone?: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
+    ...(timeZone ? { timeZone } : {}),
   })
 }

@@ -15,7 +15,7 @@ import CapTableTab from './CapTableTab'
 import FundraisingTab from './FundraisingTab'
 import RevenueTab from './RevenueTab'
 import RunwayTab from './RunwayTab'
-import { isActive } from '@/lib/runway'
+import { isActive, todayISO } from '@/lib/runway'
 import { useLatestRound } from '@/lib/useLatestRound'
 import InvestorIntrosTab from '@/components/shared/InvestorIntrosTab'
 import FilesSection from '@/components/shared/FilesSection'
@@ -277,6 +277,7 @@ function CatalystsTab({ companyId, companyName }: { companyId: string; companyNa
   const [form, setForm] = useState({ title: '', period: '1Q', year: String(currentYear), notes: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [deleteError, setDeleteError] = useState('')
   const supabase = createClient()
 
   useEffect(() => {
@@ -326,12 +327,21 @@ function CatalystsTab({ companyId, companyName }: { companyId: string; companyNa
   }
 
   async function handleDeleteCatalyst(cat: Catalyst) {
-    await supabase.from('catalysts').delete().eq('id', cat.id)
+    setDeleteError('')
+    // Only drop the row and log the activity once the delete actually landed —
+    // otherwise the feed records a deletion that never happened.
+    const { error: delErr } = await supabase.from('catalysts').delete().eq('id', cat.id)
+    if (delErr) {
+      setDeleteError(`Couldn't delete "${cat.title}": ${delErr.message}`)
+      return
+    }
     setCatalysts((prev) => prev.filter((c) => c.id !== cat.id))
     await logCatalystActivity(cat.company_name, cat.title, 'Catalyst deleted', cat.period)
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  // Local date, not toISOString's UTC one — after 8pm Eastern that was already
+  // tomorrow, so today's catalysts rendered as past.
+  const today = todayISO()
 
   return (
     <div className="space-y-4">
@@ -404,6 +414,8 @@ function CatalystsTab({ companyId, companyName }: { companyId: string; companyNa
           </div>
         </div>
       )}
+
+      {deleteError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{deleteError}</p>}
 
       {loading ? (
         <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>

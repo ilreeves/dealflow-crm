@@ -24,8 +24,19 @@ export async function gatherEntityCleanup(
   entityId: string,
 ): Promise<string[]> {
   const paths: string[] = []
-  const collect = (rows: { storage_path: string | null }[] | null) => {
-    for (const r of rows ?? []) if (r.storage_path) paths.push(r.storage_path)
+  // A failed select means the paths it would have returned are lost once the
+  // cascade runs — those objects orphan in storage. The callers (deal modal,
+  // portfolio detail) don't catch, so throwing here would strand them in their
+  // "deleting…" state; instead each failure is logged loudly enough to find
+  // the orphans later, and the delete proceeds with whatever was gathered.
+  const collect = (
+    label: string,
+    res: { data: { storage_path: string | null }[] | null; error: { message: string } | null },
+  ) => {
+    if (res.error) {
+      logError('cleanup', `${label} select failed for ${entityType} ${entityId} — its storage objects will be orphaned: ${res.error.message}`, supabase)
+    }
+    for (const r of res.data ?? []) if (r.storage_path) paths.push(r.storage_path)
   }
 
   if (entityType === 'deal') {
@@ -33,15 +44,18 @@ export async function gatherEntityCleanup(
       supabase.from('deal_files').select('storage_path').eq('deal_id', entityId),
       supabase.from('deal_meetings').select('id').eq('deal_id', entityId),
     ])
-    collect(files.data)
+    collect('deal_files', files)
+    if (meetings.error) {
+      logError('cleanup', `deal_meetings select failed for deal ${entityId} — meeting files will be orphaned: ${meetings.error.message}`, supabase)
+    }
     const meetingIds = (meetings.data ?? []).map((m: { id: string }) => m.id)
     if (meetingIds.length) {
       const mf = await supabase.from('meeting_files').select('storage_path').in('meeting_id', meetingIds)
-      collect(mf.data)
+      collect('meeting_files', mf)
     }
   } else {
     const files = await supabase.from('portfolio_files').select('storage_path').eq('company_id', entityId)
-    collect(files.data)
+    collect('portfolio_files', files)
   }
 
   const decks = await supabase
@@ -49,7 +63,7 @@ export async function gatherEntityCleanup(
     .select('storage_path')
     .eq('entity_type', entityType)
     .eq('entity_id', entityId)
-  collect(decks.data)
+  collect('company_decks', decks)
 
   return paths
 }

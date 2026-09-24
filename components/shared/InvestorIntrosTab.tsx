@@ -23,6 +23,9 @@ export default function InvestorIntrosTab({ table, fkColumn, entityId }: Props) 
   const [intros, setIntros] = useState<InvestorIntro[]>([])
   const [contacts, setContacts] = useState<InvestorContact[]>([])
   const [loadedKey, setLoadedKey] = useState<string | null>(null)
+  // Set alongside loadedKey so it always describes the entity on screen. A
+  // failed load must not read as "No investor introductions logged yet".
+  const [loadError, setLoadError] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ investor_name: '', investor_firm: '', contact_email: '', intro_date: '', status: 'Introduced', notes: '' })
   const [saving, setSaving] = useState(false)
@@ -38,9 +41,10 @@ export default function InvestorIntrosTab({ table, fkColumn, entityId }: Props) 
     let cancelled = false
     supabase.from(table).select('*').eq(fkColumn, entityId)
       .order('intro_date', { ascending: false })
-      .then(({ data }) => {
+      .then(({ data, error: e }) => {
         if (cancelled) return
         setIntros((data as InvestorIntro[]) ?? [])
+        setLoadError(e ? e.message : '')
         setLoadedKey(entityKey)
       })
     supabase.from('investor_contacts').select('*').order('name')
@@ -226,6 +230,8 @@ export default function InvestorIntrosTab({ table, fkColumn, entityId }: Props) 
 
       {loading ? (
         <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+      ) : loadError ? (
+        <p className="text-center text-sm text-red-600 py-6">Couldn&apos;t load investor introductions: {loadError}</p>
       ) : intros.length === 0 ? (
         <p className="text-center text-sm text-slate-400 py-6">No investor introductions logged yet</p>
       ) : (

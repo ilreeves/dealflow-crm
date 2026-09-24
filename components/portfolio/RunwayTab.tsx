@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Plus, Trash2, Loader2, Pencil, Wallet } from "lucide-react"
 import { PortfolioCash, PortfolioCashForecast, BURN_BASES, CASH_SOURCES } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
+import { getActor } from "@/lib/useActorName"
 import { parseNum, numToStr, numError, fmtMoney, saveHint, exactDate, inputCls } from "@/lib/rounds"
 import {
   RUNWAY_COLORS,
@@ -67,20 +68,22 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data, error: e } = await supabase
-      .from("portfolio_cash")
-      .select("*")
-      .eq("company_id", companyId)
-      .order("as_of", { ascending: false })
-    if (e) setError(saveHint(e.message))
-    setRows(sortCash((data as PortfolioCash[]) ?? []))
     // Projections live in their own table so they can never be picked up by the
     // runway helpers — see supabase/migration_cash_forecast.sql. A missing table
     // (migration not yet run) is not an error worth blocking the tab over.
-    const { data: fc } = await supabase
-      .from("portfolio_cash_forecast")
-      .select("*")
-      .eq("company_id", companyId)
+    const [{ data, error: e }, { data: fc }] = await Promise.all([
+      supabase
+        .from("portfolio_cash")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("as_of", { ascending: false }),
+      supabase
+        .from("portfolio_cash_forecast")
+        .select("*")
+        .eq("company_id", companyId),
+    ])
+    if (e) setError(saveHint(e.message))
+    setRows(sortCash((data as PortfolioCash[]) ?? []))
     setForecast((fc as PortfolioCashForecast[]) ?? [])
     setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -116,15 +119,15 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
     if (!rwRow || !mismatch) return
     setAcking(true)
     setAckError("")
-    const { data: u } = await supabase.auth.getUser()
+    const uid = (await getActor(supabase))?.id ?? null // session-cached; no Auth round-trip
     const { error: e } = await supabase
       .from("portfolio_cash")
       .update({
         mismatch_ack_pct: mismatch.pct,
         mismatch_ack_note: ackNote.trim() || null,
         mismatch_acked_at: new Date().toISOString(),
-        mismatch_acked_by: u.user?.id ?? null,
-        updated_by: u.user?.id ?? null,
+        mismatch_acked_by: uid,
+        updated_by: uid,
         updated_at: new Date().toISOString(),
       })
       .eq("id", rwRow.id)
@@ -864,8 +867,7 @@ function CashEditor({
     setError("")
     // Stamp WHO, not just when. A Basking figure was changed by an unidentified
     // hand and only the timestamp survived — see supabase/migration_runway_audit.sql.
-    const { data: auth } = await supabase.auth.getUser()
-    const uid = auth?.user?.id ?? null
+    const uid = (await getActor(supabase))?.id ?? null // session-cached; no Auth round-trip
     const payload = {
       company_id: companyId,
       as_of: f.as_of,

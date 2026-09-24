@@ -21,10 +21,17 @@ export default function CatalystEditModal({ catalyst, onClose, onSaved, onDelete
   const [error, setError] = useState('')
 
   const [periodPart, yearPart] = (catalyst.period ?? '').split(' ')
+  // A null or free-text period ("Mid-2026", a bare date) can't be shown in the
+  // select, so the form falls back to 2Q. That fallback must not be SAVED
+  // unless the user actually touches the timing — otherwise editing only the
+  // status of a date-based catalyst silently re-dated it to 2Q.
+  const periodRecognised = PERIODS.includes(periodPart as typeof PERIODS[number])
+  const initialPeriod = periodRecognised ? periodPart : '2Q'
+  const initialYear = yearPart || catalyst.catalyst_date.slice(0, 4)
   const [form, setForm] = useState({
     title: catalyst.title,
-    period: PERIODS.includes(periodPart as typeof PERIODS[number]) ? periodPart : '2Q',
-    year: yearPart || catalyst.catalyst_date.slice(0, 4),
+    period: initialPeriod,
+    year: initialYear,
     status: catalyst.status ?? 'Pending',
     resolved_date: catalyst.resolved_date ?? '',
     notes: catalyst.notes ?? '',
@@ -32,14 +39,14 @@ export default function CatalystEditModal({ catalyst, onClose, onSaved, onDelete
 
   async function handleSave() {
     if (!form.title.trim()) return
+    const writeTiming = periodRecognised || form.period !== initialPeriod || form.year !== initialYear
     const year = parseInt(form.year, 10)
-    if (!year || year < 2000 || year > 2100) return
+    if (writeTiming && (!year || year < 2000 || year > 2100)) return
     setSaving(true)
     setError('')
     const { data, error: e } = await supabase.from('catalysts').update({
       title: form.title.trim(),
-      period: `${form.period} ${year}`,
-      catalyst_date: periodEnd(form.period, year),
+      ...(writeTiming ? { period: `${form.period} ${year}`, catalyst_date: periodEnd(form.period, year) } : {}),
       status: form.status,
       resolved_date: form.resolved_date || null,
       notes: form.notes.trim() || null,
@@ -95,6 +102,11 @@ export default function CatalystEditModal({ catalyst, onClose, onSaved, onDelete
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white">
                 {PERIODS.map((p) => <option key={p} value={p}>{p === 'FY' ? 'Full Year' : p}</option>)}
               </select>
+              {!periodRecognised && (
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Currently {catalyst.period ? `“${catalyst.period}”` : catalyst.catalyst_date} — kept unless you change timing.
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-xs text-slate-500 mb-1">Year</label>

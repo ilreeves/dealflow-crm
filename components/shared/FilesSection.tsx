@@ -6,6 +6,8 @@ import { StoredFile, CompanyDeck } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { formatBytes, formatDate } from '@/lib/utils'
 import PdfViewer from '@/components/deals/PdfViewer'
+import { logError } from '@/lib/log'
+import { safeStorageName } from '@/lib/storage'
 
 // Documents for a deal or a portfolio company, in one component because the two
 // are the same list with a different foreign key.
@@ -36,9 +38,11 @@ function isPdf(f: StoredFile) {
 //
 // The portfolio prefix matches the one DecksSection already uses, so a company's
 // objects stay together under one path whichever feature put them there.
+// The key uses a sanitized name (Storage rejects en-dashes, accents, …); the
+// row's `name` column keeps the original for display.
 function storagePath(entityType: Props['entityType'], entityId: string, fileName: string) {
   const prefix = entityType === 'deal' ? entityId : `portfolio/${entityId}`
-  return `${prefix}/${Date.now()}-${fileName}`
+  return `${prefix}/${Date.now()}-${safeStorageName(fileName)}`
 }
 
 export default function FilesSection({ entityType, entityId }: Props) {
@@ -46,6 +50,9 @@ export default function FilesSection({ entityType, entityId }: Props) {
   const [decks, setDecks] = useState<StoredFile[]>([])
   const [uploading, setUploading] = useState(false)
   const [loadedId, setLoadedId] = useState<string | null>(null)
+  // Set alongside loadedId, so it always describes the entity on screen. A
+  // failed load must not read as "No files uploaded yet".
+  const [loadError, setLoadError] = useState('')
   const [error, setError] = useState('')
   const [isDragging, setIsDragging] = useState(false)
   const [viewing, setViewing] = useState<StoredFile | null>(null)
@@ -67,6 +74,8 @@ export default function FilesSection({ entityType, entityId }: Props) {
         .order('sort_order', { ascending: true }),
     ]).then(([f, d]) => {
       if (cancelled) return
+      const loadErr = f.error ?? d.error
+      setLoadError(loadErr ? loadErr.message : '')
       setFiles((f.data as StoredFile[]) ?? [])
       setDecks(
         ((d.data as CompanyDeck[]) ?? []).map((deck) => ({
@@ -158,7 +167,10 @@ export default function FilesSection({ entityType, entityId }: Props) {
     // failed delete never leaves a live record pointing at a missing file.
     const { error: delError } = await supabase.from(TABLE[entityType]).delete().eq('id', file.id)
     if (delError) { setError(`Failed to delete ${file.name}: ${delError.message}`); return }
-    await supabase.storage.from('deal-files').remove([file.storage_path])
+    // The record is gone either way; a failed remove only orphans the object,
+    // so log it for System Health instead of failing the delete.
+    const { error: rmErr } = await supabase.storage.from('deal-files').remove([file.storage_path])
+    if (rmErr) logError('files', `delete: couldn't remove ${file.storage_path}: ${rmErr.message}`, supabase)
     setFiles((prev) => prev.filter((f) => f.id !== file.id))
   }
 
@@ -208,6 +220,8 @@ export default function FilesSection({ entityType, entityId }: Props) {
         <div className="flex items-center justify-center py-8 text-slate-400">
           <Loader2 className="w-5 h-5 animate-spin" />
         </div>
+      ) : loadError ? (
+        <p className="text-center text-sm text-red-600 py-6">Couldn&apos;t load files: {loadError}</p>
       ) : shown.length === 0 ? (
         <p className="text-center text-sm text-slate-400 py-6">No files uploaded yet</p>
       ) : (

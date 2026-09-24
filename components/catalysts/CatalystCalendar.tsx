@@ -18,7 +18,19 @@ interface Props {
   /** Portfolio-company name → id, for stamping the FK on new catalysts. */
   portfolioIdByName?: Record<string, string>
   initialLegacy: string[]
+  /** Subset of initialLegacy that's Legacy because portfolio_companies.status
+   *  says so (Legacy/Exited) — not reversible from here, only on the Portfolio tab. */
+  statusLegacy?: string[]
   initialDismissed: string[]
+}
+
+// Keep the list chronological after an edit or a gantt drag re-dates a row —
+// replacing in place left the year groups (built in array order) out of order.
+function byDate(a: Catalyst, b: Catalyst): number {
+  return a.catalyst_date.localeCompare(b.catalyst_date)
+}
+function replaceSorted(list: Catalyst[], updated: Catalyst): Catalyst[] {
+  return list.map((x) => x.id === updated.id ? updated : x).sort(byDate)
 }
 
 // Pure: shifts a YYYY-MM-DD string by whole days without reading the clock.
@@ -35,7 +47,7 @@ function periodLabel(c: Catalyst): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-export default function CatalystCalendar({ today, initialCatalysts, companyNames, initialLegacy, initialDismissed, portfolioIdByName }: Props) {
+export default function CatalystCalendar({ today, initialCatalysts, companyNames, initialLegacy, statusLegacy, initialDismissed, portfolioIdByName }: Props) {
   const [catalysts, setCatalysts] = useState<Catalyst[]>(initialCatalysts)
   const [legacy, setLegacy] = useState<string[]>(initialLegacy)
   // Collapsed by default — the reminder bar is a summary you open when you want it.
@@ -111,7 +123,7 @@ export default function CatalystCalendar({ today, initialCatalysts, companyNames
       setSaving(false)
       return
     }
-    setCatalysts((prev) => [...prev, data as Catalyst].sort((a, b) => a.catalyst_date.localeCompare(b.catalyst_date)))
+    setCatalysts((prev) => [...prev, data as Catalyst].sort(byDate))
     await logCatalystActivity(form.company_name.trim(), form.title.trim(), 'Catalyst added', `${form.period} ${year}`)
     setForm({ company_name: '', title: '', period: '1Q', year: String(currentYear), status: 'Pending', notes: '' })
     setNewCompany(false)
@@ -129,6 +141,12 @@ export default function CatalystCalendar({ today, initialCatalysts, companyNames
         setActionError(`Couldn't move ${name} to legacy: ${e.message}`)
       }
     } else {
+      // Deleting from the roster can't undo a Legacy/Exited portfolio status —
+      // it would "restore" locally and snap back on the next load.
+      if (statusLegacy?.includes(name)) {
+        setActionError(`${name} is Legacy because of its portfolio status — change status on the Portfolio tab.`)
+        return
+      }
       setLegacy((prev) => prev.filter((n) => n !== name))
       const { error: e } = await supabase.from('legacy_companies').delete().eq('company_name', name)
       if (e) {
@@ -406,7 +424,7 @@ export default function CatalystCalendar({ today, initialCatalysts, companyNames
             <p className="text-sm text-slate-400">No catalysts yet — add data readouts, FDA decisions, fundraise closes, and other key timing.</p>
           </div>
         ) : view === 'gantt' ? (
-          <CatalystGantt catalysts={catalysts} onUpdated={(updated) => setCatalysts((prev) => prev.map((x) => x.id === updated.id ? updated : x))} onDeleted={handleDelete} onError={setActionError} legacyCompanies={legacy} onToggleLegacy={toggleLegacy} />
+          <CatalystGantt catalysts={catalysts} onUpdated={(updated) => setCatalysts((prev) => replaceSorted(prev, updated))} onDeleted={handleDelete} onError={setActionError} legacyCompanies={legacy} statusLegacyCompanies={statusLegacy} onToggleLegacy={toggleLegacy} />
         ) : (
           groups.map(({ key, items }) => (
             <div key={key} className="mb-8">
@@ -488,7 +506,7 @@ export default function CatalystCalendar({ today, initialCatalysts, companyNames
       <CatalystEditModal
         catalyst={editingCatalyst}
         onClose={() => setEditingCatalyst(null)}
-        onSaved={(u) => setCatalysts((prev) => prev.map((x) => x.id === u.id ? u : x))}
+        onSaved={(u) => setCatalysts((prev) => replaceSorted(prev, u))}
         onDeleted={(id) => setCatalysts((prev) => prev.filter((x) => x.id !== id))}
       />
     )}

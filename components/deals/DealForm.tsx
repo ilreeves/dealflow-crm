@@ -7,6 +7,10 @@ import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
 import { fetchListOptions, ABMS_SPECIALTIES, FALLBACK_LISTS, ListKey } from '@/lib/listOptions'
 import { addDealToPortfolio } from '@/lib/portfolio'
+import { getActor } from '@/lib/useActorName'
+import { todayISO } from '@/lib/runway'
+import { logError } from '@/lib/log'
+import { safeStorageName } from '@/lib/storage'
 
 interface Props {
   deal?: Deal
@@ -50,7 +54,8 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
   const [lists, setLists] = useState<Record<ListKey, string[]> | null>(null)
   const [deckFile, setDeckFile] = useState<File | null>(null)
   const [deckLabel, setDeckLabel] = useState('')
-  const [dateAdded, setDateAdded] = useState(new Date().toISOString().slice(0, 10))
+  // Local date — toISOString() is UTC, so after 8pm Eastern it's tomorrow.
+  const [dateAdded, setDateAdded] = useState(todayISO())
   const [sourceOptions, setSourceOptions] = useState<string[]>([])
   // Set once the INSERT succeeds. If a later step (deck upload, portfolio
   // mirror) fails and the user hits Save again, the retry must take the
@@ -159,6 +164,14 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
       description: form.description || null,
       custom_fields: form.custom_fields,
       ...(stageChanged ? { stage_entered_at: effectiveDate } : {}),
+      // Same pass bookkeeping as DealDetailModal's stage pills — without it,
+      // passing from this form left passed_at null (no "Passed" banner, no
+      // pass date on the analytics) and moving back out left a stale reason.
+      ...(stageChanged
+        ? form.stage === 'Passed'
+          ? { pass_reason: passReason.trim() || existing?.pass_reason || null, passed_at: effectiveDate }
+          : { pass_reason: null, passed_at: null }
+        : {}),
       ...(!existing ? { created_at: effectiveDate } : {}),
     }
 
@@ -176,18 +189,30 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
     }
 
     const saved = result.data as Deal
+    // Cached per session (lib/useActorName) — no auth round-trip per save.
+    const actor = await getActor(supabase)
+    const actorName = actor?.name ?? null
     if (!existing) {
       createdRef.current = saved
-      await logActivity(saved.id, saved.name, 'Deal added', `Stage: ${saved.stage}`)
+      await logActivity(saved.id, saved.name, 'Deal added', `Stage: ${saved.stage}`, actorName)
     } else if (stageChanged) {
       const details = passReason.trim() ? `${existing.stage} \u2192 ${form.stage}: ${passReason.trim()}` : `${existing.stage} \u2192 ${form.stage}`
-      await logActivity(saved.id, saved.name, 'Stage changed', details)
+      await logActivity(saved.id, saved.name, 'Stage changed', details, actorName)
+    }
+    // The public deck page and view digest read company_decks.company_name, not
+    // the deal — without this a renamed deal keeps its old name on share links.
+    // Keyed by entity like PortfolioCompanyForm's rename. Non-blocking: the deal
+    // itself saved, and a stale deck title isn't worth failing the save over.
+    if (existing && existing.name !== saved.name) {
+      const { error: deckRenameErr } = await supabase.from('company_decks').update({ company_name: saved.name })
+        .eq('entity_type', 'deal').eq('entity_id', saved.id)
+      if (deckRenameErr) logError('deals', `rename: couldn't update deck company_name for ${saved.id}: ${deckRenameErr.message}`, supabase)
     }
     // Attach the optional non-con deck now that the deal (and its id) exists.
     // Keyed on `deal` (not `existing`) so a retry after a later failure still
     // attaches it; cleared on success so the retry can't attach it twice.
     if (!deal && deckFile) {
-      const storagePath = `${saved.id}/noncon-deck/${Date.now()}-${deckFile.name}`
+      const storagePath = `${saved.id}/noncon-deck/${Date.now()}-${safeStorageName(deckFile.name)}`
       const { error: upErr } = await supabase.storage.from('deal-files').upload(storagePath, deckFile)
       if (upErr) {
         setError(`${saved.name} was saved, but the deck failed to upload: ${upErr.message}. Add it again from the Decks section.`)
@@ -219,15 +244,14 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
         setLoading(false)
         return
       }
-      await logActivity(saved.id, saved.name, 'Added to portfolio', 'Auto-added on move to Invested')
+      await logActivity(saved.id, saved.name, 'Added to portfolio', 'Auto-added on move to Invested', actorName)
     }
     if (passReasonRequired && passReason.trim()) {
-      const { data: { user } } = await supabase.auth.getUser()
       await supabase.from('deal_notes').insert({
         deal_id: saved.id,
         content: `Passed: ${passReason.trim()}`,
-        author_id: user?.id ?? null,
-        author_name: null,
+        author_id: actor?.id ?? null,
+        author_name: actorName,
       })
     }
     onSaved(saved)

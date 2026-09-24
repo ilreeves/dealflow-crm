@@ -55,6 +55,12 @@ export async function proxy(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/forgot-password")
 
   if (!user && !isPublicRoute) {
+    // API callers do `await res.json()` — redirecting them to the /login HTML
+    // makes that throw an opaque parse error instead of "session expired".
+    // (The public /api/deck/ routes returned early above.)
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Not signed in" }, { status: 401 })
+    }
     const url = request.nextUrl.clone()
     url.pathname = "/login"
     return NextResponse.redirect(url)

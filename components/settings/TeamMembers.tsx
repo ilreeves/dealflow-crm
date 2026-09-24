@@ -11,11 +11,18 @@ export default function TeamMembers() {
   const [members, setMembers] = useState<Member[]>([])
   const [meId, setMeId] = useState('')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => setMeId(user?.id ?? ''))
+    // Only the id is needed for the "(you)" tag — getClaims() reads it from the
+    // locally-verified JWT instead of getUser()'s Auth-server round-trip.
+    supabase.auth.getClaims().then(({ data }) => setMeId(data?.claims?.sub ?? ''))
     supabase.from('profiles').select('id,full_name').order('full_name')
-      .then(({ data }) => { setMembers((data as Member[]) ?? []); setLoading(false) })
+      .then(({ data, error }) => {
+        setMembers((data as Member[]) ?? [])
+        setLoadError(error ? error.message : '')
+        setLoading(false)
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -23,10 +30,13 @@ export default function TeamMembers() {
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100">
         <h2 className="text-sm font-semibold text-slate-900">Team Members</h2>
-        <p className="text-xs text-slate-500 mt-0.5">{members.length} {members.length === 1 ? 'person' : 'people'} with access</p>
+        {/* A failed load isn't "0 people with access". */}
+        {!loadError && <p className="text-xs text-slate-500 mt-0.5">{members.length} {members.length === 1 ? 'person' : 'people'} with access</p>}
       </div>
       {loading ? (
         <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+      ) : loadError ? (
+        <p className="px-5 py-6 text-sm text-red-600">Couldn&apos;t load team members: {loadError}</p>
       ) : (
         <div className="divide-y divide-slate-100">
           {members.map((m) => (

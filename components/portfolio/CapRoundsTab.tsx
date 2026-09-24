@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Plus, Trash2, Loader2, Pencil, TrendingUp } from "lucide-react"
 import { PortfolioFundraiseRound, PortfolioPosition, PortfolioValuationMark, VALUATION_BASES } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
-import { parseNum, numToStr, fmtMoney, fmtPct, saveHint, exactDate, valueColor, inputCls } from "@/lib/rounds"
+import { parseNum, numError, numToStr, fmtMoney, fmtPct, saveHint, exactDate, valueColor, inputCls } from "@/lib/rounds"
 import { latestValuation, positionValue } from "@/lib/portfolio"
 import Field from "@/components/shared/Field"
 
@@ -20,6 +20,7 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
   const [addingMark, setAddingMark] = useState(false)
   const [editingMarkId, setEditingMarkId] = useState<string | null>(null)
   const [markError, setMarkError] = useState("")
+  const [loadError, setLoadError] = useState("")
 
   useEffect(() => {
     load()
@@ -28,11 +29,15 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
 
   async function load() {
     setLoading(true)
-    const [{ data: rd }, { data: ps }, { data: mk }] = await Promise.all([
+    const [{ data: rd, error: rdErr }, { data: ps, error: psErr }, { data: mk, error: mkErr }] = await Promise.all([
       supabase.from("portfolio_fundraise_rounds").select("*").eq("company_id", companyId).order("date", { ascending: false }),
       supabase.from("portfolio_positions").select("*").eq("company_id", companyId),
       supabase.from("portfolio_valuation_marks").select("*").eq("company_id", companyId).order("as_of_date", { ascending: false }),
     ])
+    // A failed read must not render as "$0 invested" — it reads as real data.
+    // Same treatment as the cap table below.
+    const readErr = rdErr ?? psErr ?? mkErr
+    setLoadError(readErr ? readErr.message : "")
     setRounds((rd as PortfolioFundraiseRound[]) ?? [])
     setPositions((ps as PortfolioPosition[]) ?? [])
     setMarks((mk as PortfolioValuationMark[]) ?? [])
@@ -81,6 +86,7 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
 
   return (
     <div className="space-y-4">
+      {loadError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">Couldn&apos;t load rounds, positions or marks — the figures below are incomplete ({loadError}).</p>}
       {/* Position stat cards */}
       <div className="grid grid-cols-4 gap-2.5">
         <Stat label="Invested" value={fmtMoney(totalInvested)} />
@@ -179,6 +185,9 @@ function MarkEditor({
 
   async function save() {
     if (!f.valuation.trim()) { setError("Enter a valuation amount."); return }
+    // Required field, so an unreadable value would save a mark with no number.
+    const numIssue = numError("Valuation", f.valuation)
+    if (numIssue) { setError(numIssue); return }
     setSaving(true)
     setError("")
     const payload = {

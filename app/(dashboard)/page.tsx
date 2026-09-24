@@ -16,7 +16,7 @@ export default async function PipelinePage() {
   const supabase = await createClient()
 
   const since = new Date(new Date().getTime() - 14 * 86_400_000).toISOString()
-  const [res, viewsRes] = await Promise.all([
+  const [res, viewsRes, decksRes] = await Promise.all([
     supabase.from('deals').select(BOARD_COLUMNS).order('created_at', { ascending: false }),
     // The digest is auxiliary — coalesced rather than thrown so a hiccup here
     // can't take the whole pipeline down with it.
@@ -26,6 +26,10 @@ export default async function PipelinePage() {
       .gte('viewed_at', since)
       .order('viewed_at', { ascending: false })
       .limit(20),
+    // Labels for the digest. Fetched alongside rather than after the views (as
+    // an .in(tokens) lookup) to save a serial round-trip — the shared-deck
+    // list is a handful of rows.
+    supabase.from('company_decks').select('token,label').not('token', 'is', null),
   ])
 
   const deals = rowsOrThrow(res as { data: Deal[] | null; error: { message: string } | null }, 'the pipeline')
@@ -35,13 +39,9 @@ export default async function PipelinePage() {
     viewer_name: string | null; viewer_email: string | null; viewed_at: string
   }[]
   // Attach each view's deck label (a company can have several decks out).
-  const tokens = Array.from(new Set(viewRows.map((v) => v.token)))
   const labelByToken = new Map<string, string>()
-  if (tokens.length) {
-    const { data: decks } = await supabase.from('company_decks').select('token,label').in('token', tokens)
-    for (const d of (decks ?? []) as { token: string | null; label: string | null }[]) {
-      if (d.token && d.label) labelByToken.set(d.token, d.label)
-    }
+  for (const d of (decksRes.data ?? []) as { token: string | null; label: string | null }[]) {
+    if (d.token && d.label) labelByToken.set(d.token, d.label)
   }
   const deckViews = viewRows.map((v) => ({
     id: v.id,

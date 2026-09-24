@@ -6,7 +6,8 @@ import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea
 import { Plus, LayoutList, Columns3, ChevronRight } from 'lucide-react'
 import { Deal, DealStage, DEAL_STAGES, STAGE_COLORS } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
-import { useActorName } from '@/lib/useActorName'
+import { useActorName, getActor } from '@/lib/useActorName'
+import { useServerState } from '@/lib/useServerState'
 import { logActivity } from '@/lib/activity'
 import { addDealToPortfolio } from '@/lib/portfolio'
 import DealCard from './DealCard'
@@ -23,7 +24,12 @@ interface Props {
 }
 
 export default function PipelineBoard({ initialDeals, deckViews }: Props) {
-  const [deals, setDeals] = useState<Deal[]>(initialDeals)
+  // useServerState, not useState: global search opens a deal with
+  // router.push('/?open=<id>'), which re-renders the server page with fresh
+  // rows. A plain useState snapshot discarded them, so a deal added since this
+  // board mounted could never be opened from search (the modal below only
+  // renders for ids present in `deals`).
+  const [deals, setDeals] = useServerState<Deal[]>(initialDeals)
   const [showForm, setShowForm] = useState(false)
   const [view, setView] = useState<'board' | 'list'>('board')
   const [search, setSearch] = useState('')
@@ -85,8 +91,11 @@ export default function PipelineBoard({ initialDeals, deckViews }: Props) {
 
     const { error: updErr } = await supabase.from('deals').update({ stage: newStage, stage_entered_at: now, ...(newStage === 'Passed' ? { pass_reason: passReason ?? null, passed_at: now } : { pass_reason: null, passed_at: null }) }).eq('id', dealId)
     if (updErr) {
-      // Roll back the optimistic move so the board matches the database.
-      setDeals((prev) => prev.map((d) => d.id === dealId ? deal : d))
+      // Roll back the optimistic move so the board matches the database — but
+      // only if the row still carries THIS move's stamp. If a later drag has
+      // since moved it (and succeeded), restoring our pre-move snapshot would
+      // put the card back in a column the database no longer agrees with.
+      setDeals((prev) => prev.map((d) => d.id === dealId && d.stage === newStage && d.stage_entered_at === now ? deal : d))
       setMoveError(`Couldn't move ${deal.name}: ${updErr.message}`)
       return
     }
@@ -103,15 +112,15 @@ export default function PipelineBoard({ initialDeals, deckViews }: Props) {
     }
 
     if (passReason) {
-      const { data: { user } } = await supabase.auth.getUser()
+      const actor = await getActor(supabase)
       await supabase.from('deal_notes').insert({
         deal_id: dealId,
         content: `Passed: ${passReason}`,
-        author_id: user?.id ?? null,
+        author_id: actor?.id ?? null,
         author_name: actorName,
       })
     }
-  }, [supabase, deals, actorName])
+  }, [supabase, deals, actorName, setDeals])
 
   const handleDragEnd = useCallback((result: DropResult) => {
     const { destination, source, draggableId } = result
@@ -143,11 +152,11 @@ export default function PipelineBoard({ initialDeals, deckViews }: Props) {
 
   const handleDealUpdated = useCallback((updated: Deal) => {
     setDeals((prev) => prev.map((d) => d.id === updated.id ? updated : d))
-  }, [])
+  }, [setDeals])
 
   const handleDealDeleted = useCallback((id: string) => {
     setDeals((prev) => prev.filter((d) => d.id !== id))
-  }, [])
+  }, [setDeals])
 
   return (
     <div className="flex flex-col h-full">

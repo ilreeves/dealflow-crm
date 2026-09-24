@@ -4,6 +4,10 @@ import { DealActivity, CatalystActivity } from '@/lib/types'
 import { formatDate } from '@/lib/utils'
 import { ArrowRight, Plus, CalendarDays, Trash2, Pencil, CheckCircle2, Clock } from 'lucide-react'
 
+// This page renders on a UTC server — without an explicit zone, anything logged
+// after 8pm Eastern was grouped (and dated) under the following day.
+const TZ = 'America/New_York'
+
 function timeAgo(dateStr: string): string {
   const secs = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
   if (secs < 60) return 'just now'
@@ -13,13 +17,13 @@ function timeAgo(dateStr: string): string {
   if (hours < 24) return `${hours}h ago`
   const days = Math.floor(hours / 24)
   if (days < 7) return `${days}d ago`
-  return formatDate(dateStr)
+  return formatDate(dateStr, TZ)
 }
 
 function groupByDate<T extends { created_at: string }>(items: T[]): [string, T[]][] {
   const groups: Record<string, T[]> = {}
   for (const a of items) {
-    const key = new Date(a.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    const key = new Date(a.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: TZ })
     if (!groups[key]) groups[key] = []
     groups[key].push(a)
   }
