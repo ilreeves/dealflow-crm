@@ -22,8 +22,9 @@ import FilesSection from '@/components/shared/FilesSection'
 import DecksSection from '@/components/shared/DecksSection'
 import ClinicalContextSection from '@/components/shared/ClinicalContextSection'
 import KnownCompetitors from '@/components/shared/KnownCompetitors'
+import ChangeHistory from '@/components/shared/ChangeHistory'
 
-type Tab = 'overview' | 'fundraising' | 'rounds' | 'revenue' | 'runway' | 'catalysts' | 'files'
+type Tab = 'overview' | 'fundraising' | 'rounds' | 'revenue' | 'runway' | 'catalysts' | 'files' | 'history'
 
 interface Props {
   company: PortfolioCompany
@@ -67,6 +68,22 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
     onClose()
   }
 
+  // An undo can change the company row itself (funds tags, status, the
+  // revenue roster) — the other tabs refetch on mount, but this row came in
+  // as a prop. An undo that removed the company (undoing its creation)
+  // leaves nothing to show.
+  async function handleUndone() {
+    const { data, error } = await supabase.from('portfolio_companies').select('*').eq('id', company.id).maybeSingle()
+    if (error) return
+    if (!data) {
+      onDeleted(company.id)
+      onClose()
+      return
+    }
+    setCompany(data as PortfolioCompany)
+    onUpdated(data as PortfolioCompany)
+  }
+
   function handleUpdated(updated: PortfolioCompany) {
     setCompany(updated)
     onUpdated(updated)
@@ -96,6 +113,8 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
     // point it starts producing the most of them. Unconditional: unlike Revenue
     // and Runway there is no roster or status that makes documents not apply.
     { key: 'files', label: 'Files' },
+    // Every change to this company's money tables, each edit undoable.
+    { key: 'history', label: 'History' },
   ]
 
   return (
@@ -164,6 +183,7 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
             {tab === 'runway' && <RunwayTab companyId={company.id} />}
             {tab === 'catalysts' && <CatalystsTab companyId={company.id} companyName={company.name} />}
             {tab === 'files' && <FilesSection entityType="portfolio" entityId={company.id} />}
+            {tab === 'history' && <ChangeHistory companyId={company.id} onUndone={handleUndone} />}
           </div>
         </div>
       </div>

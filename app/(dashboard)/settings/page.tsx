@@ -11,6 +11,7 @@ import InvestorDirectory from '@/components/settings/InvestorDirectory'
 import DataExport from '@/components/settings/DataExport'
 import SystemHealth from '@/components/settings/SystemHealth'
 import PitchCounts from '@/components/settings/PitchCounts'
+import ChangeHistory from '@/components/shared/ChangeHistory'
 import PageHeader from '@/components/shared/PageHeader'
 import InfoTip from '@/components/shared/InfoTip'
 
@@ -283,6 +284,11 @@ export default function SettingsPage() {
       <PitchCounts />
       <DataExport />
       <SystemHealth />
+      {/* Every company's history, including deleted ones — the only way to
+          restore a company whose modal no longer exists. */}
+      <div className="bg-white rounded-2xl border border-slate-200 px-5 py-4">
+        <ChangeHistory limit={100} />
+      </div>
 
       </div>
       </div>
