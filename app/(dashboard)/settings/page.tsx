@@ -12,6 +12,7 @@ import DataExport from '@/components/settings/DataExport'
 import SystemHealth from '@/components/settings/SystemHealth'
 import PitchCounts from '@/components/settings/PitchCounts'
 import PageHeader from '@/components/shared/PageHeader'
+import InfoTip from '@/components/shared/InfoTip'
 
 const FIELD_TYPES: { value: CustomFieldType; label: string }[] = [
   { value: 'text', label: 'Text' },
@@ -122,7 +123,13 @@ export default function SettingsPage() {
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <div>
-            <h2 className="text-sm font-semibold text-slate-900">Custom Fields</h2>
+            <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+              Custom Fields
+              <InfoTip label="About custom fields">
+                Custom fields are added to the deal form for all deals. Existing deals will show the field as empty until
+                filled in. Deleting a field removes it from the form but does not delete data already saved.
+              </InfoTip>
+            </h2>
             <p className="text-xs text-slate-500 mt-0.5">
               Extra fields that appear on every deal form
             </p>
@@ -268,17 +275,10 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* Info box */}
-      <div className="px-4 py-3 bg-blue-50 rounded-xl border border-blue-100">
-        <p className="text-xs text-blue-700">
-          <strong>Note:</strong> Custom fields are added to the deal form for all deals. Existing deals will show the field as empty until filled in. Deleting a field removes it from the form but does not delete data already saved.
-        </p>
-      </div>
-
       <ListManager listKey="series" title="Series Options" description="Funding stages available on the deal and portfolio forms" />
       <ListManager listKey="clinical_stage" title="Clinical Stage Options" description="Clinical / regulatory stages available on the forms" />
-      <ListManager listKey="fund" title="Fund / Vehicle Options" description="Funds and vehicles for grouping portfolio companies. Add a new fund here and it appears top-level on Fund Performance." />
-      <ListManager listKey="spv_fund" title="SPV / Sidecar Vehicles" description="Which of the above are single-deal vehicles. These roll up under “SPVs & Sidecars” on Fund Performance; anything not listed here shows as its own fund." />
+      <ListManager listKey="fund" title="Fund / Vehicle Options" description="Funds and vehicles for grouping portfolio companies" tip="Add a new fund here and it appears top-level on Fund Performance." />
+      <ListManager listKey="spv_fund" title="SPV / Sidecar Vehicles" description="Which of the above are single-deal vehicles" tip="These roll up under “SPVs & Sidecars” on Fund Performance; anything not listed here shows as its own fund." />
       <InvestorDirectory />
       <PitchCounts />
       <DataExport />

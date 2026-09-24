@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client"
 import { parseNum, numError, numToStr, fmtMoney, fmtPct, saveHint, exactDate, valueColor, inputCls } from "@/lib/rounds"
 import { latestValuation, positionValue } from "@/lib/portfolio"
 import Field from "@/components/shared/Field"
+import InfoTip from "@/components/shared/InfoTip"
 
 // Our valuation view: what Solas has in, what it's worth now, and the interim
 // marks that drive it. The company's financing rounds (and the positions nested
@@ -89,21 +90,32 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
       {loadError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">Couldn&apos;t load rounds, positions or marks — the figures below are incomplete ({loadError}).</p>}
       {/* Position stat cards */}
       <div className="grid grid-cols-4 gap-2.5">
-        <Stat label="Invested" value={fmtMoney(totalInvested)} />
-        <Stat label="Current value" value={fmtMoney(currentValue)} accent={valueColor(currentValue, totalInvested)} />
+        <Stat
+          label="Invested"
+          value={fmtMoney(totalInvested)}
+          tip={lookthroughInvested > 0 ? (
+            <>
+              Excludes {fmtMoney(lookthroughInvested)} invested via{" "}
+              {Array.from(new Set(lookthroughPositions.map((p) => p.lookthrough_of))).join(", ")} — that capital is
+              counted once, at the vehicle, so it isn&apos;t added on top of the vehicle&apos;s own position.
+            </>
+          ) : undefined}
+        />
+        <Stat
+          label="Current value"
+          value={fmtMoney(currentValue)}
+          accent={valueColor(currentValue, totalInvested)}
+          tip={currentValue != null
+            ? "Value uses the most recent mark per position — a position fair value, or ownership × company valuation, whichever is newer. Unrealized."
+            : undefined}
+        />
         <Stat label="Ownership" value={fmtPct(ownership)} />
         <Stat label="MOIC" value={moic != null ? `${moic.toFixed(2)}×` : "—"} />
       </div>
-      <p className="text-xs text-slate-400 -mt-1.5 px-0.5">
-        {currentValue == null
-          ? "Add a round post-money (Fundraising tab), a valuation mark, or a position fair value to compute current value."
-          : "Value uses the most recent mark per position — a position fair value, or ownership × company valuation, whichever is newer. Unrealized."}
-      </p>
-      {lookthroughInvested > 0 && (
-        <p className="text-xs text-slate-400 -mt-2.5 px-0.5">
-          Excludes {fmtMoney(lookthroughInvested)} invested via{" "}
-          {Array.from(new Set(lookthroughPositions.map((p) => p.lookthrough_of))).join(", ")} — that capital is
-          counted once, at the vehicle, so it isn&apos;t added on top of the vehicle&apos;s own position.
+      {/* Action hint stays visible; the methodology notes sit behind the stat (?)s. */}
+      {currentValue == null && (
+        <p className="text-xs text-slate-400 -mt-1.5 px-0.5">
+          Add a round post-money (Fundraising tab), a valuation mark, or a position fair value to compute current value.
         </p>
       )}
 
@@ -153,10 +165,13 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
   )
 }
 
-function Stat({ label, value, accent }: { label: string; value: string; accent?: string }) {
+function Stat({ label, value, accent, tip }: { label: string; value: string; accent?: string; tip?: React.ReactNode }) {
   return (
     <div className="bg-slate-50 rounded-lg px-3 py-2.5">
-      <p className="text-xs text-slate-400">{label}</p>
+      <p className="text-xs text-slate-400 flex items-center gap-1">
+        {label}
+        {tip && <InfoTip label={`About ${label}`} size="xs">{tip}</InfoTip>}
+      </p>
       <p className="text-xl font-semibold mt-0.5" style={{ color: accent ?? "#0f172a" }}>{value}</p>
     </div>
   )

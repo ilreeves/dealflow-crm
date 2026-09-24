@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Loader2, Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import InfoTip from '@/components/shared/InfoTip'
 import { MonthlyPitchCount } from '@/lib/types'
 
 // Only a genuinely missing table means "run the migration" — PostgREST's
@@ -81,10 +82,14 @@ export default function PitchCounts() {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100">
-        <h2 className="text-sm font-semibold text-slate-900">Monthly Pitch Counts</h2>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Inbound pitches from the monthly email audit (distinct companies). Feeds the Dealflow funnel on Analytics.
-        </p>
+        <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+          Monthly Pitch Counts
+          <InfoTip label="About pitch counts">
+            Inbound pitches from the monthly email audit, counted as distinct companies. Feeds the Dealflow funnel on
+            Analytics.
+          </InfoTip>
+        </h2>
+        <p className="text-xs text-slate-500 mt-0.5">Inbound pitches from the monthly email audit</p>
       </div>
       <div className="px-5 py-4">
         {loading ? (

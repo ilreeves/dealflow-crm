@@ -11,6 +11,7 @@ import { useServerState } from "@/lib/useServerState"
 import Tile from "@/components/shared/Tile"
 import Th from "@/components/shared/Th"
 import PageHeader from "@/components/shared/PageHeader"
+import InfoTip from "@/components/shared/InfoTip"
 
 // Only navy is used directly, for the cash figure. Every verdict colour comes
 // from runwayBandColor so the tiles and the rows can't diverge.
@@ -149,8 +150,18 @@ export default function RunwayView({
           {/* Roster */}
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-              <p className="text-sm font-medium text-slate-700" title="Soonest out of cash first">
+              <p className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
                 By urgency
+                <InfoTip label="How runway is calculated">
+                  <p>Soonest out of cash first.</p>
+                  <p className="mt-1.5">
+                    Runway is counted from the date cash was measured. <strong>Left today</strong> ages that report
+                    forward at the reported burn rate — an extrapolation, so a stale balance shows as a shrinking figure
+                    rather than a reassuring one. A company-stated runway is used where a deck gives one, with cash ÷
+                    burn kept as a cross-check; a material disagreement is flagged on the company&apos;s own tab. A
+                    reported burn of zero means the company is covering its costs, not that it has no runway.
+                  </p>
+                </InfoTip>
               </p>
               <p className="text-xs text-slate-400">click a company to enter or edit snapshots</p>
             </div>
@@ -262,14 +273,6 @@ export default function RunwayView({
               ))}
             </div>
           </div>
-
-          <p className="text-xs text-slate-400">
-            Runway is counted from the date cash was measured. <strong>Left today</strong> ages that report forward at the
-            reported burn rate — an extrapolation, so a stale balance shows as a shrinking figure rather than a
-            reassuring one. A company-stated runway is used where a deck gives one, with cash ÷ burn kept as a
-            cross-check; a material disagreement is flagged on the company&apos;s own tab. A reported burn of zero
-            means the company is covering its costs, not that it has no runway.
-          </p>
         </div>
       </div>
 

@@ -8,6 +8,7 @@ export type { ShareClassWithHoldings } from "@/lib/waterfall"
 import { createClient } from "@/lib/supabase/client"
 import { parseNum, numError, numToStr, fmtMoney, fmtPct, saveHint, inputCls, noteAccruedInterest, exactDate, calendarDaysUntil, dayCount } from "@/lib/rounds"
 import Field from "@/components/shared/Field"
+import InfoTip from "@/components/shared/InfoTip"
 
 // Share-class structure: Common, each preferred series, the option pool —
 // shares, price, preference. Deliberately STANDALONE from positions:
@@ -546,19 +547,34 @@ function WaterfallSection({ classes, impliedValue, refPrice }: { classes: ShareC
     if (!exitStr && v) setExitStr(String(Math.round(v)))
   }
 
+  const methodology = (
+    <>
+      <p>Directional: where terms are silent a preferred is treated as 1× non-participating.</p>
+      <p className="mt-1.5">Each preferred takes the better of its preference or converting; proceeds short of the stack pay down in seniority order. Options and warrants count as shares with strikes ignored.</p>
+      <p className="mt-1.5">Multiple = payout ÷ money in (shares × original-issue price; a note&apos;s balance — liq-pref multiples don&apos;t inflate it). Break-even is the smallest exit that returns that money. Both apply pro-rata to the Solas slice of each class.</p>
+      {modeledNotes.length > 0 && (
+        <p className="mt-1.5">Unconverted notes convert at documented terms where stated, else at the discount to the last round price, with a floor at their balance (debt-like, ahead of the stack). Balances are as of the cap table date — interest accrued since is not added.</p>
+      )}
+    </>
+  )
+  const solasMult = solasIn != null && solasIn > 0 ? solasTotal / solasIn : null
+
   return (
     <div className="border border-slate-200 rounded-xl bg-white">
-      <button onClick={() => (open ? setOpen(false) : openWith(impliedValue))} className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-slate-50 transition rounded-xl">
-        <span className="text-slate-300">{open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</span>
-        <TrendingDown className="w-4 h-4 text-slate-400" />
-        <span className="text-sm font-medium text-slate-600">Quick waterfall</span>
-        <span className="text-xs text-slate-400">directional — 1× non-participating where terms are silent</span>
-      </button>
+      {/* The (?) sits beside the toggle, not inside it — no button in a button. */}
+      <div className="flex items-center pr-4 rounded-xl hover:bg-slate-50 transition">
+        <button onClick={() => (open ? setOpen(false) : openWith(impliedValue))} className="flex-1 flex items-center gap-2 px-4 py-2.5 text-left">
+          <span className="text-slate-300">{open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</span>
+          <TrendingDown className="w-4 h-4 text-slate-400" />
+          <span className="text-sm font-medium text-slate-600">Quick waterfall</span>
+        </button>
+        <InfoTip label="How the waterfall is calculated">{methodology}</InfoTip>
+      </div>
       {open && (
-        <div className="border-t border-slate-100 p-4 space-y-3">
-          <div className="flex items-end gap-3">
+        <div className="border-t border-slate-100 p-4 space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
             <div className="w-56">
-              <Field label="Exit value (total proceeds to equity)">
+              <Field label="Exit value (to equity)">
                 <input placeholder="e.g. 200,000,000" value={exitStr} onChange={(e) => setExitStr(e.target.value)} className={inputCls} />
               </Field>
             </div>
@@ -578,86 +594,117 @@ function WaterfallSection({ classes, impliedValue, refPrice }: { classes: ShareC
                 ))}
               </div>
             )}
-            {exitValue > 0 && anySolas && (
-              <div className="ml-auto text-right pb-0.5">
-                <p className="text-xs text-slate-400">Solas proceeds</p>
-                <p className="text-lg font-semibold" style={{ color: "#3b6d11" }}>{fmtMoney(solasTotal)}</p>
-                {solasIn != null && (
-                  // A $0 basis is real (e.g. a class priced at $0) but has no
-                  // multiple — dividing by it rendered "∞×" / "NaN×".
-                  <p className="text-xs tabular-nums" style={{ color: solasIn <= 0 ? "#64748b" : solasTotal >= solasIn ? "#3b6d11" : "#9a5b13" }}>
-                    {solasIn > 0 ? fmtMult(solasTotal / solasIn) : "—"} on {fmtMoney(solasIn)} in
-                  </p>
-                )}
-                {solasIn != null && solasWholeAt != null && (
-                  <p className="text-xs text-slate-400 tabular-nums">whole ≥ {fmtMoney(solasWholeAt)}</p>
-                )}
-              </div>
-            )}
           </div>
 
-          {exitValue > 0 && rows.length > 0 && (
-            <div className="divide-y divide-slate-50 border-t border-slate-100">
-              {rows.map((r) => {
-                const basis = basisById.get(r.id)
-                const mult = basis != null && basis > 0 ? r.payout / basis : null
-                const wholeAt = wholeAtById.get(r.id)
-                return (
-                  <div key={r.id} className="flex items-center gap-3 py-2 text-[13px]">
-                    {/* whole-at gets its own line under the name — it depends on
-                        the structure, not the exit box, and inline it truncated
-                        behind longer class names. title carries the full text. */}
-                    <span className="w-56 shrink-0 min-w-0">
-                      <span className="block truncate text-slate-700">{r.name}</span>
-                      {(wholeAt != null || r.assumed) && (
-                        <span
-                          className="block truncate text-slate-400 text-xs"
-                          title={[wholeAt != null ? `whole ≥ ${fmtMoney(wholeAt)} — smallest exit returning its money in` : null, r.assumed].filter(Boolean).join(" · ")}
-                        >
-                          {[wholeAt != null ? `whole ≥ ${fmtMoney(wholeAt)}` : null, r.assumed].filter(Boolean).join(" · ")}
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-xs px-2 py-0.5 rounded-md shrink-0" style={{ backgroundColor: MODE_STYLE[r.mode].bg, color: MODE_STYLE[r.mode].fg }}>{r.mode}</span>
-                    <span className="flex-1" />
-                    <span className="text-xs tabular-nums w-14 text-right shrink-0 font-medium" style={{ color: mult == null ? undefined : mult >= 1 ? "#3b6d11" : "#9a5b13" }}>
-                      {mult != null ? fmtMult(mult) : ""}
-                    </span>
-                    <span className="text-slate-600 tabular-nums w-24 text-right">{fmtMoney(r.payout)}</span>
-                    <span className="text-xs text-slate-400 tabular-nums w-24 text-right">
-                      {r.solas > 0 && r.unitTotal > 0 ? `Solas ${fmtMoney((r.payout * r.solas) / r.unitTotal)}` : ""}
-                    </span>
+          {/* Solas summary: the answer first, then where it lands by vehicle. */}
+          {exitValue > 0 && anySolas && (
+            <div className="rounded-lg bg-slate-50 px-4 py-3">
+              <div className="flex flex-wrap items-end gap-x-10 gap-y-2">
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Solas proceeds</p>
+                  <p className="text-xl font-semibold tabular-nums" style={{ color: "#3b6d11" }}>{fmtMoney(solasTotal)}</p>
+                </div>
+                {solasIn != null && (
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-400">Multiple</p>
+                    {/* A $0 basis is real (e.g. a class priced at $0) but has no
+                        multiple — dividing by it rendered "∞×" / "NaN×". */}
+                    <p className="text-sm font-medium tabular-nums" style={{ color: solasMult == null ? "#64748b" : solasMult >= 1 ? "#3b6d11" : "#9a5b13" }}>
+                      {solasMult != null ? fmtMult(solasMult) : "—"}
+                      <span className="text-slate-400 font-normal"> on {fmtMoney(solasIn)} in</span>
+                    </p>
                   </div>
-                )
-              })}
+                )}
+                {solasIn != null && solasWholeAt != null && (
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-400 flex items-center gap-1">
+                      Break-even exit
+                      <InfoTip size="xs" label="About break-even">The smallest exit at which Solas gets back the money it put in, across all its classes.</InfoTip>
+                    </p>
+                    <p className="text-sm font-medium tabular-nums text-slate-700">{fmtMoney(solasWholeAt)}</p>
+                  </div>
+                )}
+              </div>
+              {entityRows.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-slate-200/70 space-y-1.5">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400 flex items-center gap-1">
+                    By entity
+                    <InfoTip size="xs" label="About proceeds by entity">Every vehicle receives cash at an exit, whether or not it carries.</InfoTip>
+                  </p>
+                  {entityRows.map(([entity, amount]) => {
+                    const share = solasTotal > 0 ? amount / solasTotal : 0
+                    return (
+                      <div key={entity} className="flex items-center gap-3 text-[13px]">
+                        <span className="w-36 shrink-0 truncate text-slate-600" title={entity}>{entity}</span>
+                        <span className="flex-1 h-1.5 rounded-full bg-slate-200/80 overflow-hidden">
+                          <span className="block h-full rounded-full" style={{ width: `${Math.max(share * 100, 1)}%`, backgroundColor: "#5ba200" }} />
+                        </span>
+                        <span className="w-10 text-right text-xs text-slate-400 tabular-nums">{Math.round(share * 100)}%</span>
+                        <span className="w-16 text-right font-medium tabular-nums" style={{ color: "#3b6d11" }}>{fmtMoney(amount)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
 
-          {exitValue > 0 && entityRows.length > 0 && (
-            <div className="bg-slate-50 rounded-lg px-3 py-2.5">
-              <p className="text-xs text-slate-400 mb-1.5">Solas proceeds by entity — every vehicle receives cash, whether or not it carries</p>
-              <div className="space-y-1">
-                {entityRows.map(([entity, amount]) => (
-                  <div key={entity} className="flex items-center text-[13px]">
-                    <span className="text-slate-600">{entity}</span>
-                    <span className="flex-1 border-b border-dotted border-slate-200 mx-2" />
-                    <span className="font-medium tabular-nums" style={{ color: "#3b6d11" }}>{fmtMoney(amount)}</span>
-                  </div>
-                ))}
+          {exitValue > 0 && rows.length > 0 && (
+            <div>
+              <div className="flex items-center gap-3 pb-1.5 border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-400">
+                <span className="flex-1">Class</span>
+                <span className="w-24 shrink-0">Treatment</span>
+                <span className="w-14 shrink-0 text-right">Multiple</span>
+                <span className="w-20 shrink-0 text-right">Payout</span>
+                {anySolas && <span className="w-20 shrink-0 text-right">Solas</span>}
+              </div>
+              <div className="divide-y divide-slate-50">
+                {rows.map((r) => {
+                  const basis = basisById.get(r.id)
+                  const mult = basis != null && basis > 0 ? r.payout / basis : null
+                  const wholeAt = wholeAtById.get(r.id)
+                  const solasShare = r.solas > 0 && r.unitTotal > 0 ? (r.payout * r.solas) / r.unitTotal : null
+                  return (
+                    <div key={r.id} className="flex items-center gap-3 py-2 text-[13px]">
+                      {/* Break-even gets its own line — it depends on the
+                          structure, not the exit box. The class's modelling
+                          assumption sits behind a (?) instead of repeating
+                          on every row. */}
+                      <span className="flex-1 min-w-0">
+                        {/* Wraps rather than truncates: class names like "Series
+                            Seed-1 Preferred (as-converted)" differ only at the end. */}
+                        <span className="block text-slate-700 leading-snug">
+                          {r.name}
+                          {r.assumed && <InfoTip size="xs" className="ml-1 -mt-0.5" label={`Assumption for ${r.name}`}>{r.assumed.charAt(0).toUpperCase() + r.assumed.slice(1)}.</InfoTip>}
+                        </span>
+                        {wholeAt != null && <span className="block text-slate-400 text-xs tabular-nums">Break-even at {fmtMoney(wholeAt)}</span>}
+                      </span>
+                      <span className="w-24 shrink-0">
+                        <span className="text-xs px-2 py-0.5 rounded-md whitespace-nowrap" style={{ backgroundColor: MODE_STYLE[r.mode].bg, color: MODE_STYLE[r.mode].fg }}>{r.mode}</span>
+                      </span>
+                      <span className="w-14 shrink-0 text-xs tabular-nums text-right font-medium" style={{ color: mult == null ? undefined : mult >= 1 ? "#3b6d11" : "#9a5b13" }}>
+                        {mult != null ? fmtMult(mult) : ""}
+                      </span>
+                      <span className="w-20 shrink-0 text-slate-600 tabular-nums text-right">{fmtMoney(r.payout)}</span>
+                      {anySolas && (
+                        <span className="w-20 shrink-0 tabular-nums text-right" style={{ color: solasShare != null ? "#3b6d11" : undefined }}>
+                          {solasShare != null ? fmtMoney(solasShare) : <span className="text-slate-300">—</span>}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
 
-          <p className="text-xs text-slate-400">
-            Class-level: each preferred takes the better of its preference or converting; proceeds short of the
-            stack pay down seniority order. Options and warrants count as shares with strikes ignored.
-            {" "}Implied multiple = payout ÷ money in (shares × original-issue price; a note&apos;s balance — liq-pref
-            multiples don&apos;t inflate it); “whole ≥” is the smallest exit that returns that basis. Both apply
-            pro-rata to the Solas slice of the class.
-            {modeledNotes.length > 0 && " Unconverted notes convert at documented terms where stated, else at the discount to the last round price, with a floor at their balance (debt-like, ahead of the stack). Balances are as of the cap table date — interest accrued since is not added."}
-            {unmodeledNotes.length > 0 && " Some convertibles here have no balance entered and are NOT modeled — edit the row and set its convertible balance."}
-            {!anySolas && " No Solas holdings entered on the classes yet — add them per entity (pencil → Solas holdings) to see our proceeds."}
-          </p>
+          {/* Action-required gaps stay visible — they change what the numbers mean. */}
+          {unmodeledNotes.length > 0 && (
+            <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">Some convertibles have no balance entered and aren&apos;t modeled — edit the row and set its convertible balance.</p>
+          )}
+          {!anySolas && (
+            <p className="text-xs text-slate-500">No Solas holdings entered on the classes yet — add them per entity (pencil → Solas holdings) to see our proceeds.</p>
+          )}
         </div>
       )}
     </div>

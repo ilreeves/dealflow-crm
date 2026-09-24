@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Trash2, Loader2, Pencil, Check, X, Search } from 'lucide-react'
 import { InvestorContact } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
+import InfoTip from '@/components/shared/InfoTip'
 
 const empty = { name: '', firm: '', contact_email: '' }
 
@@ -89,10 +90,14 @@ export default function InvestorDirectory() {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100">
-        <h2 className="text-sm font-semibold text-slate-900">Investor Directory</h2>
-        <p className="text-xs text-slate-500 mt-0.5">
-          The shared list that auto-fills firm &amp; email when you log an investor introduction. Edit or remove entries to keep suggestions clean. Changes here don&apos;t alter intros already logged.
-        </p>
+        <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+          Investor Directory
+          <InfoTip label="About the investor directory">
+            The shared list that auto-fills firm &amp; email when you log an investor introduction. Edit or remove
+            entries to keep suggestions clean. Changes here don&apos;t alter intros already logged.
+          </InfoTip>
+        </h2>
+        <p className="text-xs text-slate-500 mt-0.5">Auto-fills firm &amp; email on investor intros</p>
         {contacts.length > 0 && (
           <div className="relative mt-3">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />

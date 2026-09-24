@@ -6,6 +6,7 @@ import { DealFundraiseRound, SECURITY_TYPES } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
 import { parseNum, numError, numToStr, termStr, fmtMoney, fmtPct, saveHint, monthYear, SECURITY_COLOR, inputCls, exactDate } from "@/lib/rounds"
 import Field from "@/components/shared/Field"
+import InfoTip from "@/components/shared/InfoTip"
 
 // Fundraising rounds for a pipeline deal — the round they're raising now plus
 // any prior rounds. No Solas positions: we don't hold the company yet. When the
@@ -46,10 +47,10 @@ export default function DealFundraisingTab({ dealId }: { dealId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div>
-          <span className="text-sm font-medium text-slate-500">Rounds</span>
-          <p className="text-xs text-slate-400">Current raise and prior rounds — type, size, and valuation terms.</p>
-        </div>
+        <span className="text-sm font-medium text-slate-500 flex items-center gap-1.5">
+          Rounds
+          <InfoTip label="About rounds">Current raise and prior rounds — type, size, and valuation terms.</InfoTip>
+        </span>
         {!adding && (
           <button
             onClick={() => setAdding(true)}

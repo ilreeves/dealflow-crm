@@ -149,6 +149,9 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
               : undefined
           }
           accent={lastVar ? varianceBandColor(lastVar.pct) : undefined}
+          tip={rows.length > 0
+            ? "Variance compares an actual to the plan for the same period — the revised plan where one was entered, the original otherwise. Both are kept, and the original is what Analytics scores projection reliability against. Periods with no actual reported yet are left blank rather than counted as a shortfall."
+            : undefined}
         />
         <Stat
           label="YoY growth"
@@ -157,11 +160,12 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
           accent={lastYoy != null ? varianceBandColor(lastYoy) : undefined}
         />
       </div>
-      <p className="text-xs text-slate-400 -mt-1.5 px-0.5">
-        {rows.length === 0
-          ? "Add a fiscal period to start tracking plan against actual revenue."
-          : "Variance compares an actual to the plan for the same period — the revised plan where one was entered, the original otherwise. Both are kept, and the original is what Analytics scores projection reliability against. Periods with no actual reported yet are left blank rather than counted as a shortfall."}
-      </p>
+      {/* Action hint stays visible; the methodology note sits behind the "vs plan" (?). */}
+      {rows.length === 0 && (
+        <p className="text-xs text-slate-400 -mt-1.5 px-0.5">
+          Add a fiscal period to start tracking plan against actual revenue.
+        </p>
+      )}
 
       {/* Projected vs actual by period */}
       <div className="border border-slate-200 rounded-xl bg-white">

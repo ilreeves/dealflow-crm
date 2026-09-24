@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Trash2, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import InfoTip from '@/components/shared/InfoTip'
 import { LogEvent } from '@/lib/types'
 import { formatDate } from '@/lib/utils'
 
@@ -60,10 +61,13 @@ export default function SystemHealth() {
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">System Health</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Background failures — activity logging, delete cleanup, deck serving. Empty is good.
-          </p>
+          <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+            System Health
+            <InfoTip label="About System Health">
+              Background failures — activity logging, delete cleanup, deck serving. Empty is good.
+            </InfoTip>
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">Background failures — empty is good</p>
         </div>
         {events.length > 0 && (
           <button

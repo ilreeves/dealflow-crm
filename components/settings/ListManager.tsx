@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react'
 import { Plus, Trash2, ChevronUp, ChevronDown, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import InfoTip from '@/components/shared/InfoTip'
 
 interface Opt { id: string; value: string; sort_order: number }
 
-export default function ListManager({ listKey, title, description }: { listKey: string; title: string; description: string }) {
+export default function ListManager({ listKey, title, description, tip }: { listKey: string; title: string; description: string; tip?: string }) {
   const [opts, setOpts] = useState<Opt[]>([])
   const [loading, setLoading] = useState(true)
   // A failed load must not read as an empty list — adding "missing" options
@@ -71,7 +72,10 @@ export default function ListManager({ listKey, title, description }: { listKey: 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100">
-        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+        <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+          {title}
+          {tip && <InfoTip label={`About ${title}`}>{tip}</InfoTip>}
+        </h2>
         <p className="text-xs text-slate-500 mt-0.5">{description}</p>
       </div>
       {loading ? (

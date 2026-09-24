@@ -1,4 +1,5 @@
 import { fmtMoney, exactDate } from "@/lib/rounds"
+import InfoTip from "@/components/shared/InfoTip"
 
 export type NotePosition = {
   company: string
@@ -43,11 +44,22 @@ export default function NotesExposure({ notes }: { notes: NotePosition[] }) {
 
   return (
     <div>
-      <h2 className="text-base font-bold text-slate-900">Convertible notes</h2>
-      <div className="h-0.5 w-12 mt-1 rounded-full mb-1" style={{ backgroundColor: ORANGE }} />
-      <p className="text-xs text-slate-400 mb-4">
-        Principal outstanding and interest accrued across the funds. Accrued interest is unrealised until the note converts or is repaid.
-      </p>
+      <h2 className="text-base font-bold text-slate-900 flex items-center gap-1.5">
+        Convertible notes
+        <InfoTip label="About convertible notes">
+          <p>Principal outstanding and interest accrued across the funds. Accrued interest is unrealised until the note converts or is repaid.</p>
+          <p className="mt-1.5">
+            Accrued interest is <span style={{ color: GREEN }}>{fmtMoney(accrued)}</span> on {fmtMoney(principal)} of principal
+            {wRate != null ? ` at a ${wRate.toFixed(1)}% weighted coupon` : ""}
+            {principal > 0 ? ` — ${((value / principal - 1) * 100).toFixed(1)}% above cost.` : "."}
+            {notes.some((n) => n.accruedBasis === "computed") &&
+              " Accruals age daily from each note's issue date (simple interest, Actual/365)."}
+            {notes.some((n) => n.accrued > 0 && n.accruedBasis === "entered") &&
+              " * = as entered; add a rate and date to the round terms to age it automatically."}
+          </p>
+        </InfoTip>
+      </h2>
+      <div className="h-0.5 w-12 mt-1 rounded-full mb-4" style={{ backgroundColor: ORANGE }} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <Tile label="Principal out" value={fmtMoney(principal)} />
@@ -113,15 +125,10 @@ export default function NotesExposure({ notes }: { notes: NotePosition[] }) {
         </div>
       </div>
 
-      <p className="text-xs text-slate-400 mt-2">
-        Accrued interest is <span style={{ color: GREEN }}>{fmtMoney(accrued)}</span> on {fmtMoney(principal)} of principal
-        {wRate != null ? ` at a ${wRate.toFixed(1)}% weighted coupon` : ""}
-        {principal > 0 ? ` — ${((value / principal - 1) * 100).toFixed(1)}% above cost.` : "."}
-        {notes.some((n) => n.accruedBasis === "computed") &&
-          " Accruals age daily from each note's issue date (simple interest, Actual/365)."}
-        {notes.some((n) => n.accrued > 0 && n.accruedBasis === "entered") &&
-          " * = as entered; add a rate and date to the round terms to age it automatically."}
-      </p>
+      {/* Key for the asterisk — the full note is in the heading's tip. */}
+      {notes.some((n) => n.accrued > 0 && n.accruedBasis === "entered") && (
+        <p className="text-xs text-slate-400 mt-2">* = as entered, does not age</p>
+      )}
     </div>
   )
 }

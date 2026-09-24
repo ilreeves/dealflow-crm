@@ -4,6 +4,7 @@ import { Deal } from '@/lib/types'
 import BreakdownTable, { BreakdownRow } from '@/components/analytics/BreakdownTable'
 import CollapsibleSection from '@/components/analytics/CollapsibleSection'
 import PageHeader from '@/components/shared/PageHeader'
+import InfoTip from '@/components/shared/InfoTip'
 // One variance convention app-wide. A local helper here painted +2.6% green
 // while the Revenue page painted the same figure navy; lib/revenue owns the rule.
 import { varianceBandColor, VARIANCE_BAND_PCT, SEVERE_MISS_PCT } from '@/lib/revenue'
@@ -473,7 +474,10 @@ export default async function AnalyticsPage() {
         {/* Average time in stage */}
         {stageAverages.length > 0 && (
           <div>
-            <p className="text-sm font-semibold text-slate-700 mb-3" title="How long the deals currently sitting in each stage have been there.">Current Inventory Age</p>
+            <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
+              Current Inventory Age
+              <InfoTip label="About inventory age">How long the deals currently sitting in each stage have been there.</InfoTip>
+            </p>
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <table className="w-full text-sm">
                 <tbody>
@@ -497,11 +501,12 @@ export default async function AnalyticsPage() {
 
         {/* Historical time in stage */}
         <div>
-          <p
-            className="text-sm font-semibold text-slate-700 mb-3"
-            title={`Average time deals spent in each stage before moving on, from the stage-change log (${totalTransitions} completed ${totalTransitions === 1 ? 'transition' : 'transitions'}). Tracking began June 11, 2026, so this builds accuracy over time.`}
-          >
+          <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
             Historical Time in Stage
+            <InfoTip label="About historical time in stage">
+              Average time deals spent in each stage before moving on, from the stage-change log ({totalTransitions} completed{' '}
+              {totalTransitions === 1 ? 'transition' : 'transitions'}). Tracking began June 11, 2026, so this builds accuracy over time.
+            </InfoTip>
           </p>
           {historicalAverages.length === 0 ? (
             <div className="bg-white rounded-xl border border-slate-200 px-5 py-6 text-center">
@@ -531,11 +536,12 @@ export default async function AnalyticsPage() {
 
         {/* Stage advancement funnel */}
         <div>
-          <p
-            className="text-sm font-semibold text-slate-700 mb-3"
-            title="Of the deals that reached each stage, the share that advanced to the next. Based on the furthest stage each deal reached; early history is partial (stage tracking began June 11, 2026)."
-          >
+          <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
             Stage Advancement
+            <InfoTip label="About stage advancement">
+              Of the deals that reached each stage, the share that advanced to the next. Based on the furthest stage each
+              deal reached; early history is partial (stage tracking began June 11, 2026).
+            </InfoTip>
           </p>
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <table className="w-full text-sm">
@@ -729,9 +735,10 @@ export default async function AnalyticsPage() {
         {/* Revenue projection reliability */}
         {revReliability.length > 0 && (
           <div>
-            <p
-              className="text-sm font-semibold text-slate-700 mb-3"
-              title={
+            <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
+              Revenue Projection Reliability by Company
+              <InfoTip label="How revenue reliability is measured">
+                <span className="whitespace-pre-line">{
                 `Quarterly plan vs actual, measured against the ORIGINAL budget \u2014 never a mid-year revision. ` +
                 `The Revenue page reports the revised plan instead, so the two disagree on a restated period by design.\n` +
                 `Only quarters with BOTH an original plan and a reported actual count.\n` +
@@ -746,9 +753,8 @@ export default async function AnalyticsPage() {
                 (revRevisedOnly > 0
                   ? `\n${revRevisedOnly} excluded: a revised plan is the only one on record, so there is no original target to score against.`
                   : '')
-              }
-            >
-              Revenue Projection Reliability by Company
+                }</span>
+              </InfoTip>
             </p>
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <table className="w-full text-sm">

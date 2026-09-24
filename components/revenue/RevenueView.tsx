@@ -12,6 +12,7 @@ import PortfolioCompanyDetail from "@/components/portfolio/PortfolioCompanyDetai
 import Tile from "@/components/shared/Tile"
 import Th from "@/components/shared/Th"
 import PageHeader from "@/components/shared/PageHeader"
+import InfoTip from "@/components/shared/InfoTip"
 
 const NAVY = "#023a51"  // growth + variance colours now come from varianceBandColor
 
@@ -170,11 +171,25 @@ export default function RevenueView({
           {/* Roster + figures */}
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-              <p
-                className="text-sm font-medium text-slate-700"
-                title="Adding a company here gives it a Revenue tab on its own page, where the periods are entered."
-              >
+              <p className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
                 Tracked companies
+                <InfoTip label="How revenue is tracked">
+                  <p>
+                    Adding a company here gives it a Revenue tab on its own page, where the periods are entered — click
+                    a company to open it.
+                  </p>
+                  <p className="mt-1.5">
+                    Plans here are the <strong>revised</strong> ones — the target now in force. Where a period was
+                    restated the original is shown beneath it (&ldquo;revised from …&rdquo;); everywhere else the
+                    original is still the plan. Analytics measures projection reliability against the{" "}
+                    <strong>original</strong> budget instead, so the two pages will disagree on a restated period by design.
+                  </p>
+                  <p className="mt-1.5">
+                    A blank actual means the period hasn&apos;t been reported yet, not a shortfall. Annual totals only
+                    include companies whose year is fully reported, so a partial year is never counted as if it were a
+                    full one.
+                  </p>
+                </InfoTip>
               </p>
               {!adding && (
                 <button
@@ -395,18 +410,6 @@ export default function RevenueView({
             )}
           </div>
 
-          <p className="text-xs text-slate-400">
-            Plans here are the <strong className="font-medium text-slate-500">revised</strong> ones — the target now in
-            force. Where a period was restated the original is shown beneath it (&ldquo;revised from …&rdquo;); everywhere
-            else the original is still the plan. Analytics measures projection reliability against the{" "}
-            <strong className="font-medium text-slate-500">original</strong> budget instead, so the two pages will
-            disagree on a restated period by design.
-          </p>
-          <p className="text-xs text-slate-400">
-            Click a company to open it and enter periods. A blank actual means the period hasn&apos;t been reported yet,
-            not a shortfall. Annual totals only include companies whose year is fully reported, so a partial year is
-            never counted as if it were a full one.
-          </p>
         </div>
       </div>
 

@@ -5,6 +5,7 @@ import { Users, Plus, Trash2, Loader2, ExternalLink, ChevronRight, ChevronDown, 
 import { CompanyCompetitor } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { Trial, Pub, statusColor, prettyPhase } from '@/lib/enrichment'
+import InfoTip from '@/components/shared/InfoTip'
 
 interface Props {
   entityType: 'deal' | 'portfolio'
@@ -98,9 +99,12 @@ export default function KnownCompetitors({ entityType, entityId }: Props) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between mb-2">
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
           <Users className="w-3.5 h-3.5" /> Known Competitors
+          <InfoTip label="About known competitors" size="xs">
+            Competitors you track — expand any to pull its recent trials &amp; publications.
+          </InfoTip>
         </p>
         {!adding && (
           <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition">
@@ -108,7 +112,6 @@ export default function KnownCompetitors({ entityType, entityId }: Props) {
           </button>
         )}
       </div>
-      <p className="text-xs text-slate-400 mb-2">Competitors you track — expand any to pull its recent trials &amp; publications.</p>
 
       {loading ? (
         <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-slate-400" /></div>

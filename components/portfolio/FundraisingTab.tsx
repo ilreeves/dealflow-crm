@@ -6,6 +6,7 @@ import { PortfolioFundraiseRound, PortfolioPosition, SECURITY_TYPES } from "@/li
 import { createClient } from "@/lib/supabase/client"
 import { parseNum, numError, numToStr, termStr, fmtMoney, fmtPct, saveHint, monthYear, exactDate, noteAccruedInterest, SECURITY_COLOR, valueColor, inputCls } from "@/lib/rounds"
 import Field from "@/components/shared/Field"
+import InfoTip from "@/components/shared/InfoTip"
 
 type Staged = {
   _k: number
@@ -101,10 +102,10 @@ export default function FundraisingTab({ companyId }: { companyId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div>
-          <span className="text-sm font-medium text-slate-500">Rounds</span>
-          <p className="text-xs text-slate-400">What the company raised — round type, size, and valuation terms.</p>
-        </div>
+        <span className="text-sm font-medium text-slate-500 flex items-center gap-1.5">
+          Rounds
+          <InfoTip label="About rounds">What the company raised — round type, size, and valuation terms.</InfoTip>
+        </span>
         {!adding && (
           <button
             onClick={() => setAdding(true)}

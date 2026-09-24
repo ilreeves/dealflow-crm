@@ -7,6 +7,7 @@ import { ChevronDown, ChevronRight, AlertTriangle, Clock } from "lucide-react"
 import { fmtMoney, fmtPct, valueColor } from "@/lib/rounds"
 import PageHeader from "@/components/shared/PageHeader"
 import FundTag from "@/components/shared/FundTag"
+import InfoTip from "@/components/shared/InfoTip"
 
 export type CompanyInFund = { name: string; invested: number; value: number | null; ownership: number }
 export type FundRow = { fund: string; invested: number; value: number; moic: number | null; companies: CompanyInFund[] }
@@ -122,16 +123,25 @@ export default function FundPerformanceView({
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard label="Total invested" value={fmtMoney(totals.invested)} />
               <StatCard label="Current value" value={fmtMoney(totals.value)} color="#3b6d11" />
-              <StatCard label="Portfolio TVPI" value={fmtMoic(totals.moic)} />
+              <StatCard
+                label="Portfolio TVPI"
+                value={fmtMoic(totals.moic)}
+                tip="TVPI = total value ÷ invested (gross). DPI and IRR will appear once distributions and committed capital are tracked."
+              />
               <StatCard label="Unrealized gain" value={`${totals.gain >= 0 ? "+" : ""}${fmtMoney(totals.gain)}`} color={totals.gain >= 0 ? "#3b6d11" : "#993c1d"} />
             </div>
-            <p className="text-xs text-slate-400 -mt-4">
-              TVPI = total value ÷ invested (gross). DPI and IRR will appear once distributions and committed capital are tracked.
-            </p>
 
             {/* By fund */}
             <div>
-              <h2 className="text-base font-bold text-slate-900">By fund</h2>
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-1.5">
+                By fund
+                {lookthroughCost > 0 && (
+                  <InfoTip label="About fund totals">
+                    Fund rows include {fmtMoney(lookthroughCost)} invested via sidecars we also track directly, so they sum
+                    to more than the totals above — that capital is counted once, at the vehicle.
+                  </InfoTip>
+                )}
+              </h2>
               <div className="h-0.5 w-12 mt-1 rounded-full mb-4" style={{ backgroundColor: "#5ba200" }} />
               <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
                 {coreFunds.map((f, i) => (
@@ -212,12 +222,6 @@ export default function FundPerformanceView({
                   No mark recorded
                 </span>
               </div>
-              {lookthroughCost > 0 && (
-                <p className="text-xs text-slate-400 mt-2">
-                  Fund rows include {fmtMoney(lookthroughCost)} invested via sidecars we also track directly, so they sum
-                  to more than the totals above — that capital is counted once, at the vehicle.
-                </p>
-              )}
             </div>
 
             {/* Top positions */}
@@ -298,10 +302,13 @@ export default function FundPerformanceView({
   )
 }
 
-function StatCard({ label, value, color }: { label: string; value: string; color?: string }) {
+function StatCard({ label, value, color, tip }: { label: string; value: string; color?: string; tip?: string }) {
   return (
     <div className="bg-white border border-slate-200 rounded-xl px-4 py-3">
-      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1 flex items-center gap-1">
+        {label}
+        {tip && <InfoTip label={`About ${label}`} size="xs">{tip}</InfoTip>}
+      </p>
       <p className="text-2xl font-semibold" style={{ color: color ?? "#0f172a" }}>{value}</p>
     </div>
   )

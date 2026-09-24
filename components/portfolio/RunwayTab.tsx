@@ -217,6 +217,9 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
               : undefined
           }
           accent={r ? runwayBandColor(r.months) : undefined}
+          tip={rows.length > 0
+            ? "Runway counts from the date cash was measured. “From today” ages that report forward at the reported burn rate — it is an extrapolation, not a new report."
+            : undefined}
         />
         {/* The actionable one: not what the deck said, but what it means now. */}
         <Stat
@@ -233,11 +236,12 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
         />
       </div>
 
-      <p className="text-xs text-slate-400 -mt-1.5 px-0.5">
-        {rows.length === 0
-          ? "Add a cash observation to start tracking runway. Take the balance date from the deck, not the date it was sent."
-          : "Runway counts from the date cash was measured. “From today” ages that report forward at the reported burn rate — it is an extrapolation, not a new report."}
-      </p>
+      {/* Action hint stays visible; the methodology note sits behind the Runway (?). */}
+      {rows.length === 0 && (
+        <p className="text-xs text-slate-400 -mt-1.5 px-0.5">
+          Add a cash observation to start tracking runway. Take the balance date from the deck, not the date it was sent.
+        </p>
+      )}
 
       {/* Things worth knowing before trusting the numbers above. Each is a
           legitimate state rather than an error, so these inform and never block. */}

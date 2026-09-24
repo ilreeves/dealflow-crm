@@ -9,6 +9,7 @@ import { isExpired, DECK_LINK_TTL_MS } from '@/lib/deck'
 import { logError } from '@/lib/log'
 import { safeStorageName } from '@/lib/storage'
 import PdfViewer from '@/components/deals/PdfViewer'
+import InfoTip from '@/components/shared/InfoTip'
 
 interface Props {
   entityType: 'deal' | 'portfolio'
@@ -83,15 +84,19 @@ export default function DecksSection({ entityType, entityId, entityName, buildEm
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Non-Confidential Decks</p>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+          Non-Confidential Decks
+          <InfoTip label="About decks" size="xs">
+            One deck per raise — each gets its own share link (name/email gate, 4-week expiry) and view tracker.
+          </InfoTip>
+        </p>
         {!adding && (
           <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition">
             <Plus className="w-3.5 h-3.5" /> Add deck
           </button>
         )}
       </div>
-      <p className="text-xs text-slate-400 mb-2">One deck per raise — each gets its own share link (name/email gate, 4-week expiry) and view tracker.</p>
 
       {loading ? (
         <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>

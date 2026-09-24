@@ -5,6 +5,7 @@ import { FlaskConical, BookOpen, Loader2, RefreshCw, ExternalLink, Sparkles } fr
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
 import { Trial, Pub, statusColor, prettyPhase } from '@/lib/enrichment'
+import InfoTip from '@/components/shared/InfoTip'
 
 interface Props {
   entityType: 'deal' | 'portfolio'
@@ -71,17 +72,19 @@ export default function ClinicalContextSection({ entityType, entityId, name, dru
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Clinical &amp; Scientific Context</p>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+          Clinical &amp; Scientific Context
+          <InfoTip label="About clinical context" size="xs">
+            Live from ClinicalTrials.gov (lead-sponsor trials) and PubMed (recent publications) for &ldquo;{name}&rdquo;.
+          </InfoTip>
+        </p>
         {hasResults && (
           <button onClick={run} disabled={running} className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition disabled:opacity-50">
             {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} Refresh
           </button>
         )}
       </div>
-      <p className="text-xs text-slate-400 mb-2">
-        Live from ClinicalTrials.gov (lead-sponsor trials) and PubMed (recent publications) for &ldquo;{name}&rdquo;.
-      </p>
 
       {!loaded ? (
         <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-slate-400" /></div>
