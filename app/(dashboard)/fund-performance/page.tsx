@@ -127,10 +127,10 @@ export default async function FundPerformancePage() {
 
   // `marked` tracks whether any position resolved a value, so Top positions can
   // tell "no mark" from a genuine $0 write-down (value stays numeric for sums).
-  const compMap = new Map<string, { name: string; fund: string; fundInvested: Record<string, number>; invested: number; value: number; marked: boolean; ownership: number }>()
+  const compMap = new Map<string, { name: string; funds: string[]; fundInvested: Record<string, number>; invested: number; value: number; marked: boolean; ownership: number }>()
   for (const p of ownPs) {
     const cname = nameById[p.company_id] ?? "Unknown"
-    const e = compMap.get(cname) ?? { name: cname, fund: "", fundInvested: {}, invested: 0, value: 0, marked: false, ownership: 0 }
+    const e = compMap.get(cname) ?? { name: cname, funds: [], fundInvested: {}, invested: 0, value: 0, marked: false, ownership: 0 }
     const inv = Number(p.invested_amount) || 0
     e.invested += inv
     const f = p.fund || "Unassigned"
@@ -141,8 +141,9 @@ export default async function FundPerformancePage() {
     compMap.set(cname, e)
   }
   for (const e of compMap.values()) {
-    // list every fund the company is held in, largest allocation first
-    e.fund = Object.entries(e.fundInvested).sort((a, b) => b[1] - a[1]).map(([f]) => f).join(", ") || "—"
+    // every fund the company is held in, largest allocation first. Kept as a
+    // list (not a joined string) so Top positions can render each as a tag.
+    e.funds = Object.entries(e.fundInvested).sort((a, b) => b[1] - a[1]).map(([f]) => f)
   }
 
   const totalInvested = Array.from(compMap.values()).reduce((s, c) => s + c.invested, 0)
@@ -155,7 +156,7 @@ export default async function FundPerformancePage() {
   }
 
   const top: TopPosition[] = Array.from(compMap.values())
-    .map((c) => ({ name: c.name, fund: c.fund, ownership: c.ownership, invested: c.invested, value: c.marked ? c.value : null, moic: c.invested > 0 && c.value > 0 ? c.value / c.invested : null }))
+    .map((c) => ({ name: c.name, funds: c.funds, ownership: c.ownership, invested: c.invested, value: c.marked ? c.value : null, moic: c.invested > 0 && c.value > 0 ? c.value / c.invested : null }))
     .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
     .slice(0, 6)
 

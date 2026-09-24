@@ -3,6 +3,7 @@ import { rowsOrThrow } from '@/lib/supabase/unwrap'
 import { DealActivity, CatalystActivity } from '@/lib/types'
 import { formatDate } from '@/lib/utils'
 import { ArrowRight, Plus, CalendarDays, Trash2, Pencil, CheckCircle2, Clock } from 'lucide-react'
+import PageHeader from '@/components/shared/PageHeader'
 
 // This page renders on a UTC server — without an explicit zone, anything logged
 // after 8pm Eastern was grouped (and dated) under the following day.
@@ -30,6 +31,20 @@ function groupByDate<T extends { created_at: string }>(items: T[]): [string, T[]
   return Object.entries(groups)
 }
 
+// One readable line from an activity row's action + details. Display only — the
+// stored rows are untouched. The feed used to print `action — details`, which
+// read as "stage changed — Sourced → Science Committee" and, where the action
+// was already implied, as a line that opened on a stray dash.
+//   · "Stage changed" is implied by the arrow, so only the transition shows.
+//   · "Stage: Sourced" (logged on Deal added) drops its label → "Deal added · Sourced".
+//   · Any leading dash a caller baked into `details` is stripped.
+function describe(action: string, details: string | null): string {
+  const d = (details ?? '').replace(/^[\s\u2014\u2013-]+/, '').replace(/^Stage:\s*/, '').trim()
+  if (!d) return action
+  if (action === 'Stage changed') return d
+  return `${action} \u00b7 ${d}`
+}
+
 function catalystIcon(action: string) {
   if (action === 'Catalyst added') return { bg: 'bg-green-100', icon: <Plus className="w-3.5 h-3.5 text-green-600" /> }
   if (action === 'Catalyst deleted') return { bg: 'bg-red-100', icon: <Trash2 className="w-3.5 h-3.5 text-red-500" /> }
@@ -51,11 +66,9 @@ export default async function ActivityPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 py-4 bg-white border-b border-slate-200 shrink-0">
-        <h1 className="text-lg font-semibold text-slate-900" title="Recent changes across deals and catalysts">Activity</h1>
-      </div>
+      <PageHeader title="Activity" subtitle="Recent changes across deals and catalysts" />
 
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-6 px-6 py-6">
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-6 px-4 md:px-6 py-6">
 
         {/* Deal activity column */}
         <div className="flex flex-col min-h-0 bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -82,14 +95,14 @@ export default async function ActivityPage() {
                           }
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-sm font-semibold text-slate-800">{a.deal_name}</span>
-                            <span className="text-sm text-slate-500">{a.action.toLowerCase()}</span>
-                            {a.details && <span className="text-sm text-slate-400">&mdash; {a.details}</span>}
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            {a.actor_name && <span className="text-xs text-slate-400">{a.actor_name}</span>}
-                            <span className="text-xs text-slate-300">{timeAgo(a.created_at)}</span>
+                          {/* Same shape as the catalyst column: who/what on top, what
+                              happened beneath, then who and when. */}
+                          <p className="text-sm font-semibold text-slate-800">{a.deal_name}</p>
+                          <p className="text-sm text-slate-500">{describe(a.action, a.details)}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5 text-xs">
+                            {a.actor_name && <span className="text-slate-400">{a.actor_name}</span>}
+                            {a.actor_name && <span className="text-slate-300">&middot;</span>}
+                            <span className="text-slate-300">{timeAgo(a.created_at)}</span>
                           </div>
                         </div>
                       </div>
@@ -127,10 +140,10 @@ export default async function ActivityPage() {
                               <span className="text-sm font-semibold text-slate-800">{a.company_name}</span>
                               <span className="text-sm text-slate-600 truncate">{a.catalyst_title}</span>
                             </div>
-                            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                              <span className="text-xs text-slate-500">{a.action}</span>
-                              {a.details && <span className="text-xs text-slate-400">&mdash; {a.details}</span>}
-                              <span className="text-xs text-slate-300">{timeAgo(a.created_at)}</span>
+                            <div className="flex items-center gap-1.5 flex-wrap mt-0.5 text-xs">
+                              <span className="text-slate-500">{describe(a.action, a.details)}</span>
+                              <span className="text-slate-300">&middot;</span>
+                              <span className="text-slate-300">{timeAgo(a.created_at)}</span>
                             </div>
                           </div>
                         </div>

@@ -11,6 +11,7 @@ import { useServerState } from "@/lib/useServerState"
 import PortfolioCompanyDetail from "@/components/portfolio/PortfolioCompanyDetail"
 import Tile from "@/components/shared/Tile"
 import Th from "@/components/shared/Th"
+import PageHeader from "@/components/shared/PageHeader"
 
 const NAVY = "#023a51"  // growth + variance colours now come from varianceBandColor
 
@@ -131,16 +132,11 @@ export default function RevenueView({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 py-4 bg-white border-b border-slate-200 shrink-0">
-        <h1
-          className="text-lg font-semibold text-slate-900"
-          title={`Plan against actual revenue for the revenue-generating portfolio · FY ${fiscalYear}\nPlans shown on the REVISED basis: the restated target where one exists, the original everywhere else.`}
-        >
-          Revenue
-        </h1>
-      </div>
+      {/* The revised-basis explanation that used to live in this title's
+          tooltip is spelled out in the footnote under the table. */}
+      <PageHeader title="Revenue" subtitle={`Plan vs actual for tracked companies · FY ${fiscalYear}`} />
 
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6">
         <div className="max-w-6xl space-y-6">
           {/* Tiles */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -277,16 +273,16 @@ export default function RevenueView({
                             {fmtMoney(c.latestProjected)}
                           </span>
                           {c.latestRevised && (
-                            <span className="block text-[11px] text-slate-400 leading-tight">
-                              rev · orig {c.latestOriginal != null ? fmtMoney(c.latestOriginal) : "none on record"}
+                            <span className="block text-[11px] text-slate-400 leading-tight whitespace-nowrap">
+                              {c.latestOriginal != null ? `revised from ${fmtMoney(c.latestOriginal)}` : "revised · no original on file"}
                             </span>
                           )}
                         </td>
                         <td className="px-4 py-2.5 text-right tabular-nums" style={{ color: varianceBandColor(c.variancePct) }}>
                           {c.varianceAbs != null ? fmtSignedPct(c.variancePct) : <span className="text-slate-300">—</span>}
                           {c.originalVariancePct != null && (
-                            <span className="block text-[11px] text-slate-400 leading-tight" title="Against the original plan">
-                              {fmtSignedPct(c.originalVariancePct)} vs orig
+                            <span className="block text-[11px] text-slate-400 leading-tight whitespace-nowrap" title="Against the original plan">
+                              {fmtSignedPct(c.originalVariancePct)} vs original
                             </span>
                           )}
                         </td>
@@ -311,8 +307,8 @@ export default function RevenueView({
                               {/* Only when the two bases actually differ — an
                                   unchanged plan printed twice reads as a discrepancy. */}
                               {c.fyRevised && c.fyOriginal !== c.fyProjected && (
-                                <span className="block text-[11px] text-slate-400 leading-tight">
-                                  rev · orig {c.fyOriginal != null ? fmtMoney(c.fyOriginal) : "incomplete"}
+                                <span className="block text-[11px] text-slate-400 leading-tight whitespace-nowrap">
+                                  {c.fyOriginal != null ? `revised from ${fmtMoney(c.fyOriginal)}` : "revised · original plan incomplete"}
                                 </span>
                               )}
                             </>
@@ -401,8 +397,8 @@ export default function RevenueView({
 
           <p className="text-xs text-slate-400">
             Plans here are the <strong className="font-medium text-slate-500">revised</strong> ones — the target now in
-            force. Where a period was restated the original is shown beneath it, tagged <em>rev</em>; everywhere else the
-            original is still the plan. Analytics measures projection reliability against the{" "}
+            force. Where a period was restated the original is shown beneath it (&ldquo;revised from …&rdquo;); everywhere
+            else the original is still the plan. Analytics measures projection reliability against the{" "}
             <strong className="font-medium text-slate-500">original</strong> budget instead, so the two pages will
             disagree on a restated period by design.
           </p>

@@ -17,6 +17,7 @@ import DealForm from '@/components/deals/DealForm'
 import DealsTable from './DealsTable'
 import PassReasonModal from '@/components/deals/PassReasonModal'
 import DealDetailModal from '@/components/deals/DealDetailModal'
+import PageHeader from '@/components/shared/PageHeader'
 
 interface Props {
   initialDeals: Deal[]
@@ -160,69 +161,72 @@ export default function PipelineBoard({ initialDeals, deckViews }: Props) {
 
   return (
     <div className="flex flex-col h-full">
+      <PageHeader
+        title="Pipeline"
+        subtitle={`${deals.length} deals`}
+        actions={
+          <>
+            <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg">
+              {(['All', 'Devices', 'Drugs'] as const).map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setCategory(cat)}
+                  style={category === cat ? {color: '#5ba200'} : {}}
+                  className={`px-3 py-1 text-sm font-medium rounded-md transition ${
+                    category === cat ? 'bg-white shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+            <input
+              type="text"
+              placeholder="Search deals…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 w-44 sm:w-52"
+            />
+            {!isMobile && (
+              <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setView('board')}
+                  className={`p-1.5 ${view === 'board' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+                  title="Board view"
+                >
+                  <Columns3 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setView('list')}
+                  className={`p-1.5 ${view === 'list' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+                  title="List view"
+                >
+                  <LayoutList className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+            <button
+              onClick={() => setShowForm(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg transition" style={{backgroundColor: "#e98925"}}
+            >
+              <Plus className="w-4 h-4" />
+              Add Deal
+            </button>
+          </>
+        }
+      />
+      {/* Notices sit BELOW the header so the page title is always the first
+          thing on the page. Each is shrink-0 with its own mt-3, so they stack
+          between the header and the board without becoming a second scroller —
+          the board below keeps its flex-1 and absorbs whatever height is left. */}
       {moveError && (
-        <div className="mx-4 md:mx-6 mt-3 flex items-center justify-between gap-3 px-3 py-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg">
+        <div className="mx-4 md:mx-6 mt-3 flex items-center justify-between gap-3 px-3 py-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg shrink-0">
           <span>{moveError}</span>
           <button onClick={() => setMoveError('')} className="text-red-400 hover:text-red-700 transition shrink-0">✕</button>
         </div>
       )}
       <DeckViewsDigest views={deckViews ?? []} />
       <NeedsAttention deals={deals} />
-      {/* Header */}
-      <div className="px-4 md:px-6 py-4 bg-white border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">Pipeline</h1>
-          <p className="text-sm text-slate-500">{deals.length} deals</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg">
-            {(['All', 'Devices', 'Drugs'] as const).map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setCategory(cat)}
-                style={category === cat ? {color: '#5ba200'} : {}}
-                className={`px-3 py-1 text-sm font-medium rounded-md transition ${
-                  category === cat ? 'bg-white shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-          <input
-            type="text"
-            placeholder="Search deals…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 w-44 sm:w-52"
-          />
-          {!isMobile && (
-            <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
-              <button
-                onClick={() => setView('board')}
-                className={`p-1.5 ${view === 'board' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-                title="Board view"
-              >
-                <Columns3 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setView('list')}
-                className={`p-1.5 ${view === 'list' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-                title="List view"
-              >
-                <LayoutList className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg transition" style={{backgroundColor: "#e98925"}}
-          >
-            <Plus className="w-4 h-4" />
-            Add Deal
-          </button>
-        </div>
-      </div>
 
       {/* Board / List */}
       {effectiveView === 'board' ? (

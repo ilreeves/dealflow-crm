@@ -11,6 +11,7 @@ import InvestorDirectory from '@/components/settings/InvestorDirectory'
 import DataExport from '@/components/settings/DataExport'
 import SystemHealth from '@/components/settings/SystemHealth'
 import PitchCounts from '@/components/settings/PitchCounts'
+import PageHeader from '@/components/shared/PageHeader'
 
 const FIELD_TYPES: { value: CustomFieldType; label: string }[] = [
   { value: 'text', label: 'Text' },
@@ -102,12 +103,17 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-8">
-      <div className="mb-8">
-        <h1 className="text-xl font-semibold text-slate-900" title="Profile, team, custom fields, dropdown lists, investor directory, and data export">Settings</h1>
-      </div>
+    // Same frame as every other page: a full-width pinned header, then one
+    // scroll container. Settings used to be a centred max-w-2xl column with
+    // the title inside it, which made it look like a different app. The cards
+    // stay in a readable-width column (forms don't want to be 1400px wide), but
+    // left-aligned on the same edge as the header, like Fund Performance's and
+    // Revenue's max-w-6xl content.
+    <div className="flex flex-col h-full">
+      <PageHeader title="Settings" subtitle="Profile, team, lists and data export" />
 
-      <div className="space-y-6">
+      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6">
+      <div className="max-w-3xl space-y-6">
 
       <ProfileSettings />
       <TeamMembers />
@@ -278,6 +284,7 @@ export default function SettingsPage() {
       <DataExport />
       <SystemHealth />
 
+      </div>
       </div>
     </div>
   )

@@ -7,6 +7,7 @@ import { PERIODS, STATUSES, STATUS_COLORS, CLOSED_STATUSES, periodEnd } from '@/
 import { createClient } from '@/lib/supabase/client'
 import CatalystGantt from './CatalystGantt'
 import CatalystEditModal from './CatalystEditModal'
+import PageHeader from '@/components/shared/PageHeader'
 import { logCatalystActivity } from '@/lib/activity'
 
 interface Props {
@@ -226,38 +227,38 @@ export default function CatalystCalendar({ today, initialCatalysts, companyNames
   return (
     <>
     <div className="flex flex-col h-full">
-      <div className="px-4 md:px-6 py-4 bg-white border-b border-slate-200 flex items-center justify-between gap-4 shrink-0">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">Catalyst Calendar</h1>
-          <p className="text-sm text-slate-500">{catalysts.filter((c) => !legacySet.has(c.company_name) && !CLOSED_STATUSES.includes(c.status ?? 'Pending')).length} open</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
+      <PageHeader
+        title="Catalyst Calendar"
+        subtitle={`${catalysts.filter((c) => !legacySet.has(c.company_name) && !CLOSED_STATUSES.includes(c.status ?? 'Pending')).length} open`}
+        actions={
+          <>
+            <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setView('list')}
+                className={`p-1.5 ${view === 'list' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+                title="List view"
+              >
+                <LayoutList className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setView('gantt')}
+                className={`p-1.5 ${view === 'gantt' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+                title="Gantt view"
+              >
+                <BarChartHorizontal className="w-4 h-4" />
+              </button>
+            </div>
             <button
-              onClick={() => setView('list')}
-              className={`p-1.5 ${view === 'list' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-              title="List view"
+              onClick={() => setShowForm(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg transition"
+              style={{ backgroundColor: '#e98925' }}
             >
-              <LayoutList className="w-4 h-4" />
+              <Plus className="w-4 h-4" />
+              Add Catalyst
             </button>
-            <button
-              onClick={() => setView('gantt')}
-              className={`p-1.5 ${view === 'gantt' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-              title="Gantt view"
-            >
-              <BarChartHorizontal className="w-4 h-4" />
-            </button>
-          </div>
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg transition"
-            style={{ backgroundColor: '#e98925' }}
-          >
-            <Plus className="w-4 h-4" />
-            Add Catalyst
-          </button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <div className={`flex-1 overflow-y-auto px-4 md:px-6 py-6 ${view === 'list' ? 'max-w-3xl' : ''}`}>
         {actionError && (

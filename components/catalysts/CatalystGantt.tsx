@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { ChevronDown, Archive, RotateCcw } from 'lucide-react'
+import { ChevronDown, Archive, RotateCcw, Info } from 'lucide-react'
 import { Catalyst } from '@/lib/types'
 import { STATUSES, STATUS_BAR, CLOSED_STATUSES, periodEnd } from '@/lib/catalysts'
 import { createClient } from '@/lib/supabase/client'
@@ -260,14 +260,23 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, onError
                   title={isCollapsed(name) ? 'Show catalysts' : 'Hide catalysts'}
                 >
                   <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isCollapsed(name) ? '-rotate-90' : ''}`} />
-                  <span className={`text-xs font-bold uppercase tracking-wide truncate ${isLegacy ? 'text-slate-400' : 'text-slate-700'}`}>{name}</span>
-                  <span className="text-xs text-slate-400 font-medium ml-auto">{items.length}</span>
+                  {/* min-w-0 + truncate on the name, shrink-0 on the count: the
+                      name gives way first, but only once the column is genuinely
+                      full, and the full name is always one hover away. */}
+                  <span title={name} className={`min-w-0 text-xs font-bold uppercase tracking-wide truncate ${isLegacy ? 'text-slate-400' : 'text-slate-700'}`}>{name}</span>
+                  <span className="text-xs text-slate-400 font-medium ml-auto pl-1 shrink-0 tabular-nums">{items.length}</span>
                 </button>
                 {isLegacy && statusLegacyCompanies?.includes(name) ? (
                   // Legacy because the portfolio status says so — deleting from
                   // legacy_companies (all Restore does) wouldn't change that.
-                  <span className="px-2 py-1.5 shrink-0 text-[10px] text-slate-400 whitespace-nowrap opacity-0 group-hover/co:opacity-100 transition">
-                    Change status on the Portfolio tab
+                  // An icon with a tooltip, not inline text: the old hint was a
+                  // ~150px nowrap span that was invisible (opacity-0) but still
+                  // took up its width, which crushed these names to "AR… 7".
+                  <span
+                    title="Legacy via its Portfolio status — change the status on the Portfolio tab to restore it"
+                    className="px-2 py-1.5 shrink-0 text-slate-300 opacity-0 group-hover/co:opacity-100 transition cursor-help"
+                  >
+                    <Info className="w-3.5 h-3.5" />
                   </span>
                 ) : (
                   <button

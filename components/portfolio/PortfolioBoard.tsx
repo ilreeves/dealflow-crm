@@ -7,6 +7,8 @@ import { PortfolioCompany } from '@/lib/types'
 import PortfolioCompanyForm from './PortfolioCompanyForm'
 import PortfolioCompanyDetail from './PortfolioCompanyDetail'
 import PortfolioDeckAlerts from './PortfolioDeckAlerts'
+import PageHeader from '@/components/shared/PageHeader'
+import FundTag from '@/components/shared/FundTag'
 
 interface Props {
   initialCompanies: PortfolioCompany[]
@@ -129,46 +131,47 @@ export default function PortfolioBoard({ initialCompanies, fundOrder }: Props) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Topbar */}
-      <div className="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">Portfolio Companies</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{companies.length} {companies.length === 1 ? 'company' : 'companies'}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg">
-            {([['clinical', 'Clinical Stage'], ['fund', 'Fund']] as const).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setGroupBy(key)}
-                style={groupBy === key ? { color: '#5ba200' } : {}}
-                className={`px-3 py-1 text-sm font-medium rounded-md transition ${
-                  groupBy === key ? 'bg-white shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search companies…"
-              className="pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 w-52"
-            />
-          </div>
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 px-4 py-2 text-white text-sm font-medium rounded-lg transition"
-            style={{backgroundColor: '#e98925'}}
-          >
-            <Plus className="w-4 h-4" />
-            Add Company
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Portfolio Companies"
+        subtitle={`${companies.length} ${companies.length === 1 ? 'company' : 'companies'}`}
+        actions={
+          <>
+            <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg">
+              {([['clinical', 'Clinical Stage'], ['fund', 'Fund']] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setGroupBy(key)}
+                  style={groupBy === key ? { color: '#5ba200' } : {}}
+                  className={`px-3 py-1 text-sm font-medium rounded-md transition ${
+                    groupBy === key ? 'bg-white shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {/* Search + Add sized to match Pipeline's (py-1.5 / px-3) — this
+                page's were a notch larger, which made the two headers differ. */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search companies…"
+                className="pl-9 pr-4 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 w-52"
+              />
+            </div>
+            <button
+              onClick={() => setShowForm(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg transition"
+              style={{backgroundColor: '#e98925'}}
+            >
+              <Plus className="w-4 h-4" />
+              Add Company
+            </button>
+          </>
+        }
+      />
 
       <PortfolioDeckAlerts onOpen={(id) => { const co = companies.find((c) => c.id === id); if (co) setSelected(co) }} />
 
@@ -296,11 +299,7 @@ function CompanyCard({ company, onClick }: { company: PortfolioCompany; onClick:
           )}
           {(company.funds?.length ?? 0) > 0 && (
             <div className="flex items-center gap-1 flex-wrap mt-1.5">
-              {company.funds!.map((f) => (
-                <span key={f} className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide" style={{ backgroundColor: 'rgba(2,58,81,0.08)', color: '#023a51' }}>
-                  {f}
-                </span>
-              ))}
+              {company.funds!.map((f) => <FundTag key={f} fund={f} />)}
             </div>
           )}
         </div>

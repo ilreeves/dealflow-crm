@@ -10,6 +10,7 @@ import PortfolioCompanyDetail from "@/components/portfolio/PortfolioCompanyDetai
 import { useServerState } from "@/lib/useServerState"
 import Tile from "@/components/shared/Tile"
 import Th from "@/components/shared/Th"
+import PageHeader from "@/components/shared/PageHeader"
 
 // Only navy is used directly, for the cash figure. Every verdict colour comes
 // from runwayBandColor so the tiles and the rows can't diverge.
@@ -94,13 +95,9 @@ export default function RunwayView({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 py-4 bg-white border-b border-slate-200 shrink-0">
-        <h1 className="text-lg font-semibold text-slate-900" title="Cash on hand, monthly burn, and when each company runs out">
-          Runway
-        </h1>
-      </div>
+      <PageHeader title="Runway" subtitle="Cash on hand, burn, and when each company runs out" />
 
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6">
         <div className="max-w-6xl space-y-6">
           {/* Tiles */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

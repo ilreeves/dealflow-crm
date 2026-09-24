@@ -3,6 +3,7 @@ import { rowsOrThrow } from '@/lib/supabase/unwrap'
 import { Deal } from '@/lib/types'
 import BreakdownTable, { BreakdownRow } from '@/components/analytics/BreakdownTable'
 import CollapsibleSection from '@/components/analytics/CollapsibleSection'
+import PageHeader from '@/components/shared/PageHeader'
 // One variance convention app-wide. A local helper here painted +2.6% green
 // while the Revenue page painted the same figure navy; lib/revenue owns the rule.
 import { varianceBandColor, VARIANCE_BAND_PCT, SEVERE_MISS_PCT } from '@/lib/revenue'
@@ -406,11 +407,9 @@ export default async function AnalyticsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 py-4 bg-white border-b border-slate-200 shrink-0">
-        <h1 className="text-lg font-semibold text-slate-900">Analytics</h1>
-      </div>
+      <PageHeader title="Analytics" subtitle="Pipeline conversion and portfolio track record" />
 
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6">
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
 
         {/* ── Left column: pipeline analytics ── */}

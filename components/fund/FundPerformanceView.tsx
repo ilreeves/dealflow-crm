@@ -5,10 +5,13 @@ import { ChevronDown, ChevronRight, AlertTriangle, Clock } from "lucide-react"
 // The sign-aware fmtMoney here used to be this file's local fix; it is now the
 // shared implementation in lib/rounds.
 import { fmtMoney, fmtPct, valueColor } from "@/lib/rounds"
+import PageHeader from "@/components/shared/PageHeader"
+import FundTag from "@/components/shared/FundTag"
 
 export type CompanyInFund = { name: string; invested: number; value: number | null; ownership: number }
 export type FundRow = { fund: string; invested: number; value: number; moic: number | null; companies: CompanyInFund[] }
-export type TopPosition = { name: string; fund: string; ownership: number; invested: number; value: number | null; moic: number | null }
+/** `funds`: every fund holding the company, largest allocation first. */
+export type TopPosition = { name: string; funds: string[]; ownership: number; invested: number; value: number | null; moic: number | null }
 export type RiskFlag = { kind: "overdue" | "maturing"; company: string; text: string }
 export type Totals = { invested: number; value: number; moic: number | null; gain: number }
 
@@ -102,11 +105,12 @@ export default function FundPerformanceView({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 py-4 bg-white border-b border-slate-200 shrink-0">
-        <h1 className="text-lg font-semibold text-slate-900" title={`Invested capital, current value, and ownership across funds${asOf ? ` · as of ${asOf}` : ""}`}>Fund Performance</h1>
-      </div>
+      <PageHeader
+        title="Fund Performance"
+        subtitle={`Invested capital and current value across funds${asOf ? ` · as of ${asOf}` : ""}`}
+      />
 
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-6">
         {empty ? (
           <div className="max-w-md mx-auto text-center py-16">
             <p className="text-sm text-slate-500">No positions recorded yet.</p>
@@ -225,7 +229,21 @@ export default function FundPerformanceView({
                   {top.map((p, i) => (
                     <div key={p.name} className="flex items-center gap-3 px-4 py-3">
                       <span className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] text-white shrink-0" style={{ backgroundColor: FUND_COLORS[i % FUND_COLORS.length] }}>{initials(p.name)}</span>
-                      <span className="flex-1 min-w-0 truncate text-sm text-slate-800">{p.name} <span className="text-xs text-slate-400">· {p.fund} · {fmtPct(p.ownership)}</span></span>
+                      {/* Name on top, the holding funds as tags beneath. This was one
+                          line — "Francis Sidecar, H2Oey Ventures II, Fund II, … · 25.1%"
+                          — which truncated mid-list and ran ownership into the fund
+                          names. Tags wrap as whole units on narrow widths; ownership
+                          gets its own column. */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-800 truncate">{p.name}</p>
+                        <div className="flex flex-wrap items-center gap-1 mt-1">
+                          {p.funds.map((f) => <FundTag key={f} fund={f} />)}
+                          {/* On phones the ownership column is dropped to give the
+                              name room, and ownership rides along with the tags. */}
+                          <span className="sm:hidden text-[11px] text-slate-400 tabular-nums whitespace-nowrap">{fmtPct(p.ownership)} owned</span>
+                        </div>
+                      </div>
+                      <span className="hidden sm:inline text-xs text-slate-400 shrink-0 tabular-nums whitespace-nowrap">{fmtPct(p.ownership)} owned</span>
                       <span className="text-sm text-slate-400 shrink-0">{fmtMoney(p.invested)} → </span>
                       <span className="text-sm shrink-0" style={{ color: valueColor(p.value, p.invested) }}>{fmtMoney(p.value)}</span>
                       <MoicPill moic={p.moic} />

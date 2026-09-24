@@ -3,8 +3,23 @@
 import { useState, useEffect } from 'react'
 import { Loader2, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { formatDate } from '@/lib/utils'
 
-interface Member { id: string; full_name: string | null }
+interface Member {
+  id: string
+  full_name: string | null
+  // Mirrored from auth.users by supabase/migration_profile_identity.sql.
+  // Absent until that migration runs — the list then falls back to names only.
+  email?: string | null
+  joined_at?: string | null
+  last_sign_in_at?: string | null
+}
+
+// Postgres "undefined column" / PostgREST "column not in schema cache": the
+// identity migration hasn't been run yet. Anything else is a real failure.
+function isMissingColumn(err: { code?: string; message: string }): boolean {
+  return err.code === '42703' || err.code === 'PGRST204' || /column .* does not exist/i.test(err.message)
+}
 
 export default function TeamMembers() {
   const supabase = createClient()
@@ -12,17 +27,30 @@ export default function TeamMembers() {
   const [meId, setMeId] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [identityMissing, setIdentityMissing] = useState(false)
 
   useEffect(() => {
+    let active = true
     // Only the id is needed for the "(you)" tag — getClaims() reads it from the
     // locally-verified JWT instead of getUser()'s Auth-server round-trip.
-    supabase.auth.getClaims().then(({ data }) => setMeId(data?.claims?.sub ?? ''))
-    supabase.from('profiles').select('id,full_name').order('full_name')
-      .then(({ data, error }) => {
-        setMembers((data as Member[]) ?? [])
-        setLoadError(error ? error.message : '')
-        setLoading(false)
-      })
+    supabase.auth.getClaims().then(({ data }) => { if (active) setMeId(data?.claims?.sub ?? '') })
+    ;(async () => {
+      let res = await supabase.from('profiles').select('id,full_name,email,joined_at,last_sign_in_at')
+      if (res.error && isMissingColumn(res.error)) {
+        if (active) setIdentityMissing(true)
+        res = await supabase.from('profiles').select('id,full_name')
+      }
+      if (!active) return
+      // Named people first, then by email, so the accounts nobody recognises
+      // collect at the bottom where they're easy to review.
+      const rows = ((res.data as Member[]) ?? []).sort((a, b) =>
+        Number(!a.full_name) - Number(!b.full_name) ||
+        (a.full_name ?? a.email ?? '').localeCompare(b.full_name ?? b.email ?? ''))
+      setMembers(rows)
+      setLoadError(res.error ? res.error.message : '')
+      setLoading(false)
+    })()
+    return () => { active = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -30,8 +58,8 @@ export default function TeamMembers() {
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100">
         <h2 className="text-sm font-semibold text-slate-900">Team Members</h2>
-        {/* A failed load isn't "0 people with access". */}
-        {!loadError && <p className="text-xs text-slate-500 mt-0.5">{members.length} {members.length === 1 ? 'person' : 'people'} with access</p>}
+        {/* Neither a failed nor an unfinished load is "0 people with access". */}
+        {!loadError && !loading && <p className="text-xs text-slate-500 mt-0.5">{members.length} {members.length === 1 ? 'person' : 'people'} with access</p>}
       </div>
       {loading ? (
         <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
@@ -44,14 +72,32 @@ export default function TeamMembers() {
               <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
                 <User className="w-3.5 h-3.5 text-slate-400" />
               </div>
-              <span className="text-sm text-slate-700">{m.full_name || <span className="text-slate-400">Unnamed user</span>}</span>
-              {m.id === meId && <span className="text-xs text-slate-400">(you)</span>}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-slate-700 truncate">
+                  {m.full_name || m.email || <span className="text-slate-400">Unnamed user</span>}
+                  {m.id === meId && <span className="text-xs text-slate-400 ml-1.5">(you)</span>}
+                </p>
+                {m.full_name && m.email && <p className="text-xs text-slate-400 truncate">{m.email}</p>}
+              </div>
+              {(m.joined_at || m.last_sign_in_at !== undefined) && (
+                <div className="text-right shrink-0">
+                  {m.joined_at && <p className="text-xs text-slate-500">Joined {formatDate(m.joined_at)}</p>}
+                  <p className="text-[11px] text-slate-400">
+                    {m.last_sign_in_at ? `Last sign-in ${formatDate(m.last_sign_in_at)}` : 'Never signed in'}
+                  </p>
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
       <div className="px-5 py-3 border-t border-slate-100 bg-slate-50">
-        <p className="text-xs text-slate-400">New members are added from the Supabase Auth dashboard. They appear here once they set a display name.</p>
+        <p className="text-xs text-slate-400">
+          {identityMissing
+            ? <>Run <code className="text-slate-500">supabase/migration_profile_identity.sql</code> to show each account&apos;s email and last sign-in. </>
+            : null}
+          Members are added and removed in the Supabase Auth dashboard (Authentication → Users).
+        </p>
       </div>
     </div>
   )
