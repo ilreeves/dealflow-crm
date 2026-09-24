@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (error) {
       // An expired or replayed code must not look like a successful sign-in.
-      return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent('Sign-in link expired or already used. Please try again.')}`)
+      return NextResponse.redirect(`${origin}/login?error=link_expired`)
     }
   }
 

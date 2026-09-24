@@ -7,8 +7,8 @@ import LoginForm from './LoginForm'
 const LINK_EXPIRED = 'Sign-in link expired or already used. Please try again.'
 const ERROR_MESSAGES: Record<string, string> = {
   link_expired: LINK_EXPIRED,
-  // What /auth/callback passes today (the full sentence, URL-encoded) — kept so
-  // that redirect keeps showing the same message.
+  // What /auth/callback passed before it switched to the code — kept so an
+  // old redirect URL still in someone's history shows the same message.
   [LINK_EXPIRED]: LINK_EXPIRED,
   // Supabase's own codes for a dead email link, should one land here.
   otp_expired: LINK_EXPIRED,

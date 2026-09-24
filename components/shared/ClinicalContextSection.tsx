@@ -28,8 +28,11 @@ export default function ClinicalContextSection({ entityType, entityId, name, dru
     let active = true
     supabase.from('company_enrichment').select('trials,publications,fetched_at')
       .eq('entity_type', entityType).eq('entity_id', entityId).maybeSingle()
-      .then(({ data }) => {
+      .then(({ data, error: loadErr }) => {
         if (!active) return
+        // Without this a failed read looks like "never fetched" and invites a
+        // Refresh that burns an external lookup for data we already have.
+        if (loadErr) setError(`Couldn't load saved clinical context: ${loadErr.message}`)
         if (data) {
           setTrials((data.trials as Trial[]) ?? [])
           setPubs((data.publications as Pub[]) ?? [])

@@ -61,6 +61,9 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
   // mirror) fails and the user hits Save again, the retry must take the
   // UPDATE path — otherwise it inserts the deal a second time.
   const createdRef = useRef<Deal | null>(null)
+  // Same retry problem for the "Passed:" note: passReasonRequired keys on the
+  // `deal` prop, so a retry after a later step failed would add the note again.
+  const passNoteWrittenRef = useRef(false)
 
   const [form, setForm] = useState({
     name: deal?.name ?? '',
@@ -246,13 +249,15 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
       }
       await logActivity(saved.id, saved.name, 'Added to portfolio', 'Auto-added on move to Invested', actorName)
     }
-    if (passReasonRequired && passReason.trim()) {
-      await supabase.from('deal_notes').insert({
+    if (passReasonRequired && passReason.trim() && !passNoteWrittenRef.current) {
+      const { error: noteErr } = await supabase.from('deal_notes').insert({
         deal_id: saved.id,
         content: `Passed: ${passReason.trim()}`,
         author_id: actor?.id ?? null,
         author_name: actorName,
       })
+      if (noteErr) logError('deals', `pass note insert failed for ${saved.id}: ${noteErr.message}`, supabase)
+      else passNoteWrittenRef.current = true
     }
     onSaved(saved)
   }

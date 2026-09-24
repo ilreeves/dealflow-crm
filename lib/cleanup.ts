@@ -13,8 +13,10 @@ import { logError } from '@/lib/log'
 //     the row shouldn't exist at all).
 //
 // Usage: gather BEFORE deleting the parent (the cascade destroys the pointers),
-// finish AFTER the delete succeeds. Cleanup failures are logged, not surfaced —
-// the parent is already gone, so there's nothing actionable for the user.
+// finish AFTER the delete succeeds. A failed gather is returned as an error so
+// the caller can refuse the delete (the paths would be lost to the cascade);
+// failures in finish are logged, not surfaced — the parent is already gone, so
+// there's nothing actionable for the user.
 
 type EntityType = 'deal' | 'portfolio'
 
@@ -22,20 +24,22 @@ export async function gatherEntityCleanup(
   supabase: SupabaseClient,
   entityType: EntityType,
   entityId: string,
-): Promise<string[]> {
+): Promise<{ paths: string[]; error: string | null }> {
   const paths: string[] = []
   // A failed select means the paths it would have returned are lost once the
-  // cascade runs — those objects orphan in storage. The callers (deal modal,
-  // portfolio detail) don't catch, so throwing here would strand them in their
-  // "deleting…" state; instead each failure is logged loudly enough to find
-  // the orphans later, and the delete proceeds with whatever was gathered.
+  // cascade runs — those objects would orphan in storage for good. So the
+  // first failure is reported back and the caller refuses to delete; retrying
+  // later costs nothing, an orphaned file is never found again.
+  let error: string | null = null
+  const fail = (label: string, message: string) => {
+    logError('cleanup', `${label} select failed for ${entityType} ${entityId}: ${message}`, supabase)
+    error ??= `couldn't list its ${label.replace('_', ' ')} (${message})`
+  }
   const collect = (
     label: string,
     res: { data: { storage_path: string | null }[] | null; error: { message: string } | null },
   ) => {
-    if (res.error) {
-      logError('cleanup', `${label} select failed for ${entityType} ${entityId} — its storage objects will be orphaned: ${res.error.message}`, supabase)
-    }
+    if (res.error) fail(label, res.error.message)
     for (const r of res.data ?? []) if (r.storage_path) paths.push(r.storage_path)
   }
 
@@ -45,9 +49,7 @@ export async function gatherEntityCleanup(
       supabase.from('deal_meetings').select('id').eq('deal_id', entityId),
     ])
     collect('deal_files', files)
-    if (meetings.error) {
-      logError('cleanup', `deal_meetings select failed for deal ${entityId} — meeting files will be orphaned: ${meetings.error.message}`, supabase)
-    }
+    if (meetings.error) fail('deal_meetings', meetings.error.message)
     const meetingIds = (meetings.data ?? []).map((m: { id: string }) => m.id)
     if (meetingIds.length) {
       const mf = await supabase.from('meeting_files').select('storage_path').in('meeting_id', meetingIds)
@@ -65,7 +67,7 @@ export async function gatherEntityCleanup(
     .eq('entity_id', entityId)
   collect('company_decks', decks)
 
-  return paths
+  return { paths, error }
 }
 
 export async function finishEntityCleanup(

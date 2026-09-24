@@ -3,9 +3,9 @@
 import { useState } from "react"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { fmtMoney } from "@/lib/rounds"
+import { combineSeries, seriesMax, FundSeries } from "@/lib/valuationHistory"
 
-export type SnapshotPoint = { date: string; invested: number; value: number }
-export type FundSeries = { fund: string; points: SnapshotPoint[] }
+export type { SnapshotPoint, FundSeries } from "@/lib/valuationHistory"
 
 // Show each mark's actual as-of date rather than an H1/H2 or quarter bucket.
 // These are audited marks struck on specific days, and the books carry them at
@@ -35,23 +35,13 @@ export default function ValuationHistory({ series, scaleMax, spvFunds }: {
   const core = series.filter((s) => !isSpv.has(s.fund))
   const sidecars = series.filter((s) => isSpv.has(s.fund))
 
-  const byDate = new Map<string, { invested: number; value: number }>()
-  for (const s of sidecars) {
-    for (const p of s.points) {
-      const e = byDate.get(p.date) ?? { invested: 0, value: 0 }
-      e.invested += p.invested; e.value += p.value
-      byDate.set(p.date, e)
-    }
-  }
-  const combined: FundSeries | null = byDate.size
-    ? {
-        fund: `SPVs & Sidecars (${sidecars.length})`,
-        points: Array.from(byDate.entries())
-          .map(([date, v]) => ({ date, invested: v.invested, value: v.value }))
-          .sort((a, b) => a.date.localeCompare(b.date)),
-      }
-    : null
+  // Marks on different dates are carried forward (see combineSeries), so each
+  // combined bar covers every vehicle marked by then.
+  const combined = combineSeries(`SPVs & Sidecars (${sidecars.length})`, sidecars)
   const shown = combined ? [...core, combined] : core
+  // The page's scale only knows the per-vehicle bars; the combined series sums
+  // them and can be taller, so widen the scale rather than overflow the band.
+  const scale = Math.max(scaleMax, combined ? seriesMax([combined]) : 1)
 
   return (
     <div>
@@ -85,8 +75,8 @@ export default function ValuationHistory({ series, scaleMax, spvFunds }: {
             <div className="flex items-end gap-6 overflow-x-auto pb-1">
               {points.map((p) => {
                 const tvpi = p.invested > 0 ? p.value / p.invested : null
-                const hInv = Math.max((p.invested / scaleMax) * 120, 2)
-                const hVal = Math.max((p.value / scaleMax) * 120, 2)
+                const hInv = Math.max((p.invested / scale) * 120, 2)
+                const hVal = Math.max((p.value / scale) * 120, 2)
                 return (
                   <div key={p.date} className="flex flex-col items-center gap-1.5 shrink-0">
                     <div className="flex items-end gap-1" style={{ height: 120 }}>
@@ -128,8 +118,8 @@ export default function ValuationHistory({ series, scaleMax, spvFunds }: {
                       return (
                         <div key={p.date} className="flex flex-col items-center gap-1 shrink-0">
                           <div className="flex items-end gap-1" style={{ height: 64 }}>
-                            <div className="w-5 rounded-t" style={{ height: Math.max((p.invested / scaleMax) * 64, 2), backgroundColor: "#cbd5e1" }} title={`Invested ${fmtMoney(p.invested)}`} />
-                            <div className="w-5 rounded-t" style={{ height: Math.max((p.value / scaleMax) * 64, 2), backgroundColor: p.value >= p.invested ? GREEN : ORANGE }} title={`Value ${fmtMoney(p.value)}`} />
+                            <div className="w-5 rounded-t" style={{ height: Math.max((p.invested / scale) * 64, 2), backgroundColor: "#cbd5e1" }} title={`Invested ${fmtMoney(p.invested)}`} />
+                            <div className="w-5 rounded-t" style={{ height: Math.max((p.value / scale) * 64, 2), backgroundColor: p.value >= p.invested ? GREEN : ORANGE }} title={`Value ${fmtMoney(p.value)}`} />
                           </div>
                           <span className="text-[10px] text-slate-500">{label(p.date)}</span>
                           <span className="text-[10px] text-slate-400 tabular-nums">{fmtMoney(p.value)}</span>

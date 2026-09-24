@@ -125,7 +125,13 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
     setDeleting(true)
     // Snapshot storage paths BEFORE the delete — the cascade destroys the rows
     // that point at them.
-    const paths = await gatherEntityCleanup(supabase, 'deal', deal.id)
+    const { paths, error: gatherErr } = await gatherEntityCleanup(supabase, 'deal', deal.id)
+    if (gatherErr) {
+      // Deleting now would orphan the files the failed lookup missed.
+      setDeleting(false)
+      setStageError(`Couldn't delete ${deal.name}: ${gatherErr}. Nothing was deleted — try again.`)
+      return
+    }
     const { error } = await supabase.from('deals').delete().eq('id', deal.id)
     if (error) {
       setDeleting(false)

@@ -48,7 +48,13 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
     setDeleteError('')
     // Snapshot storage paths BEFORE the delete — the cascade destroys the rows
     // that point at them.
-    const paths = await gatherEntityCleanup(supabase, 'portfolio', company.id)
+    const { paths, error: gatherErr } = await gatherEntityCleanup(supabase, 'portfolio', company.id)
+    if (gatherErr) {
+      // Deleting now would orphan the files the failed lookup missed.
+      setDeleting(false)
+      setDeleteError(`Couldn't delete ${company.name}: ${gatherErr}. Nothing was deleted — try again.`)
+      return
+    }
     const { error } = await supabase.from('portfolio_companies').delete().eq('id', company.id)
     if (error) {
       setDeleting(false)

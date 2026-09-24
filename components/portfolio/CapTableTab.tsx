@@ -352,7 +352,9 @@ function ClassEditor({
   onCancel: () => void
 }) {
   const supabase = createClient()
-  const isNew = !initial
+  // Set once a new class's row exists. If its holdings then fail, the retry
+  // must UPDATE that row — inserting again created a second copy of the class.
+  const [createdId, setCreatedId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   // Per-entity Solas holdings in this class ("Fund II", "Cryosa Sidecar", …).
@@ -408,11 +410,12 @@ function ClassEditor({
       conversion_price: f.class_type === "Other" ? parseNum(f.conversion_price) : null,
       notes: f.notes || null,
     }
-    let classId = initial?.id
-    if (isNew) {
+    let classId = initial?.id ?? createdId ?? undefined
+    if (!classId) {
       const { data, error: e } = await supabase.from("portfolio_share_classes").insert(payload).select("id").single()
       if (e || !data) { setError(saveHint(e?.message ?? "insert returned no row")); setSaving(false); return }
       classId = (data as { id: string }).id
+      setCreatedId(classId)
     } else {
       const { error: e } = await supabase.from("portfolio_share_classes").update(payload).eq("id", classId!)
       if (e) { setError(saveHint(e.message)); setSaving(false); return }

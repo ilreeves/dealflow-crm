@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Trash2, Loader2, Check } from 'lucide-react'
 import { InvestorIntro, InvestorContact, INTRO_STATUSES } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
+import { logError } from '@/lib/log'
 
 const STATUS_COLORS: Record<string, string> = {
   'Introduced':        'bg-blue-100 text-blue-700',
@@ -48,7 +49,13 @@ export default function InvestorIntrosTab({ table, fkColumn, entityId }: Props) 
         setLoadedKey(entityKey)
       })
     supabase.from('investor_contacts').select('*').order('name')
-      .then(({ data }) => { if (!cancelled) setContacts((data as InvestorContact[]) ?? []) })
+      .then(({ data, error: dirErr }) => {
+        if (cancelled) return
+        // Only powers autofill, so not worth an on-screen error — but leave a
+        // trace in System Health rather than failing silently.
+        if (dirErr) logError('investor-intros', `investor_contacts load failed: ${dirErr.message}`, supabase)
+        setContacts((data as InvestorContact[]) ?? [])
+      })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table, fkColumn, entityId])
