@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { X, Pencil, Trash2, Plus, Globe, Mail, Building2, DollarSign, Loader2, Link, MapPin, Tag } from 'lucide-react'
 import { PortfolioCompany, Catalyst } from '@/lib/types'
-import { PERIODS, STATUS_COLORS, isClosed, periodEnd } from '@/lib/catalysts'
+import { PERIODS, STATUS_COLORS, isClosed, periodEnd, confirmCatalystDelete } from '@/lib/catalysts'
 import { buildDeckEmail } from '@/lib/deck'
 import { logCatalystActivity } from '@/lib/activity'
 import { gatherEntityCleanup, finishEntityCleanup } from '@/lib/cleanup'
@@ -336,6 +336,7 @@ function CatalystsTab({ companyId, companyName }: { companyId: string; companyNa
   }
 
   async function handleDeleteCatalyst(cat: Catalyst) {
+    if (!confirmCatalystDelete(cat)) return
     setDeleteError('')
     // Only drop the row and log the activity once the delete actually landed —
     // otherwise the feed records a deletion that never happened.

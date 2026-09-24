@@ -3,12 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "sh scripts/icloud-exclude.sh",
     "dev": "NODE_OPTIONS=--use-bundled-ca next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "postinstall": "sh scripts/icloud-exclude.sh"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",

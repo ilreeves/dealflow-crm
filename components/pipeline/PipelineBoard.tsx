@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { Plus, LayoutList, Columns3, ChevronRight } from 'lucide-react'
@@ -38,7 +38,6 @@ export default function PipelineBoard({ initialDeals, deckViews }: Props) {
   const [collapsedStages, setCollapsedStages] = useState<Set<DealStage>>(new Set(['Passed']))
   const actorName = useActorName()
   const [pendingPass, setPendingPass] = useState<{ id: string; name: string; fromStage: DealStage } | null>(null)
-  const [isMobile, setIsMobile] = useState(false)
   // ?open=<id> deep-links a deal modal (global search sends people here). Track
   // the last-seen param and react only when it CHANGES (the useServerState
   // derived-state idiom): a mount-time read alone made search a no-op when you
@@ -55,14 +54,10 @@ export default function PipelineBoard({ initialDeals, deckViews }: Props) {
   const [moveError, setMoveError] = useState('')
   const supabase = createClient()
 
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768)
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [])
-
-  const effectiveView = isMobile ? 'list' : view
+  // Phones always get the list. That used to be decided in an effect reading
+  // window.innerWidth — which can't run on the server, so every phone load
+  // painted the board first and then swapped. CSS decides now (max-md:hidden /
+  // md:hidden below), so the right view is there from the first frame.
   // Invested deals graduate to Portfolio — keep the stage in data, but drop it from the pipeline view
   const boardStages = DEAL_STAGES.filter((st) => st !== 'Invested')
 
@@ -187,24 +182,22 @@ export default function PipelineBoard({ initialDeals, deckViews }: Props) {
               onChange={(e) => setSearch(e.target.value)}
               className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 w-44 sm:w-52"
             />
-            {!isMobile && (
-              <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
-                <button
-                  onClick={() => setView('board')}
-                  className={`p-1.5 ${view === 'board' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-                  title="Board view"
-                >
-                  <Columns3 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setView('list')}
-                  className={`p-1.5 ${view === 'list' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-                  title="List view"
-                >
-                  <LayoutList className="w-4 h-4" />
-                </button>
-              </div>
-            )}
+            <div className="max-md:hidden flex items-center border border-slate-200 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setView('board')}
+                className={`p-1.5 ${view === 'board' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+                title="Board view"
+              >
+                <Columns3 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setView('list')}
+                className={`p-1.5 ${view === 'list' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+                title="List view"
+              >
+                <LayoutList className="w-4 h-4" />
+              </button>
+            </div>
             <button
               onClick={() => setShowForm(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-white text-sm font-medium rounded-lg transition" style={{backgroundColor: "#e98925"}}
@@ -229,8 +222,8 @@ export default function PipelineBoard({ initialDeals, deckViews }: Props) {
       <NeedsAttention deals={deals} />
 
       {/* Board / List */}
-      {effectiveView === 'board' ? (
-        <div className="flex-1 overflow-x-auto">
+      {view === 'board' && (
+        <div className="flex-1 overflow-x-auto max-md:hidden">
           <DragDropContext onDragEnd={handleDragEnd}>
             <div className="flex gap-3 p-4 h-full min-w-max lg:min-w-0">
               {boardStages.map((stage) => {
@@ -320,15 +313,14 @@ export default function PipelineBoard({ initialDeals, deckViews }: Props) {
             </div>
           </DragDropContext>
         </div>
-      ) : (
-        <div className="flex-1 overflow-auto p-4 md:p-6">
-          <DealsTable
-            deals={filteredDeals.filter((d) => d.stage !== 'Invested')}
-            onUpdated={handleDealUpdated}
-            onDeleted={handleDealDeleted}
-          />
-        </div>
       )}
+      <div className={`flex-1 overflow-auto p-4 md:p-6${view === 'board' ? ' md:hidden' : ''}`}>
+        <DealsTable
+          deals={filteredDeals.filter((d) => d.stage !== 'Invested')}
+          onUpdated={handleDealUpdated}
+          onDeleted={handleDealDeleted}
+        />
+      </div>
 
       {showForm && (
         <DealForm

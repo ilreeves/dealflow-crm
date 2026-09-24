@@ -3,7 +3,9 @@ import { isExpired } from '@/lib/deck'
 import { logError } from '@/lib/log'
 import DeckGate from './DeckGate'
 
-export const runtime = 'nodejs'
+// No `export const runtime`: Node is already the default, and declaring it
+// made Vercel split this route into its own function — which idled cold
+// (2–3s first hits for outside investors) while the main app stayed warm.
 export const dynamic = 'force-dynamic'
 
 type Lookup = { company: string | null; label: string | null; expired: boolean }

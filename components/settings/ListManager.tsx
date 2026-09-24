@@ -1,11 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, ChevronUp, ChevronDown, Loader2 } from 'lucide-react'
+import { Plus, Trash2, ChevronUp, ChevronDown, Loader2, Pencil } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import InfoTip from '@/components/shared/InfoTip'
+import RenameFund from '@/components/settings/RenameFund'
 
 interface Opt { id: string; value: string; sort_order: number }
+
+// A fund rename also rewrites the spv_fund list (and could touch any list the
+// page shows), so every ListManager on the page reloads when one fires it.
+const LISTS_CHANGED = 'list-options-changed'
 
 export default function ListManager({ listKey, title, description, tip }: { listKey: string; title: string; description: string; tip?: string }) {
   const [opts, setOpts] = useState<Opt[]>([])
@@ -16,15 +21,26 @@ export default function ListManager({ listKey, title, description, tip }: { list
   const [newVal, setNewVal] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  // Fund names are copied into positions, tags, holdings and snapshots, so the
+  // fund list renames through rename_fund() rather than editing this row alone.
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const canRename = listKey === 'fund'
   const supabase = createClient()
 
   useEffect(() => {
-    supabase.from('list_options').select('id,value,sort_order').eq('list_key', listKey).order('sort_order')
-      .then(({ data, error: e }) => {
-        setOpts((data as Opt[]) ?? [])
-        setLoadError(e ? e.message : '')
-        setLoading(false)
-      })
+    let active = true
+    const load = () => {
+      supabase.from('list_options').select('id,value,sort_order').eq('list_key', listKey).order('sort_order')
+        .then(({ data, error: e }) => {
+          if (!active) return
+          setOpts((data as Opt[]) ?? [])
+          setLoadError(e ? e.message : '')
+          setLoading(false)
+        })
+    }
+    load()
+    window.addEventListener(LISTS_CHANGED, load)
+    return () => { active = false; window.removeEventListener(LISTS_CHANGED, load) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -90,7 +106,10 @@ export default function ListManager({ listKey, title, description, tip }: { list
                 <button onClick={() => move(i, -1)} disabled={i === 0} className="text-slate-300 hover:text-slate-600 disabled:opacity-30"><ChevronUp className="w-3 h-3" /></button>
                 <button onClick={() => move(i, 1)} disabled={i === opts.length - 1} className="text-slate-300 hover:text-slate-600 disabled:opacity-30"><ChevronDown className="w-3 h-3" /></button>
               </div>
-              <span className="flex-1 text-sm text-slate-700">{o.value}</span>
+              <span className="flex-1 min-w-0 break-words text-sm text-slate-700">{o.value}</span>
+              {canRename && (
+                <button onClick={() => setRenaming(o.value)} aria-label={`Rename ${o.value}`} title="Rename everywhere" className="p-1 text-slate-300 hover:text-slate-700 md:opacity-0 md:group-hover:opacity-100 transition"><Pencil className="w-3.5 h-3.5" /></button>
+              )}
               <button onClick={() => remove(o.id)} className="p-1 text-slate-300 hover:text-red-500 md:opacity-0 md:group-hover:opacity-100 transition"><Trash2 className="w-3.5 h-3.5" /></button>
             </div>
           ))}
@@ -109,6 +128,13 @@ export default function ListManager({ listKey, title, description, tip }: { list
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />} Add
         </button>
       </div>
+      {renaming != null && (
+        <RenameFund
+          oldName={renaming}
+          onClose={() => setRenaming(null)}
+          onRenamed={() => window.dispatchEvent(new Event(LISTS_CHANGED))}
+        />
+      )}
     </div>
   )
 }

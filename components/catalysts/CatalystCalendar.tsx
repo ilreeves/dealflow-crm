@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Plus, Trash2, Loader2, CalendarDays, Pencil, LayoutList, BarChartHorizontal, Check, X, Bell, ChevronDown } from 'lucide-react'
 import { Catalyst } from '@/lib/types'
-import { PERIODS, STATUSES, STATUS_COLORS, CLOSED_STATUSES, periodEnd } from '@/lib/catalysts'
+import { PERIODS, STATUSES, STATUS_COLORS, CLOSED_STATUSES, periodEnd, confirmCatalystDelete } from '@/lib/catalysts'
 import { createClient } from '@/lib/supabase/client'
 import CatalystGantt from './CatalystGantt'
 import CatalystEditModal from './CatalystEditModal'
@@ -159,6 +159,7 @@ export default function CatalystCalendar({ today, initialCatalysts, companyNames
 
   async function handleDelete(id: string) {
     const cat = catalysts.find((c) => c.id === id)
+    if (cat && !confirmCatalystDelete(cat)) return
     setActionError('')
     const { error: e } = await supabase.from('catalysts').delete().eq('id', id)
     if (e) {

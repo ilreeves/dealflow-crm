@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { X, Loader2, Trash2 } from 'lucide-react'
 import { Catalyst } from '@/lib/types'
-import { PERIODS, STATUSES, periodEnd } from '@/lib/catalysts'
+import { PERIODS, STATUSES, periodEnd, confirmCatalystDelete } from '@/lib/catalysts'
 import { createClient } from '@/lib/supabase/client'
 import { logCatalystActivity } from '@/lib/activity'
 
@@ -64,6 +64,7 @@ export default function CatalystEditModal({ catalyst, onClose, onSaved, onDelete
   }
 
   async function handleDelete() {
+    if (!confirmCatalystDelete(catalyst)) return
     setDeleting(true)
     setError('')
     const { error: e } = await supabase.from('catalysts').delete().eq('id', catalyst.id)

@@ -49,3 +49,15 @@ export function periodEnd(period: string, year: number): string {
     default:   return `${year}-12-31`
   }
 }
+
+/**
+ * Catalyst deletes are immediate and permanent (the row and its history go),
+ * and the delete buttons sit one mis-tap from edit controls in the list, the
+ * Gantt bar menu, the edit modal and the company modal — so every path asks.
+ * The native dialog is deliberate: it works identically on desktop and touch,
+ * and can't be scrolled out of view inside a modal.
+ */
+export function confirmCatalystDelete(c: { title: string; company_name?: string | null }): boolean {
+  const who = c.company_name ? `${c.company_name}: ` : ''
+  return window.confirm(`Delete the catalyst "${who}${c.title}"? This can't be undone.`)
+}

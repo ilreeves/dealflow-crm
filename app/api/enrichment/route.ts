@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
-export const runtime = 'nodejs'
+// No `export const runtime`: Node is already the default, and declaring it
+// made Vercel split this route into its own function — which idled cold
+// (2–3s first hits for outside investors) while the main app stayed warm.
 export const dynamic = 'force-dynamic'
 
 // Public, key-free APIs. Both are called server-side (no CORS), best-effort:
