@@ -15,6 +15,7 @@ import NeedsAttention from './NeedsAttention'
 import DeckViewsDigest, { DeckViewDigestRow } from './DeckViewsDigest'
 import DealForm from '@/components/deals/DealForm'
 import DealsTable from './DealsTable'
+import MobilePipeline from './MobilePipeline'
 import PassReasonModal from '@/components/deals/PassReasonModal'
 import DealDetailModal from '@/components/deals/DealDetailModal'
 import PageHeader from '@/components/shared/PageHeader'
@@ -180,7 +181,7 @@ export default function PipelineBoard({ initialDeals, deckViews }: Props) {
               placeholder="Search deals…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 w-44 sm:w-52"
+              className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 w-44 sm:w-52 max-md:order-last max-md:w-full"
             />
             <div className="max-md:hidden flex items-center border border-slate-200 rounded-lg overflow-hidden">
               <button
@@ -314,11 +315,24 @@ export default function PipelineBoard({ initialDeals, deckViews }: Props) {
           </DragDropContext>
         </div>
       )}
-      <div className={`flex-1 overflow-auto p-4 md:p-6${view === 'board' ? ' md:hidden' : ''}`}>
-        <DealsTable
-          deals={filteredDeals.filter((d) => d.stage !== 'Invested')}
+      {view === 'list' && (
+        <div className="flex-1 overflow-auto p-4 md:p-6 max-md:hidden">
+          <DealsTable
+            deals={filteredDeals.filter((d) => d.stage !== 'Invested')}
+            onUpdated={handleDealUpdated}
+            onDeleted={handleDealDeleted}
+          />
+        </div>
+      )}
+      {/* Phones get their own stacked-by-stage view regardless of the toggle
+          (which is hidden there) — see MobilePipeline for why. */}
+      <div className="flex-1 overflow-auto p-4 md:hidden">
+        <MobilePipeline
+          stages={boardStages}
+          dealsByStage={dealsByStage}
           onUpdated={handleDealUpdated}
           onDeleted={handleDealDeleted}
+          expandAll={search.trim() !== ''}
         />
       </div>
 
