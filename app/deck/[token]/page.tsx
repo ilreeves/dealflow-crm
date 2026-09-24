@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isExpired } from '@/lib/deck'
 import { logError } from '@/lib/log'
@@ -30,8 +31,36 @@ async function lookup(token: string): Promise<Lookup> {
   return { company: data.company_name as string, label: data.label as string, expired: isExpired(data.shared_at as string | null) }
 }
 
+// The page streams: the frame and a loading card go out immediately, and the
+// gate fills in when the lookup returns. Investors opening a link see the
+// page at once instead of a blank tab while the database answers.
 export default async function DeckPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
+  return (
+    <Suspense fallback={<DeckLoading />}>
+      <DeckContent token={token} />
+    </Suspense>
+  )
+}
+
+async function DeckContent({ token }: { token: string }) {
   const { company, label, expired } = await lookup(token)
   return <DeckGate token={token} company={company} label={label} expired={expired} />
+}
+
+// Same card as DeckGate's Shell, so the swap to the real gate doesn't jump.
+function DeckLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-100 p-6" aria-busy="true">
+        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#5ba200' }}>Solas BioVentures</p>
+        <div className="mt-3 space-y-2.5 animate-pulse">
+          <div className="h-5 w-2/3 rounded bg-slate-100" />
+          <div className="h-3.5 w-full rounded bg-slate-100" />
+          <div className="h-9 w-full rounded-lg bg-slate-100 mt-4" />
+          <div className="h-9 w-full rounded-lg bg-slate-100" />
+        </div>
+      </div>
+    </div>
+  )
 }
