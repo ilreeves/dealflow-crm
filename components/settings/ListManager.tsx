@@ -91,7 +91,7 @@ export default function ListManager({ listKey, title, description, tip }: { list
                 <button onClick={() => move(i, 1)} disabled={i === opts.length - 1} className="text-slate-300 hover:text-slate-600 disabled:opacity-30"><ChevronDown className="w-3 h-3" /></button>
               </div>
               <span className="flex-1 text-sm text-slate-700">{o.value}</span>
-              <button onClick={() => remove(o.id)} className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"><Trash2 className="w-3.5 h-3.5" /></button>
+              <button onClick={() => remove(o.id)} className="p-1 text-slate-300 hover:text-red-500 md:opacity-0 md:group-hover:opacity-100 transition"><Trash2 className="w-3.5 h-3.5" /></button>
             </div>
           ))}
         </div>

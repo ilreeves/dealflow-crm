@@ -154,13 +154,14 @@ export default function PdfViewer({ file, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+    // Full-screen on phones (max-md); md+ unchanged.
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 max-md:p-0">
       <div
         ref={containerRef}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden max-md:max-w-none max-md:h-dvh max-md:max-h-none max-md:rounded-none"
       >
         {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100">
+        <div className="flex items-center gap-3 max-md:gap-2 px-4 py-3 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <span
               className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
@@ -175,14 +176,14 @@ export default function PdfViewer({ file, onClose }: Props) {
             className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 border border-slate-200 hover:border-slate-300 rounded-lg px-2.5 py-1.5 transition"
             title="Download"
           >
-            <Download className="w-3.5 h-3.5" /> Download
+            <Download className="w-3.5 h-3.5" /> <span className="max-md:hidden">Download</span>
           </button>
           <button
             onClick={handleFullscreen}
             className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 border border-slate-200 hover:border-slate-300 rounded-lg px-2.5 py-1.5 transition"
             title="Fullscreen"
           >
-            <Maximize2 className="w-3.5 h-3.5" /> Fullscreen
+            <Maximize2 className="w-3.5 h-3.5" /> <span className="max-md:hidden">Fullscreen</span>
           </button>
           <button
             onClick={onClose}

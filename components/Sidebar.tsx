@@ -1,9 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, Settings, LogOut, Building2, Activity, BarChart2, CalendarDays, Search, TrendingUp, LineChart, Wallet } from 'lucide-react'
+import { LayoutDashboard, Settings, LogOut, Building2, Activity, BarChart2, CalendarDays, Search, TrendingUp, LineChart, Wallet, Menu, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 
@@ -15,6 +16,10 @@ export default function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  // Phones in portrait: the 224px rail took ~60% of the screen and squeezed
+  // every page into a strip. Below md it becomes a slide-over drawer opened
+  // from a slim top bar; md and up are unchanged.
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -34,8 +39,37 @@ export default function Sidebar({ user }: SidebarProps) {
     { href: '/settings', label: 'Settings', icon: Settings },
   ]
 
+  const openSearch = () => {
+    setMobileOpen(false)
+    window.dispatchEvent(new Event('open-global-search'))
+  }
+
   return (
-    <aside className="w-56 flex flex-col text-slate-300 shrink-0" style={{backgroundColor: "#023a51"}}>
+    <>
+    {/* Mobile top bar */}
+    <header className="md:hidden flex items-center gap-2 h-12 px-2 shrink-0 text-slate-200" style={{backgroundColor: "#023a51"}}>
+      <button onClick={() => setMobileOpen(true)} aria-label="Open menu" className="p-2 rounded-lg hover:bg-white/10 transition">
+        <Menu className="w-5 h-5" />
+      </button>
+      <Image src="/solas-orb-white.gif" alt="Solas" width={22} height={22} className="shrink-0" />
+      {/* The page's own header names the page — repeating it here read double. */}
+      <span className="font-semibold text-white text-sm truncate">Solas Dealflow</span>
+      <button onClick={openSearch} aria-label="Search" className="ml-auto p-2 rounded-lg hover:bg-white/10 transition">
+        <Search className="w-5 h-5" />
+      </button>
+    </header>
+
+    {mobileOpen && <div className="md:hidden fixed inset-0 z-[60] bg-black/40" onClick={() => setMobileOpen(false)} />}
+
+    <aside
+      className={cn(
+        'w-56 flex-col text-slate-300 shrink-0',
+        // md+: the permanent rail. Below: an off-canvas drawer over the page.
+        'md:static md:flex',
+        mobileOpen ? 'fixed inset-y-0 left-0 z-[70] flex shadow-2xl' : 'hidden',
+      )}
+      style={{backgroundColor: "#023a51"}}
+    >
       {/* Logo */}
       <div className="px-4 py-5 border-b border-slate-800">
         <div className="flex items-center gap-2.5">
@@ -47,23 +81,27 @@ export default function Sidebar({ user }: SidebarProps) {
             className="shrink-0"
           />
           <span className="font-semibold text-white text-sm">Solas Dealflow</span>
+          <button onClick={() => setMobileOpen(false)} aria-label="Close menu" className="md:hidden ml-auto p-1 -mr-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
       {/* Nav */}
       <nav className="flex-1 px-2 py-3 space-y-0.5">
         <button
-          onClick={() => window.dispatchEvent(new Event('open-global-search'))}
+          onClick={openSearch}
           className="w-full flex items-center gap-2.5 px-3 py-2 mb-1 text-sm font-medium rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition"
         >
           <Search className="w-4 h-4" />
           <span>Search</span>
-          <kbd className="ml-auto text-[10px] text-slate-500 border border-slate-600 rounded px-1.5 py-0.5">⌘K</kbd>
+          <kbd className="hidden md:inline ml-auto text-[10px] text-slate-500 border border-slate-600 rounded px-1.5 py-0.5">⌘K</kbd>
         </button>
         {navItems.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
             href={href}
+            onClick={() => setMobileOpen(false)}
             style={pathname === href ? {backgroundColor: 'rgba(91,162,0,0.25)'} : {}}
             className={cn(
               'flex items-center gap-2.5 px-3 py-2 text-sm font-medium transition',
@@ -93,5 +131,6 @@ export default function Sidebar({ user }: SidebarProps) {
         </button>
       </div>
     </aside>
+    </>
   )
 }

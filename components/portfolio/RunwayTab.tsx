@@ -184,7 +184,7 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
   return (
     <div className="space-y-4">
       {/* Stat cards */}
-      <div className="grid grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-4 max-md:grid-cols-2 gap-2.5">
         <Stat
           label="Cash on hand"
           value={fmtMoney(last?.cash_on_hand)}
@@ -355,15 +355,17 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
 
       {/* Observations over time */}
       <div className="border border-slate-200 rounded-xl bg-white">
-        <div className="flex items-center justify-between px-4 py-2.5">
-          <div className="flex items-center gap-2">
+        {/* Phones: the hint drops under the title and the controls wrap to
+            their own right-aligned line. */}
+        <div className="flex items-center justify-between max-md:flex-wrap max-md:gap-2 px-4 py-2.5">
+          <div className="flex items-center gap-2 max-md:flex-wrap max-md:gap-y-0 max-md:min-w-0">
             <Wallet className="w-4 h-4 text-slate-400" />
             <span className="text-sm font-medium text-slate-600">Cash &amp; burn</span>
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-slate-400 max-md:basis-full max-md:pl-6">
               {curve.length ? "reported, then projected" : "by observation date"}
             </span>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 max-md:ml-auto">
             {/* ALWAYS PRESENT, even where the two views are identical because
                 the forecast has no tail past the window. Isaiah has now made
                 this point twice — first about the Log button, then here — and
@@ -390,7 +392,7 @@ export default function RunwayTab({ companyId }: { companyId: string }) {
             {!adding && !editingId && (
               <button
                 onClick={() => setAdding(true)}
-                className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 hover:border-slate-300 transition"
+                className="flex items-center gap-1 max-md:whitespace-nowrap text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 hover:border-slate-300 transition"
               >
                 <Plus className="w-3.5 h-3.5" /> Add snapshot
               </button>
@@ -494,18 +496,20 @@ function CashRow({ row, onEdit, onDelete }: { row: PortfolioCash; onEdit: () => 
   const derived = derivedRunwayMonths(row)
   const z = zeroCashDate(row)
   return (
+    // Phones (max-md): fixed column widths released and the row wraps, rather
+    // than pushing the modal body into a sideways scroll. md+ unchanged.
     <div className="px-4 py-2.5 group">
-      <div className="flex items-center gap-3 text-sm">
+      <div className="flex items-center gap-3 max-md:flex-wrap max-md:gap-y-1 text-sm">
         <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-lg bg-slate-100 text-xs font-bold text-slate-600 shrink-0 w-[6rem]">
           {exactDate(row.as_of)}
         </span>
-        <div className="flex items-baseline gap-1.5 w-32 shrink-0">
+        <div className="flex items-baseline gap-1.5 w-32 max-md:w-auto shrink-0">
           <span className="text-xs text-slate-400">cash</span>
           <span className="font-medium tabular-nums" style={{ color: row.cash_on_hand != null ? NAVY : undefined }}>
             {row.cash_on_hand != null ? fmtMoney(row.cash_on_hand) : <span className="text-slate-300">not reported</span>}
           </span>
         </div>
-        <div className="flex items-baseline gap-1.5 w-32 shrink-0">
+        <div className="flex items-baseline gap-1.5 w-32 max-md:w-auto shrink-0">
           <span className="text-xs text-slate-400">burn</span>
           <span className="text-slate-600 tabular-nums">
             {row.monthly_burn == null
@@ -515,7 +519,7 @@ function CashRow({ row, onEdit, onDelete }: { row: PortfolioCash; onEdit: () => 
                 : `${fmtMoney(row.monthly_burn)}/mo`}
           </span>
         </div>
-        <span className="flex-1 text-xs tabular-nums" style={{ color: runwayBandColor(r?.months) }}>
+        <span className="flex-1 max-md:flex-none max-md:empty:hidden text-xs tabular-nums" style={{ color: runwayBandColor(r?.months) }}>
           {r ? (
             <span
               title={
@@ -536,13 +540,13 @@ function CashRow({ row, onEdit, onDelete }: { row: PortfolioCash; onEdit: () => 
             out {exactDate(z.date)}
           </span>
         )}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
+        <div className="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 transition shrink-0 max-md:ml-auto">
           <button onClick={onEdit} className="p-1 text-slate-400 hover:text-slate-700"><Pencil className="w-3.5 h-3.5" /></button>
           <button onClick={onDelete} className="p-1 text-slate-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
         </div>
       </div>
       {(row.source || row.source_detail || row.burn_basis || row.committed_funding != null || row.notes) && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 pl-[6.75rem] text-xs text-slate-400">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 pl-[6.75rem] max-md:pl-0 text-xs text-slate-400">
           {row.source && <span>{row.source}{row.source_detail ? ` · ${row.source_detail}` : ""}</span>}
           {row.burn_basis && <span>{row.burn_basis}</span>}
           {row.committed_funding != null && <span>+{fmtMoney(row.committed_funding)} committed</span>}
@@ -902,7 +906,7 @@ function CashEditor({
 
   return (
     <div className="p-4 space-y-3 bg-slate-50">
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-4 max-md:grid-cols-2 gap-3">
         <Field label="Balance date *">
           <input type="date" value={f.as_of} onChange={(e) => set("as_of", e.target.value)} className={inputCls} />
         </Field>
@@ -919,7 +923,7 @@ function CashEditor({
           </select>
         </Field>
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 max-md:grid-cols-2 gap-3">
         <div className="col-span-2">
           {/* Toggle sits next to its label, not pushed to the far edge of the
               two-column span — at that distance it reads as belonging to the

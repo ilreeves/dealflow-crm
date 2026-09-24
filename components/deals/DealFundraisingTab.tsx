@@ -279,7 +279,7 @@ function RoundEditor({
   return (
     <div className="p-4 space-y-3 bg-slate-50">
       {isNew && <p className="text-sm font-semibold text-slate-700">New round</p>}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 max-md:grid-cols-2 gap-3">
         <Field label="Round name *">
           <input placeholder="e.g. Series A" value={f.round_name} onChange={(e) => set("round_name", e.target.value)} className={inputCls} />
         </Field>

@@ -68,25 +68,29 @@ export default function TeamMembers() {
       ) : (
         <div className="divide-y divide-slate-100">
           {members.map((m) => (
-            <div key={m.id} className="flex items-center gap-3 px-5 py-3">
+            <div key={m.id} className="flex items-start sm:items-center gap-3 px-5 py-3">
               <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
                 <User className="w-3.5 h-3.5 text-slate-400" />
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm text-slate-700 truncate">
-                  {m.full_name || m.email || <span className="text-slate-400">Unnamed user</span>}
-                  {m.id === meId && <span className="text-xs text-slate-400 ml-1.5">(you)</span>}
-                </p>
-                {m.full_name && m.email && <p className="text-xs text-slate-400 truncate">{m.email}</p>}
-              </div>
-              {(m.joined_at || m.last_sign_in_at !== undefined) && (
-                <div className="text-right shrink-0">
-                  {m.joined_at && <p className="text-xs text-slate-500">Joined {formatDate(m.joined_at)}</p>}
-                  <p className="text-[11px] text-slate-400">
-                    {m.last_sign_in_at ? `Last sign-in ${formatDate(m.last_sign_in_at)}` : 'Never signed in'}
+              <div className="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-center sm:gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-slate-700 truncate">
+                    {m.full_name || m.email || <span className="text-slate-400">Unnamed user</span>}
+                    {m.id === meId && <span className="text-xs text-slate-400 ml-1.5">(you)</span>}
                   </p>
+                  {m.full_name && m.email && <p className="text-xs text-slate-400 truncate">{m.email}</p>}
                 </div>
-              )}
+                {/* On phones the dates drop under the name instead of squeezing
+                    the email down to "belitz@solasbi…". */}
+                {(m.joined_at || m.last_sign_in_at !== undefined) && (
+                  <div className="mt-0.5 sm:mt-0 sm:text-right shrink-0 flex gap-2 sm:block">
+                    {m.joined_at && <p className="text-xs text-slate-500">Joined {formatDate(m.joined_at)}</p>}
+                    <p className="text-[11px] text-slate-400">
+                      {m.last_sign_in_at ? `Last sign-in ${formatDate(m.last_sign_in_at)}` : 'Never signed in'}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>

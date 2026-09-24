@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client"
 import { parseNum, numError, numToStr, fmtMoney, fmtPct, saveHint, inputCls, noteAccruedInterest, exactDate, calendarDaysUntil, dayCount } from "@/lib/rounds"
 import Field from "@/components/shared/Field"
 import InfoTip from "@/components/shared/InfoTip"
+import Stat from "@/components/shared/Stat"
 
 // Share-class structure: Common, each preferred series, the option pool —
 // shares, price, preference. Deliberately STANDALONE from positions:
@@ -175,19 +176,27 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
           heading separates the company's structure from Solas's stake above. */}
       <h3 className="text-sm font-semibold text-slate-700 pt-2 border-t border-slate-100">Cap table</h3>
       {/* Structure stat cards */}
-      <div className="grid grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-4 max-md:grid-cols-2 gap-2.5">
         <Stat label="Fully diluted" value={fmtShares(fdShares || null)} />
-        <Stat label="Implied valuation" value={fmtMoney(impliedValuation)} />
+        <Stat
+          label="Implied valuation"
+          value={fmtMoney(impliedValuation)}
+          tip={impliedValuation != null
+            ? `Last round price (${fmtPrice(lastRound)}${latestPricedRound ? `, ${latestPricedRound.round_name}` : ""}) × fully diluted shares.`
+            : "The last round price applied across all fully diluted shares."}
+        />
         <Stat label="Solas shares" value={fmtShares(solasShares || null)} />
-        <Stat label="Solas FD %" value={fmtPct(solasFdPct)} />
+        <Stat label="Solas FD %" value={fmtPct(solasFdPct)} tip="Solas shares ÷ fully diluted shares." />
       </div>
-      <p className="text-xs text-slate-400 -mt-1.5 px-0.5">
-        {classes.length === 0
-          ? "Add the share classes from the company's cap table to compute fully diluted totals."
-          : impliedValuation == null
-            ? "Implied valuation needs a priced preferred class — the last round price is applied across all fully diluted shares."
-            : `Implied valuation = last round price (${fmtPrice(lastRound)}${latestPricedRound ? `, ${latestPricedRound.round_name}` : ""}) × fully diluted shares. Solas FD % = Solas shares ÷ fully diluted.`}
-      </p>
+      {/* The formulas live in the cards' (?) tips; only a missing input stays
+          visible, since it tells you what to enter. */}
+      {(classes.length === 0 || impliedValuation == null) && (
+        <p className="text-xs text-slate-400 -mt-1.5 px-0.5">
+          {classes.length === 0
+            ? "Add the share classes from the company's cap table to compute fully diluted totals."
+            : "Implied valuation needs a priced preferred class."}
+        </p>
+      )}
       {mismatch && (
         <p className="text-xs px-3 py-2 rounded-lg -mt-1.5" style={{ backgroundColor: "#fef3e6", color: "#9a5b13" }}>
           Computed FD % ({fmtPct(solasFdPct)}) differs from the audited ownership on positions ({fmtPct(enteredPct)}).
@@ -200,11 +209,12 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
 
       {/* Share classes */}
       <div className="border border-slate-200 rounded-xl bg-white">
-        <div className="flex items-center justify-between px-4 py-2.5">
-          <div className="flex items-center gap-2">
+        {/* Phones: "as of" drops under the title and the button keeps one line. */}
+        <div className="flex items-center justify-between max-md:gap-2 px-4 py-2.5">
+          <div className="flex items-center gap-2 max-md:flex-wrap max-md:gap-y-1 max-md:min-w-0">
             <Layers className="w-4 h-4 text-slate-400" />
             <span className="text-sm font-medium text-slate-600">Share classes</span>
-            <label className="flex items-center gap-1.5 text-xs text-slate-400">
+            <label className="flex items-center gap-1.5 text-xs text-slate-400 max-md:basis-full max-md:pl-6">
               as of
               <input
                 type="date"
@@ -215,7 +225,7 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
             </label>
           </div>
           {!adding && !editingId && (
-            <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 hover:border-slate-300 transition">
+            <button onClick={() => setAdding(true)} className="flex items-center gap-1 max-md:shrink-0 max-md:whitespace-nowrap text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 hover:border-slate-300 transition">
               <Plus className="w-3.5 h-3.5" /> Add class
             </button>
           )}
@@ -232,19 +242,25 @@ export default function CapTableTab({ company, onCompanyUpdated }: {
               editingId === c.id ? (
                 <div key={c.id}><ClassEditor companyId={company.id} initial={c} onCancel={() => setEditingId(null)} onDone={() => { setEditingId(null); load() }} /></div>
               ) : (
-                <div key={c.id} className="flex items-center gap-3 px-4 py-2.5 text-sm group">
-                  <span className="font-medium text-slate-800 w-36 shrink-0 truncate">{c.name}</span>
+                // Phones (max-md): name + type on the first line, figures on the
+                // second (notes, if any, on a third) — the fixed-width columns summed
+                // to ~560px and pushed the whole modal body into a sideways
+                // scroll. The zero-height basis-full span is the line break
+                // (display:none from md); `order` keeps the actions on line one.
+                <div key={c.id} className="flex items-center gap-3 max-md:flex-wrap max-md:gap-y-1 px-4 py-2.5 text-sm group">
+                  <span className="font-medium text-slate-800 w-36 shrink-0 truncate max-md:w-auto max-md:shrink max-md:min-w-0" title={c.name}>{c.name}</span>
                   <span className="text-xs px-2 py-0.5 rounded-md shrink-0" style={{ backgroundColor: "#e6eef1", color: "#023a51" }}>{c.class_type}</span>
-                  <span className="text-slate-600 shrink-0 w-24 text-right tabular-nums">
+                  <span className="basis-full h-0 md:hidden max-md:order-2" aria-hidden />
+                  <span className="text-slate-600 shrink-0 w-24 text-right tabular-nums max-md:order-2">
                     {c.shares_outstanding != null ? fmtShares(c.shares_outstanding) : c.convertible_balance != null ? fmtMoney(c.convertible_balance) : "—"}
                   </span>
-                  <span className="text-xs text-slate-400 shrink-0 w-12 text-right tabular-nums">
+                  <span className="text-xs text-slate-400 shrink-0 w-12 text-right tabular-nums max-md:order-2">
                     {fdShares > 0 && c.shares_outstanding != null ? fmtPct((Number(c.shares_outstanding) / fdShares) * 100) : "—"}
                   </span>
-                  <span className="text-xs text-slate-500 shrink-0 w-20 text-right tabular-nums">{fmtPrice(c.price_per_share)}</span>
-                  <span className="text-xs text-slate-400 shrink-0 w-10 text-right">{c.liq_pref_multiple != null ? `${Number(c.liq_pref_multiple)}×` : ""}</span>
-                  <span className="flex-1 min-w-0 truncate text-xs text-slate-400">{c.notes}</span>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
+                  <span className="text-xs text-slate-500 shrink-0 w-20 text-right tabular-nums max-md:order-2">{fmtPrice(c.price_per_share)}</span>
+                  <span className="text-xs text-slate-400 shrink-0 w-10 text-right max-md:order-2">{c.liq_pref_multiple != null ? `${Number(c.liq_pref_multiple)}×` : ""}</span>
+                  <span className="flex-1 min-w-0 truncate text-xs text-slate-400 max-md:order-2 max-md:basis-full max-md:empty:hidden">{c.notes}</span>
+                  <div className="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 transition shrink-0 max-md:order-1 max-md:ml-auto">
                     <button onClick={() => { setEditingId(c.id); setAdding(false) }} className="p-1 text-slate-400 hover:text-slate-700"><Pencil className="w-3.5 h-3.5" /></button>
                     <button onClick={() => handleDelete(c.id)} className="p-1 text-slate-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
@@ -332,15 +348,6 @@ async function replaceHoldings(
 
 function fmtShares(n: number | null | undefined): string {
   return n == null || isNaN(Number(n)) ? "—" : Number(n).toLocaleString("en-US", { maximumFractionDigits: 0 })
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-slate-50 rounded-lg px-3 py-2.5">
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className="text-xl font-semibold mt-0.5 text-slate-900">{value}</p>
-    </div>
-  )
 }
 
 // ─── share class editor ───────────────────────────────────────────────────────
@@ -434,7 +441,7 @@ function ClassEditor({
 
   return (
     <div className="p-4 space-y-3 bg-slate-50">
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 max-md:grid-cols-2 gap-3">
         <Field label="Class name *"><input placeholder="Series B Preferred" value={f.name} onChange={(e) => set("name", e.target.value)} className={inputCls} /></Field>
         <Field label="Type">
           <select value={f.class_type} onChange={(e) => set("class_type", e.target.value as typeof f.class_type)} className={inputCls}>
@@ -443,7 +450,7 @@ function ClassEditor({
         </Field>
         <Field label="Shares outstanding"><input placeholder="e.g. 4,215,000" value={f.shares_outstanding} onChange={(e) => set("shares_outstanding", e.target.value)} className={inputCls} /></Field>
       </div>
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-4 max-md:grid-cols-2 gap-3">
         <Field label="Price per share"><input placeholder="$ (4 decimals ok)" value={f.price_per_share} onChange={(e) => set("price_per_share", e.target.value)} className={inputCls} /></Field>
         <Field label="Liq pref multiple">
           <div className="flex items-center gap-2">
@@ -456,7 +463,7 @@ function ClassEditor({
         <Field label="Seniority"><input placeholder="1 = most senior" value={f.seniority} onChange={(e) => set("seniority", e.target.value)} className={inputCls} /></Field>
       </div>
       {f.class_type === "Other" && (
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-4 max-md:grid-cols-2 gap-3">
           <Field label="Convertible balance ($)"><input placeholder="principal + accrued" value={f.convertible_balance} onChange={(e) => set("convertible_balance", e.target.value)} className={inputCls} /></Field>
           <Field label="Conversion price ($)"><input placeholder="blank = discount to last round" value={f.conversion_price} onChange={(e) => set("conversion_price", e.target.value)} className={inputCls} /></Field>
         </div>
@@ -635,7 +642,7 @@ function WaterfallSection({ classes, impliedValue, refPrice }: { classes: ShareC
                     const share = solasTotal > 0 ? amount / solasTotal : 0
                     return (
                       <div key={entity} className="flex items-center gap-3 text-[13px]">
-                        <span className="w-36 shrink-0 truncate text-slate-600" title={entity}>{entity}</span>
+                        <span className="w-36 max-md:w-24 shrink-0 truncate text-slate-600" title={entity}>{entity}</span>
                         <span className="flex-1 h-1.5 rounded-full bg-slate-200/80 overflow-hidden">
                           <span className="block h-full rounded-full" style={{ width: `${Math.max(share * 100, 1)}%`, backgroundColor: "#5ba200" }} />
                         </span>
@@ -652,9 +659,11 @@ function WaterfallSection({ classes, impliedValue, refPrice }: { classes: ShareC
           {exitValue > 0 && rows.length > 0 && (
             <div>
               <div className="flex items-center gap-3 pb-1.5 border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-400">
+                {/* Phones: Treatment folds under the class name and Multiple is
+                    dropped — five fixed columns left the name 0px at 375px. */}
                 <span className="flex-1">Class</span>
-                <span className="w-24 shrink-0">Treatment</span>
-                <span className="w-14 shrink-0 text-right">Multiple</span>
+                <span className="w-24 shrink-0 max-md:hidden">Treatment</span>
+                <span className="w-14 shrink-0 text-right max-md:hidden">Multiple</span>
                 <span className="w-20 shrink-0 text-right">Payout</span>
                 {anySolas && <span className="w-20 shrink-0 text-right">Solas</span>}
               </div>
@@ -678,11 +687,14 @@ function WaterfallSection({ classes, impliedValue, refPrice }: { classes: ShareC
                           {r.assumed && <InfoTip size="xs" className="ml-1 -mt-0.5" label={`Assumption for ${r.name}`}>{r.assumed.charAt(0).toUpperCase() + r.assumed.slice(1)}.</InfoTip>}
                         </span>
                         {wholeAt != null && <span className="block text-slate-400 text-xs tabular-nums">Break-even at {fmtMoney(wholeAt)}</span>}
+                        <span className="md:hidden block mt-0.5">
+                          <span className="text-xs px-2 py-0.5 rounded-md whitespace-nowrap" style={{ backgroundColor: MODE_STYLE[r.mode].bg, color: MODE_STYLE[r.mode].fg }}>{r.mode}</span>
+                        </span>
                       </span>
-                      <span className="w-24 shrink-0">
+                      <span className="w-24 shrink-0 max-md:hidden">
                         <span className="text-xs px-2 py-0.5 rounded-md whitespace-nowrap" style={{ backgroundColor: MODE_STYLE[r.mode].bg, color: MODE_STYLE[r.mode].fg }}>{r.mode}</span>
                       </span>
-                      <span className="w-14 shrink-0 text-xs tabular-nums text-right font-medium" style={{ color: mult == null ? undefined : mult >= 1 ? "#3b6d11" : "#9a5b13" }}>
+                      <span className="w-14 shrink-0 text-xs tabular-nums text-right font-medium max-md:hidden" style={{ color: mult == null ? undefined : mult >= 1 ? "#3b6d11" : "#9a5b13" }}>
                         {mult != null ? fmtMult(mult) : ""}
                       </span>
                       <span className="w-20 shrink-0 text-slate-600 tabular-nums text-right">{fmtMoney(r.payout)}</span>

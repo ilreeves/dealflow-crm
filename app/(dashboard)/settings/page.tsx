@@ -137,7 +137,7 @@ export default function SettingsPage() {
           {!showForm && (
             <button
               onClick={() => setShowForm(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-lg hover:bg-slate-800 transition"
+              className="flex items-center gap-1.5 max-md:shrink-0 max-md:whitespace-nowrap px-3 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-lg hover:bg-slate-800 transition"
             >
               <Plus className="w-3.5 h-3.5" />
               Add Field
@@ -264,7 +264,7 @@ export default function SettingsPage() {
                 </div>
                 <button
                   onClick={() => handleDelete(field.id)}
-                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition opacity-0 group-hover:opacity-100"
+                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition md:opacity-0 md:group-hover:opacity-100"
                   title="Delete field"
                 >
                   <Trash2 className="w-3.5 h-3.5" />

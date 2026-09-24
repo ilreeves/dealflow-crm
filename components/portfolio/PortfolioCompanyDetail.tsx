@@ -100,10 +100,13 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+      {/* Phones (max-md): full-screen sheet — no outer padding or rounding, full
+          dynamic-viewport height — so the content gets the whole width. The
+          header stays pinned and only the body scrolls. md+ unchanged. */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 max-md:p-0">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col max-md:max-w-none max-md:h-dvh max-md:max-h-none max-md:rounded-none">
           {/* Header */}
-          <div className="px-6 py-4 border-b border-slate-100">
+          <div className="px-6 max-md:px-4 py-4 border-b border-slate-100 shrink-0">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
                 <h2 className="text-lg font-semibold text-slate-900 truncate">{company.name}</h2>
@@ -127,12 +130,12 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
                 </button>
               </div>
             </div>
-            <div className="flex gap-4 mt-4 border-b border-slate-100 -mb-px">
+            <div className="flex gap-4 mt-4 border-b border-slate-100 -mb-px max-md:overflow-x-auto max-md:whitespace-nowrap max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden">
               {tabs.map(({ key, label }) => (
                 <button
                   key={key}
                   onClick={() => setTab(key)}
-                  className={`pb-2 text-sm font-medium border-b-2 transition ${
+                  className={`pb-2 text-sm font-medium border-b-2 transition shrink-0 ${
                     tab === key ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'
                   }`}
                 >
@@ -142,7 +145,7 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="flex-1 overflow-y-auto px-6 max-md:px-4 py-4">
             {tab === 'overview' && <OverviewTab company={company} />}
             {tab === 'fundraising' && (
               <div className="space-y-4">
@@ -453,7 +456,7 @@ function CatalystsTab({ companyId, companyName }: { companyId: string; companyNa
                   </div>
                   <button
                     onClick={() => handleDeleteCatalyst(cat)}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition shrink-0"
+                    className="md:opacity-0 md:group-hover:opacity-100 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition shrink-0"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

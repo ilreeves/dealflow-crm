@@ -147,8 +147,9 @@ export default function FundraisingTab({ companyId }: { companyId: string }) {
             const sizeLabel = r.security_type === "Convertible note" ? "principal" : "round"
             return (
               <div key={r.id} className="border border-slate-200 rounded-xl bg-white overflow-hidden">
-                {/* summary header */}
-                <div className="flex items-center gap-2.5 px-4 py-3">
+                {/* summary header — on phones the badges wrap to a second line
+                    rather than running off the card's edge. */}
+                <div className="flex items-center gap-2.5 max-md:flex-wrap max-md:gap-y-1.5 px-4 py-3">
                   <button onClick={() => setExpanded(isOpen ? null : r.id)} className="text-slate-400 hover:text-slate-600 shrink-0">
                     {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                   </button>
@@ -237,12 +238,14 @@ function PositionList({ positions, isNote }: { positions: PortfolioPosition[]; i
   return (
     <div className="space-y-1">
       <p className="text-[11px] text-slate-400">Solas positions</p>
-      <div className="border border-slate-100 rounded-lg overflow-hidden">
-        <div className={`grid ${isNote ? "grid-cols-4" : "grid-cols-5"} gap-2 px-3 py-1.5 bg-slate-50 text-[10px] font-semibold text-slate-400 uppercase tracking-wide`}>
+      {/* Phones: five columns at ~45px each overlapped, so the grid keeps a
+          readable minimum width and scrolls sideways inside its border. */}
+      <div className="border border-slate-100 rounded-lg overflow-hidden max-md:overflow-x-auto">
+        <div className={`grid ${isNote ? "grid-cols-4" : "grid-cols-5"} max-md:min-w-[26rem] gap-2 px-3 py-1.5 bg-slate-50 text-[10px] font-semibold text-slate-400 uppercase tracking-wide`}>
           {cols.map((c, i) => <span key={c} className={i === 0 ? "" : "text-right"}>{c}</span>)}
         </div>
         {positions.map((p) => (
-          <div key={p.id} className={`grid ${isNote ? "grid-cols-4" : "grid-cols-5"} gap-2 px-3 py-2 text-sm border-t border-slate-50 items-center`}>
+          <div key={p.id} className={`grid ${isNote ? "grid-cols-4" : "grid-cols-5"} max-md:min-w-[26rem] gap-2 px-3 py-2 text-sm border-t border-slate-50 items-center`}>
             <span className="flex items-center gap-1.5 min-w-0">
               <Building2 className="w-3.5 h-3.5 shrink-0" style={{ color: "#023a51" }} />
               <span className="truncate text-slate-800">{p.fund || "—"}</span>
@@ -532,7 +535,7 @@ function RoundEditor({
   return (
     <div className="p-4 space-y-3 bg-slate-50">
       {isNew && <p className="text-sm font-semibold text-slate-700">New round</p>}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 max-md:grid-cols-2 gap-3">
         <Field label="Round name *">
           <input placeholder="e.g. Series B" value={f.round_name} onChange={(e) => set("round_name", e.target.value)} className={inputCls} />
         </Field>
@@ -618,9 +621,11 @@ function RoundEditor({
         <p className="text-[11px] text-slate-400 mb-1.5">Solas positions in this round</p>
         <div className="space-y-2">
           {posList.map((p) => (
+            // Phones (max-md): a 6-column grid instead of 12 — at 12 the
+            // shares / own % inputs were ~35px wide. Fund gets its own line.
             <div key={p._k} className="border border-slate-100 rounded-lg p-2 bg-white space-y-2">
-              <div className="grid grid-cols-12 gap-2 items-center">
-                <div className="col-span-3 min-w-0">
+              <div className="grid grid-cols-12 max-md:grid-cols-6 gap-2 items-center">
+                <div className="col-span-3 max-md:col-span-6 min-w-0">
                   <select value={p.fund} onChange={(e) => setPos(p._k, "fund", e.target.value)} className={inputCls}>
                     <option value="">Fund…</option>
                     {funds.map((fd) => <option key={fd} value={fd}>{fd}</option>)}
@@ -630,11 +635,11 @@ function RoundEditor({
                   )}
                 </div>
                 <input placeholder="$ invested" value={p.invested_amount} onChange={(e) => setPos(p._k, "invested_amount", e.target.value)} className={`${inputCls} col-span-3`} />
-                <input placeholder="Shares" value={p.shares} onChange={(e) => setPos(p._k, "shares", e.target.value)} className={`${inputCls} col-span-2`} />
+                <input placeholder="Shares" value={p.shares} onChange={(e) => setPos(p._k, "shares", e.target.value)} className={`${inputCls} col-span-2 max-md:col-span-3`} />
                 <input placeholder="Own %" value={p.ownership_pct} onChange={(e) => setPos(p._k, "ownership_pct", e.target.value)} className={`${inputCls} col-span-2`} />
                 {isNote ? (
-                  <input placeholder="Accrued $" value={p.accrued_interest} onChange={(e) => setPos(p._k, "accrued_interest", e.target.value)} className={`${inputCls} col-span-1`} />
-                ) : <span className="col-span-1" />}
+                  <input placeholder="Accrued $" value={p.accrued_interest} onChange={(e) => setPos(p._k, "accrued_interest", e.target.value)} className={`${inputCls} col-span-1 max-md:col-span-3`} />
+                ) : <span className="col-span-1 max-md:col-span-3" />}
                 <button onClick={() => removePos(p._k)} className="col-span-1 flex justify-center text-slate-300 hover:text-red-500 transition"><Trash2 className="w-4 h-4" /></button>
               </div>
               {/* Accrual sanity check: every note on the books follows simple
@@ -653,11 +658,11 @@ function RoundEditor({
                   </p>
                 )
               })()}
-              <div className="grid grid-cols-12 gap-2 items-center">
-                <span className="col-span-3 text-[11px] text-slate-400 pl-1">Fair-value mark</span>
+              <div className="grid grid-cols-12 max-md:grid-cols-6 gap-2 items-center">
+                <span className="col-span-3 max-md:col-span-6 text-[11px] text-slate-400 pl-1">Fair-value mark</span>
                 <input placeholder="$ fair value" value={p.fair_value} onChange={(e) => setPos(p._k, "fair_value", e.target.value)} className={`${inputCls} col-span-3`} />
                 <input type="date" value={p.fair_value_date} onChange={(e) => setPos(p._k, "fair_value_date", e.target.value)} className={`${inputCls} col-span-3`} />
-                <input placeholder="Source (e.g. audited financials)" value={p.fair_value_source} onChange={(e) => setPos(p._k, "fair_value_source", e.target.value)} className={`${inputCls} col-span-3`} />
+                <input placeholder="Source (e.g. audited financials)" value={p.fair_value_source} onChange={(e) => setPos(p._k, "fair_value_source", e.target.value)} className={`${inputCls} col-span-3 max-md:col-span-6`} />
               </div>
             </div>
           ))}

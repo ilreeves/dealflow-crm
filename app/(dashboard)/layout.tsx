@@ -20,9 +20,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   else if (!profile) console.error(`no profiles row for user ${user.id}`)
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    // Column on phones (top bar above the page), row from md (rail beside it).
+    // dvh, not vh: mobile Safari's vh includes the collapsing URL bar.
+    <div className="flex flex-col md:flex-row h-dvh overflow-hidden bg-slate-50">
       <Sidebar user={{ email: user.email ?? '', name: profile?.full_name ?? '' }} />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 min-h-0 overflow-auto">
         {children}
       </main>
       <GlobalSearch />

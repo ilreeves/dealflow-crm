@@ -435,7 +435,7 @@ export default function CatalystCalendar({ today, initialCatalysts, companyNames
                   const status = c.status ?? 'Pending'
                   const isClosed = CLOSED_STATUSES.includes(status)
                   return (
-                    <div key={c.id} className={`flex items-start gap-4 rounded-xl border px-4 py-3 group transition ${
+                    <div key={c.id} className={`flex items-start gap-4 max-md:gap-3 rounded-xl border px-4 max-md:px-3 py-3 group transition ${
                       isClosed ? 'border-slate-100 bg-slate-50 opacity-60' : 'border-slate-200 bg-white'
                     }`}>
                       <div className="flex flex-col items-center justify-center w-12 h-8 rounded-lg bg-slate-100 shrink-0 mt-0.5" title={c.resolved_date ? `Resolved ${c.resolved_date}` : undefined}>
@@ -445,7 +445,10 @@ export default function CatalystCalendar({ today, initialCatalysts, companyNames
                             : periodLabel(c)}
                         </span>
                       </div>
-                      <div className="flex-1 min-w-0">
+                      {/* overflow-wrap on phones: notes carry long unbroken tokens
+                          ("[weekly refresh 2026-08-28]", URLs) that pushed the
+                          list ~30px past the screen edge. */}
+                      <div className="flex-1 min-w-0 max-md:[overflow-wrap:anywhere]">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-slate-800">{c.company_name}</span>
                           <span className="text-sm text-slate-600">{c.title}</span>
@@ -477,7 +480,7 @@ export default function CatalystCalendar({ today, initialCatalysts, companyNames
                           c.notes && <p className="text-sm text-slate-500 mt-0.5 leading-relaxed">{c.notes}</p>
                         )}
                       </div>
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition shrink-0">
+                      <div className="flex items-center gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition shrink-0">
                         <button
                           onClick={() => setEditingNote({ id: c.id, text: c.notes ?? '' })}
                           className="p-1.5 text-slate-300 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition"

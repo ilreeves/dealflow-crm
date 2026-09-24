@@ -33,7 +33,7 @@ export default function BreakdownTable({ title, rows, max, color }: Props) {
                 >
                   <td className="px-4 py-2.5 font-medium text-slate-700">
                     <span className="flex items-center gap-1.5">
-                      <ChevronRight className={`w-3 h-3 text-slate-300 transition-transform ${expanded === label ? 'rotate-90' : ''}`} />
+                      <ChevronRight className={`w-3 h-3 max-md:shrink-0 text-slate-300 transition-transform ${expanded === label ? 'rotate-90' : ''}`} />
                       {label}
                     </span>
                   </td>

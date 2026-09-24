@@ -161,20 +161,23 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+      {/* Phones (max-md): full-screen sheet — no outer padding or rounding, full
+          dynamic-viewport height — so the content gets the whole width. The
+          header stays pinned and only the body scrolls. md+ unchanged. */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 max-md:p-0">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col max-md:max-w-none max-md:h-dvh max-md:max-h-none max-md:rounded-none">
           {stageError && (
-            <div className="mx-6 mt-3 flex items-center justify-between gap-3 px-3 py-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg">
+            <div className="mx-6 max-md:mx-4 mt-3 shrink-0 flex items-center justify-between gap-3 px-3 py-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg">
               <span>{stageError}</span>
               <button onClick={() => setStageError('')} className="text-red-400 hover:text-red-700 transition shrink-0">✕</button>
             </div>
           )}
           {/* Header */}
-          <div className="px-6 py-4 border-b border-slate-100">
+          <div className="px-6 max-md:px-4 py-4 border-b border-slate-100 shrink-0">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
                 <h2 className="text-lg font-semibold text-slate-900 truncate">{deal.name}</h2>
-                <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-2 max-md:flex-wrap max-md:gap-y-1 mt-1">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text}`}>
                     {deal.stage}
                   </span>
@@ -266,12 +269,12 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-4 mt-4 border-b border-slate-100 -mb-px">
+            <div className="flex gap-4 mt-4 border-b border-slate-100 -mb-px max-md:overflow-x-auto max-md:whitespace-nowrap max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden">
               {tabs.map(({ key, label }) => (
                 <button
                   key={key}
                   onClick={() => setTab(key)}
-                  className={`pb-2 text-sm font-medium border-b-2 transition ${
+                  className={`pb-2 text-sm font-medium border-b-2 transition shrink-0 ${
                     tab === key
                       ? 'border-slate-900 text-slate-900'
                       : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -284,7 +287,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="flex-1 overflow-y-auto px-6 max-md:px-4 py-4">
             {tab === 'overview' && <OverviewTab deal={deal} />}
             {tab === 'fundraising' && <DealFundraisingTab dealId={deal.id} />}
             {tab === 'meetings' && <MeetingsList dealId={deal.id} />}

@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useServerState } from "@/lib/useServerState"
 import PortfolioCompanyDetail from "@/components/portfolio/PortfolioCompanyDetail"
 import Tile from "@/components/shared/Tile"
-import Th from "@/components/shared/Th"
+import Th, { STICKY_TD } from "@/components/shared/Th"
 import PageHeader from "@/components/shared/PageHeader"
 import InfoTip from "@/components/shared/InfoTip"
 
@@ -242,7 +242,7 @@ export default function RevenueView({
                 <table className="w-full text-sm min-w-[920px]">
                   <thead>
                     <tr className="border-b border-slate-100">
-                      <Th>Company</Th>
+                      <Th sticky>Company</Th>
                       <Th>Latest period</Th>
                       <Th right>Actual</Th>
                       <Th right>Plan</Th>
@@ -261,7 +261,7 @@ export default function RevenueView({
                         onClick={() => setOpenId(c.id)}
                         className="border-b border-slate-50 hover:bg-slate-50 cursor-pointer group"
                       >
-                        <td className="px-4 py-2.5 font-medium text-slate-700 whitespace-nowrap">
+                        <td className={`px-4 py-2.5 font-medium text-slate-700 whitespace-nowrap ${STICKY_TD}`}>
                           {c.name}
                           {c.status && c.status !== "Active" && (
                             <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-400">{c.status}</span>
@@ -271,7 +271,7 @@ export default function RevenueView({
                               not tracked · {c.periodCount} period{c.periodCount === 1 ? "" : "s"} kept
                             </span>
                           )}
-                          <ChevronRight className="inline w-3.5 h-3.5 ml-1.5 text-slate-300 opacity-0 group-hover:opacity-100 transition" />
+                          <ChevronRight className="inline max-md:hidden w-3.5 h-3.5 ml-1.5 text-slate-300 md:opacity-0 md:group-hover:opacity-100 transition" />
                         </td>
                         <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">
                           {c.latestPeriod ?? <span className="text-slate-300">nothing entered yet</span>}
@@ -357,7 +357,7 @@ export default function RevenueView({
                                 else handleRemove(c)
                               }}
                               title="Remove from revenue tracking"
-                              className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"
+                              className="p-1 text-slate-300 hover:text-red-500 md:opacity-0 md:group-hover:opacity-100 transition"
                             >
                               <X className="w-3.5 h-3.5" />
                             </button>

@@ -284,7 +284,7 @@ export default function InvestorIntrosTab({ table, fkColumn, entityId }: Props) 
                 </div>
                 <button
                   onClick={() => handleDelete(intro.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition shrink-0"
+                  className="md:opacity-0 md:group-hover:opacity-100 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition shrink-0"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>

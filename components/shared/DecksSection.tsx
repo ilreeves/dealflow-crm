@@ -387,17 +387,20 @@ function DeckItem({ deck, rounds, entityName, buildEmail, onUpdated, onDeleted }
         )}
       </div>
 
-      {/* File + controls */}
-      <div className="flex items-center gap-3">
+      {/* File + controls. Phones (max-md): the six actions drop to their own
+          line under the name, and the name button is capped at its column
+          (a block <button> sizes to its content, so `truncate` alone never
+          kicked in and the name ran under the icons). md+ unchanged. */}
+      <div className="flex items-center gap-3 max-md:flex-wrap max-md:gap-y-1">
         <FileText className="w-4 h-4 shrink-0" style={isPdf ? { color: '#e98925' } : { color: '#94a3b8' }} />
         <div className="flex-1 min-w-0">
           {isPdf ? (
-            <button onClick={() => setViewing(true)} className="text-sm font-medium text-slate-700 truncate block text-left hover:text-slate-900 hover:underline" title="View deck">{deck.file_name}</button>
+            <button onClick={() => setViewing(true)} className="text-sm font-medium text-slate-700 truncate block max-md:max-w-full text-left hover:text-slate-900 hover:underline" title="View deck">{deck.file_name}</button>
           ) : (
             <p className="text-sm font-medium text-slate-700 truncate">{deck.file_name}</p>
           )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 max-md:w-full max-md:pl-5">
           <button onClick={handleEmail} disabled={emailing} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition disabled:opacity-50" title="Draft investor email with deck link">
             {emailing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
           </button>

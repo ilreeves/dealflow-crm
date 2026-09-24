@@ -32,16 +32,20 @@ function FundLine({ fund: f, color, isOpen, onToggle, nested }: {
 }) {
   return (
     <div>
-      <button onClick={onToggle} className={`w-full flex items-center gap-3 py-3 text-left hover:bg-slate-50 transition ${nested ? "pl-10 pr-4" : "px-4"}`}>
+      {/* Phones (max-md): the name stays on one line with the count beneath it,
+          and the figures wrap to their own right-aligned line when the pair
+          doesn't fit — instead of the name breaking mid-word ("Fund / II") and
+          the count running under the figures. md+ is the original single row. */}
+      <button onClick={onToggle} className={`w-full flex items-center gap-3 max-md:flex-wrap max-md:gap-y-1 py-3 text-left hover:bg-slate-50 transition ${nested ? "pl-10 pr-4" : "px-4"}`}>
         <span className="text-slate-300">{isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</span>
         <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: color }} />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className={`font-medium text-slate-800 ${nested ? "text-[13px]" : "text-sm"}`}>{f.fund}</span>
-            <span className="text-xs text-slate-400">{f.companies.length} {f.companies.length === 1 ? "company" : "companies"}</span>
+        <div className="flex-1 max-md:flex-auto min-w-0">
+          <div className="flex items-center gap-2 max-md:flex-col max-md:items-start max-md:gap-0">
+            <span className={`font-medium text-slate-800 max-md:whitespace-nowrap ${nested ? "text-[13px]" : "text-sm"}`}>{f.fund}</span>
+            <span className="text-xs text-slate-400 max-md:whitespace-nowrap">{f.companies.length} {f.companies.length === 1 ? "company" : "companies"}</span>
           </div>
         </div>
-        <div className="text-right shrink-0">
+        <div className="text-right shrink-0 max-md:ml-auto">
           <div className="text-sm">
             <span className="text-slate-400">{fmtMoney(f.invested)} → </span>
             <span className="font-medium" style={{ color: valueColor(f.value, f.invested) }}>{fmtMoney(f.value)}</span>
@@ -50,7 +54,7 @@ function FundLine({ fund: f, color, isOpen, onToggle, nested }: {
         </div>
       </button>
       {isOpen && (
-        <div className={`pb-3 space-y-1.5 ${nested ? "pl-[4.5rem] pr-4" : "px-4 pl-12"}`}>
+        <div className={`pb-3 space-y-1.5 ${nested ? "pl-[4.5rem] max-md:pl-10 pr-4" : "px-4 pl-12"}`}>
           {f.companies.map((c) => (
             <div key={c.name} className="flex items-center gap-2 text-[13px] text-slate-600">
               <span className="flex-1 min-w-0 truncate">{c.name} <span className="text-slate-400">· {fmtPct(c.ownership)}</span></span>
@@ -160,18 +164,18 @@ export default function FundPerformanceView({
                   const isOpen = open === "__spvs__"
                   return (
                     <div>
-                      <button onClick={() => setOpen(isOpen ? null : "__spvs__")} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition">
+                      <button onClick={() => setOpen(isOpen ? null : "__spvs__")} className="w-full flex items-center gap-3 max-md:flex-wrap max-md:gap-y-1 px-4 py-3 text-left hover:bg-slate-50 transition">
                         <span className="text-slate-300">{isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</span>
                         <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: "#94a3b8" }} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-slate-800">SPVs &amp; Sidecars</span>
-                            <span className="text-xs text-slate-400">
+                        <div className="flex-1 max-md:flex-auto min-w-0">
+                          <div className="flex items-center gap-2 max-md:flex-col max-md:items-start max-md:gap-0">
+                            <span className="text-sm font-medium text-slate-800 max-md:whitespace-nowrap">SPVs &amp; Sidecars</span>
+                            <span className="text-xs text-slate-400 max-md:whitespace-nowrap">
                               {sidecars.length} vehicles · {spvCompanies} {spvCompanies === 1 ? "company" : "companies"}
                             </span>
                           </div>
                         </div>
-                        <div className="text-right shrink-0">
+                        <div className="text-right shrink-0 max-md:ml-auto">
                           <div className="text-sm">
                             <span className="text-slate-400">{fmtMoney(spvTotals.invested)} → </span>
                             <span className="font-medium" style={{ color: valueColor(spvTotals.value, spvTotals.invested) }}>{fmtMoney(spvTotals.value)}</span>
@@ -231,7 +235,7 @@ export default function FundPerformanceView({
                 <div className="h-0.5 w-12 mt-1 rounded-full mb-4" style={{ backgroundColor: "#5ba200" }} />
                 <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
                   {top.map((p, i) => (
-                    <div key={p.name} className="flex items-center gap-3 px-4 py-3">
+                    <div key={p.name} className="flex items-center gap-3 max-md:flex-wrap max-md:gap-y-1.5 px-4 py-3">
                       <span className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] text-white shrink-0" style={{ backgroundColor: FUND_COLORS[i % FUND_COLORS.length] }}>{initials(p.name)}</span>
                       {/* Name on top, the holding funds as tags beneath. This was one
                           line — "Francis Sidecar, H2Oey Ventures II, Fund II, … · 25.1%"
@@ -248,9 +252,14 @@ export default function FundPerformanceView({
                         </div>
                       </div>
                       <span className="hidden sm:inline text-xs text-slate-400 shrink-0 tabular-nums whitespace-nowrap">{fmtPct(p.ownership)} owned</span>
-                      <span className="text-sm text-slate-400 shrink-0">{fmtMoney(p.invested)} → </span>
-                      <span className="text-sm shrink-0" style={{ color: valueColor(p.value, p.invested) }}>{fmtMoney(p.value)}</span>
-                      <MoicPill moic={p.moic} />
+                      {/* Figures: their own right-aligned line on phones (the name and
+                          tags were being crushed to "Francis …"); `md:contents`
+                          dissolves the wrapper so md+ lays out exactly as before. */}
+                      <div className="flex w-full items-center justify-end gap-3 md:contents">
+                        <span className="text-sm text-slate-400 shrink-0">{fmtMoney(p.invested)} → </span>
+                        <span className="text-sm shrink-0" style={{ color: valueColor(p.value, p.invested) }}>{fmtMoney(p.value)}</span>
+                        <MoicPill moic={p.moic} />
+                      </div>
                     </div>
                   ))}
                 </div>

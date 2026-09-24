@@ -48,7 +48,11 @@ function dateQuarterPos(dateStr: string, minYear: number): number {
 }
 
 const QUARTER_W = 48
-const LABEL_W = 260
+// The name column's width lives in a CSS variable set on the chart root:
+// 260px from md up (unchanged), but only 132px on phones — at 260 the column
+// filled the whole screen and no timeline was visible. Names truncate with the
+// full name in their tooltip.
+const LABEL_W = 'var(--gantt-label)'
 
 export default function CatalystGantt({ catalysts, onUpdated, onDeleted, onError, legacyCompanies, statusLegacyCompanies, onToggleLegacy }: Props) {
   // Inverted set: companies default to COLLAPSED, including ones added after
@@ -177,7 +181,7 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, onError
   const activeGroups = companies.filter((g) => !legacySet.has(g.name))
   const legacyGroups = companies.filter((g) => legacySet.has(g.name))
 
-  const chartWidth = LABEL_W + totalQuarters * QUARTER_W
+  const chartWidth = `calc(${LABEL_W} + ${totalQuarters * QUARTER_W}px)`
 
   function renderBar(c: Catalyst, mini: boolean) {
     const status = c.status ?? 'Pending'
@@ -256,7 +260,7 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, onError
               <div style={{ width: LABEL_W }} className={`shrink-0 sticky left-0 z-20 border-r border-slate-200 flex items-center group/co ${isLegacy ? 'bg-slate-100/70' : 'bg-slate-50'}`}>
                 <button
                   onClick={() => toggleCompany(name)}
-                  className="flex-1 min-w-0 px-3 py-1.5 flex items-center gap-1.5 text-left hover:bg-slate-100 transition"
+                  className="flex-1 min-w-0 px-3 max-md:px-2 py-1.5 flex items-center gap-1.5 text-left hover:bg-slate-100 transition"
                   title={isCollapsed(name) ? 'Show catalysts' : 'Hide catalysts'}
                 >
                   <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isCollapsed(name) ? '-rotate-90' : ''}`} />
@@ -264,7 +268,8 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, onError
                       name gives way first, but only once the column is genuinely
                       full, and the full name is always one hover away. */}
                   <span title={name} className={`min-w-0 text-xs font-bold uppercase tracking-wide truncate ${isLegacy ? 'text-slate-400' : 'text-slate-700'}`}>{name}</span>
-                  <span className="text-xs text-slate-400 font-medium ml-auto pl-1 shrink-0 tabular-nums">{items.length}</span>
+                  {/* Count dropped on phones: in the narrow column it left the name ~50px. */}
+                  <span className="text-xs text-slate-400 font-medium ml-auto pl-1 shrink-0 tabular-nums max-md:hidden">{items.length}</span>
                 </button>
                 {isLegacy && statusLegacyCompanies?.includes(name) ? (
                   // Legacy because the portfolio status says so — deleting from
@@ -274,7 +279,7 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, onError
                   // took up its width, which crushed these names to "AR… 7".
                   <span
                     title="Legacy via its Portfolio status — change the status on the Portfolio tab to restore it"
-                    className="px-2 py-1.5 shrink-0 text-slate-300 opacity-0 group-hover/co:opacity-100 transition cursor-help"
+                    className="px-2 max-md:px-1 py-1.5 shrink-0 text-slate-300 opacity-0 group-hover/co:opacity-100 transition cursor-help"
                   >
                     <Info className="w-3.5 h-3.5" />
                   </span>
@@ -282,7 +287,7 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, onError
                   <button
                     onClick={() => onToggleLegacy(name, !isLegacy)}
                     title={isLegacy ? 'Restore to active' : 'Move to Legacy Companies'}
-                    className="px-2 py-1.5 shrink-0 text-slate-300 hover:text-slate-600 opacity-0 group-hover/co:opacity-100 transition"
+                    className="px-2 max-md:px-1 py-1.5 shrink-0 text-slate-300 hover:text-slate-600 opacity-0 group-hover/co:opacity-100 transition"
                   >
                     {isLegacy ? <RotateCcw className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
                   </button>
@@ -314,7 +319,7 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, onError
                     <p
                       style={{ width: LABEL_W }}
                       onClick={() => setEditingTitle({ id: c.id, text: c.title })}
-                      className="shrink-0 sticky left-0 bg-white z-20 border-r border-slate-200 px-3 py-1.5 text-xs text-slate-600 truncate cursor-text hover:bg-slate-50"
+                      className="shrink-0 sticky left-0 bg-white z-20 border-r border-slate-200 px-3 max-md:px-2 py-1.5 text-xs text-slate-600 truncate cursor-text hover:bg-slate-50"
                       title={`${c.title}${c.notes ? ' — ' + c.notes : ''} (click to edit)`}
                     >
                       {c.title}
@@ -391,7 +396,7 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, onError
   }
 
   return (
-    <div className="overflow-auto border border-slate-200 rounded-xl bg-white" style={{ maxHeight: 'calc(100vh - 180px)' }}>
+    <div className="overflow-auto border border-slate-200 rounded-xl bg-white [--gantt-label:132px] md:[--gantt-label:260px]" style={{ maxHeight: 'calc(100vh - 180px)' }}>
       <div style={{ width: chartWidth, minWidth: chartWidth }}>
 
         {/* Year + quarter headers */}
@@ -414,9 +419,9 @@ export default function CatalystGantt({ catalysts, onUpdated, onDeleted, onError
 
         {legacyGroups.length > 0 && (
           <div className="flex items-center bg-slate-100 border-y border-slate-200">
-            <div style={{ width: LABEL_W }} className="shrink-0 sticky left-0 z-20 bg-slate-100 px-3 py-2 flex items-center gap-1.5">
-              <Archive className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Legacy Companies</span>
+            <div style={{ width: LABEL_W }} className="shrink-0 sticky left-0 z-20 bg-slate-100 px-3 max-md:px-2 py-2 flex items-center gap-1.5">
+              <Archive className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span className="min-w-0 truncate text-xs font-bold text-slate-500 uppercase tracking-wide">Legacy Companies</span>
               <span className="text-xs text-slate-400 font-medium ml-auto">{legacyGroups.length}</span>
             </div>
             <div className="flex-1 h-9 bg-slate-100" />

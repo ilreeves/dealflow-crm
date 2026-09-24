@@ -149,7 +149,7 @@ export default function InvestorDirectory() {
                     </div>
                     {c.contact_email && <a href={`mailto:${c.contact_email}`} className="text-xs text-blue-600 hover:underline">{c.contact_email}</a>}
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
+                  <div className="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 transition shrink-0">
                     <button onClick={() => startEdit(c)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-white rounded-lg transition" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
                     <button onClick={() => remove(c.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Remove"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>

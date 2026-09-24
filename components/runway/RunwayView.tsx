@@ -9,7 +9,7 @@ import { fmtMoney, exactDate } from "@/lib/rounds"
 import PortfolioCompanyDetail from "@/components/portfolio/PortfolioCompanyDetail"
 import { useServerState } from "@/lib/useServerState"
 import Tile from "@/components/shared/Tile"
-import Th from "@/components/shared/Th"
+import Th, { STICKY_TD } from "@/components/shared/Th"
 import PageHeader from "@/components/shared/PageHeader"
 import InfoTip from "@/components/shared/InfoTip"
 
@@ -149,7 +149,8 @@ export default function RunwayView({
 
           {/* Roster */}
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+            {/* Stacks on phones — side by side, the hint squeezed into three lines. */}
+            <div className="flex items-center justify-between max-md:flex-col max-md:items-start max-md:gap-0.5 px-4 py-3 border-b border-slate-100">
               <p className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
                 By urgency
                 <InfoTip label="How runway is calculated">
@@ -175,7 +176,7 @@ export default function RunwayView({
                 <table className="w-full text-sm min-w-[940px]">
                   <thead>
                     <tr className="border-b border-slate-100">
-                      <Th>Company</Th>
+                      <Th sticky>Company</Th>
                       <Th>Balance date</Th>
                       <Th right>Cash on hand</Th>
                       <Th right>Monthly burn</Th>
@@ -213,9 +214,9 @@ export default function RunwayView({
                             onClick={() => setOpenId(c.id)}
                             className="border-b border-slate-50 hover:bg-slate-50 cursor-pointer group"
                           >
-                            <td className="px-4 py-2.5 text-slate-400 whitespace-nowrap">
+                            <td className={`px-4 py-2.5 text-slate-400 whitespace-nowrap ${STICKY_TD}`}>
                               {c.name}
-                              <ChevronRight className="inline w-3.5 h-3.5 ml-1.5 text-slate-300 opacity-0 group-hover:opacity-100 transition" />
+                              <ChevronRight className="inline max-md:hidden w-3.5 h-3.5 ml-1.5 text-slate-300 md:opacity-0 md:group-hover:opacity-100 transition" />
                             </td>
                             <td colSpan={6} className="px-4 py-2.5 text-slate-300">no snapshot recorded</td>
                             <td />
@@ -296,7 +297,7 @@ export default function RunwayView({
 function Row({ c, onOpen }: { c: CompanyRunway; onOpen: () => void }) {
   return (
     <tr onClick={onOpen} className="border-b border-slate-50 hover:bg-slate-50 cursor-pointer group">
-      <td className="px-4 py-2.5 font-medium text-slate-700 whitespace-nowrap">
+      <td className={`px-4 py-2.5 font-medium text-slate-700 whitespace-nowrap ${STICKY_TD}`}>
         {c.name}
         {c.mismatchPct != null && (
           <span
@@ -307,7 +308,7 @@ function Row({ c, onOpen }: { c: CompanyRunway; onOpen: () => void }) {
             check
           </span>
         )}
-        <ChevronRight className="inline w-3.5 h-3.5 ml-1.5 text-slate-300 opacity-0 group-hover:opacity-100 transition" />
+        <ChevronRight className="inline max-md:hidden w-3.5 h-3.5 ml-1.5 text-slate-300 md:opacity-0 md:group-hover:opacity-100 transition" />
       </td>
       {/* An old balance is the thing most likely to mislead, so it's flagged in
           the cell rather than only in the aggregate caption. */}

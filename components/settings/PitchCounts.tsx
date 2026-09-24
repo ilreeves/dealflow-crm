@@ -109,8 +109,10 @@ export default function PitchCounts() {
               const existing = rows.get(key)
               return (
                 <div key={key} className="flex items-center gap-3 text-sm">
-                  <span className="w-36 text-slate-700">{label}</span>
-                  <span className="w-12 text-right tabular-nums font-medium text-slate-900">
+                  {/* Phones: label flexes (one line) and the count/input narrow a little,
+                      so "September 2026" no longer wraps in a squeezed column. */}
+                  <span className="w-36 max-md:w-auto max-md:flex-1 max-md:min-w-0 max-md:truncate text-slate-700">{label}</span>
+                  <span className="w-12 max-md:w-8 text-right tabular-nums font-medium text-slate-900">
                     {existing ? existing.pitches : <span className="text-slate-300">—</span>}
                   </span>
                   <input
@@ -118,7 +120,7 @@ export default function PitchCounts() {
                     onChange={(e) => setDrafts((prev) => ({ ...prev, [key]: e.target.value }))}
                     onKeyDown={(e) => { if (e.key === 'Enter') save(key) }}
                     placeholder={existing ? 'correct…' : 'count…'}
-                    className="w-24 px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                    className="w-24 max-md:w-20 px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
                   />
                   <button
                     onClick={() => save(key)}

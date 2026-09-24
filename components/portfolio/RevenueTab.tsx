@@ -113,7 +113,7 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
   return (
     <div className="space-y-4">
       {/* Stat cards */}
-      <div className="grid grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-4 max-md:grid-cols-2 gap-2.5">
         <Stat
           label="Latest actual"
           value={fmtMoney(last?.actual)}
@@ -169,16 +169,17 @@ export default function RevenueTab({ companyId }: { companyId: string }) {
 
       {/* Projected vs actual by period */}
       <div className="border border-slate-200 rounded-xl bg-white">
-        <div className="flex items-center justify-between px-4 py-2.5">
-          <div className="flex items-center gap-2">
+        {/* Phones: the hint drops under the title and the button keeps one line. */}
+        <div className="flex items-center justify-between max-md:gap-2 px-4 py-2.5">
+          <div className="flex items-center gap-2 max-md:flex-wrap max-md:gap-y-0 max-md:min-w-0">
             <LineChart className="w-4 h-4 text-slate-400" />
             <span className="text-sm font-medium text-slate-600">Revenue by period</span>
-            <span className="text-xs text-slate-400">projected vs actual</span>
+            <span className="text-xs text-slate-400 max-md:basis-full max-md:pl-6">projected vs actual</span>
           </div>
           {!adding && !editingId && (
             <button
               onClick={() => setAdding(true)}
-              className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 hover:border-slate-300 transition"
+              className="flex items-center gap-1 max-md:shrink-0 max-md:whitespace-nowrap text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 hover:border-slate-300 transition"
             >
               <Plus className="w-3.5 h-3.5" /> Add period
             </button>
@@ -267,32 +268,35 @@ function RevenueRow({
   const v = variance(row, "revised")
   const revised = isRevised(row)
   return (
+    // Phones (max-md): the fixed column widths (~520px) are released and the
+    // row wraps — period + plan, then actual and the variances — instead of
+    // pushing the modal body into a sideways scroll. md+ unchanged.
     <div className="px-4 py-2.5 group">
-      <div className="flex items-center gap-3 text-sm">
+      <div className="flex items-center gap-3 max-md:flex-wrap max-md:gap-y-1 text-sm">
         <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-lg bg-slate-100 text-xs font-bold text-slate-600 shrink-0 w-[4.5rem]">
           {periodLabel(row)}
         </span>
         {/* The plan in force, with the original kept beside it when the target
             moved. Struck through rather than hidden: a restatement is a fact about
             the period, and replacing the number outright would erase it. */}
-        <div className="flex items-baseline gap-1.5 w-32 shrink-0">
+        <div className="flex items-baseline gap-1.5 w-32 max-md:w-auto shrink-0">
           <span className="text-xs text-slate-400">{revised ? "rev plan" : "plan"}</span>
           <span className="text-slate-600 tabular-nums">{fmtMoney(planValue(row, "revised"))}</span>
         </div>
-        <div className="flex items-baseline gap-1.5 w-24 shrink-0">
+        <div className="flex items-baseline gap-1.5 w-24 max-md:w-auto max-md:empty:hidden shrink-0">
           {revised && row.projected != null && (
             <span className="text-xs text-slate-400 tabular-nums line-through" title="Original plan">
               {fmtMoney(row.projected)}
             </span>
           )}
         </div>
-        <div className="flex items-baseline gap-1.5 w-32 shrink-0">
+        <div className="flex items-baseline gap-1.5 w-32 max-md:w-auto shrink-0">
           <span className="text-xs text-slate-400">actual</span>
           <span className="font-medium tabular-nums" style={{ color: row.actual != null ? NAVY : undefined }}>
             {row.actual != null ? fmtMoney(row.actual) : <span className="text-slate-300">not reported</span>}
           </span>
         </div>
-        <span className="flex-1 text-xs tabular-nums" style={{ color: varianceBandColor(v?.pct) }}>
+        <span className="flex-1 max-md:flex-none max-md:empty:hidden text-xs tabular-nums" style={{ color: varianceBandColor(v?.pct) }}>
           {v ? `${fmtSignedPct(v.pct)} vs plan` : ""}
         </span>
         {yoy != null && (
@@ -300,13 +304,13 @@ function RevenueRow({
             {fmtSignedPct(yoy)} YoY
           </span>
         )}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
+        <div className="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 transition shrink-0 max-md:ml-auto">
           <button onClick={onEdit} className="p-1 text-slate-400 hover:text-slate-700"><Pencil className="w-3.5 h-3.5" /></button>
           <button onClick={onDelete} className="p-1 text-slate-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
         </div>
       </div>
       {(row.projected_source || row.revised_source || row.actual_source || row.projected_as_of || row.notes) && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 pl-[5.25rem] text-xs text-slate-400">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 pl-[5.25rem] max-md:pl-0 text-xs text-slate-400">
           {row.projected_source && (
             <span>
               plan: {row.projected_source}
@@ -861,7 +865,7 @@ function RevenueEditor({
 
   return (
     <div className="p-4 space-y-3 bg-slate-50">
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-4 max-md:grid-cols-2 gap-3">
         <Field label="Period *">
           <select value={f.period_type} onChange={(e) => set("period_type", e.target.value)} className={inputCls}>
             {REVENUE_PERIODS.map((p) => <option key={p} value={p}>{p === "FY" ? "FY (full year)" : p}</option>)}
@@ -877,7 +881,7 @@ function RevenueEditor({
           <input placeholder="$ blank if not reported" value={f.actual} onChange={(e) => set("actual", e.target.value)} className={inputCls} />
         </Field>
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 max-md:grid-cols-2 gap-3">
         <Field label="Original plan source">
           {/* An unrecognised stored value is kept as an option so a row written
               before this list changed doesn't silently lose its source on save. */}
@@ -901,7 +905,7 @@ function RevenueEditor({
           next to "Original plan" — filling it in is a decision about the period,
           not a correction of the number to its left, and the original must survive
           it. Leave blank while the original still stands. */}
-      <div className="grid grid-cols-3 gap-3 pt-1 border-t border-slate-200">
+      <div className="grid grid-cols-3 max-md:grid-cols-2 gap-3 pt-1 border-t border-slate-200">
         <Field label="Revised plan">
           <input
             placeholder="$ blank if unchanged"

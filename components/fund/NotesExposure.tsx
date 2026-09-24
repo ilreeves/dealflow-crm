@@ -1,5 +1,6 @@
 import { fmtMoney, exactDate } from "@/lib/rounds"
 import InfoTip from "@/components/shared/InfoTip"
+import { STICKY_COL, STICKY_TD } from "@/components/shared/Th"
 
 export type NotePosition = {
   company: string
@@ -73,7 +74,8 @@ export default function NotesExposure({ notes }: { notes: NotePosition[] }) {
           <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="border-b border-slate-100">
-                <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Company</th>
+                {/* Company column pinned while the table scrolls sideways on phones. */}
+                <th className={`text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide ${STICKY_COL} max-md:bg-white`}>Company</th>
                 <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Note</th>
                 <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Rate</th>
                 {showMaturity && <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wide">Matures</th>}
@@ -90,13 +92,16 @@ export default function NotesExposure({ notes }: { notes: NotePosition[] }) {
                 <tbody key={fund}>
                   <tr className="bg-slate-50 border-b border-slate-100">
                     <td colSpan={showMaturity ? 7 : 6} className="px-4 py-1.5 text-xs font-semibold text-slate-500">
-                      {fund}
-                      <span className="font-normal text-slate-400"> · {rows.length} note{rows.length === 1 ? "" : "s"}</span>
+                      {/* Pinned on phones, like the company column below it. */}
+                      <span className="max-md:sticky max-md:left-4 max-md:inline-block">
+                        {fund}
+                        <span className="font-normal text-slate-400"> · {rows.length} note{rows.length === 1 ? "" : "s"}</span>
+                      </span>
                     </td>
                   </tr>
                   {rows.map((n, i) => (
-                    <tr key={`${n.company}-${n.note}-${i}`} className="border-b border-slate-50 hover:bg-slate-50">
-                      <td className="px-4 py-2.5 font-medium text-slate-700 whitespace-nowrap">{n.company}</td>
+                    <tr key={`${n.company}-${n.note}-${i}`} className="border-b border-slate-50 hover:bg-slate-50 group">
+                      <td className={`px-4 py-2.5 font-medium text-slate-700 whitespace-nowrap ${STICKY_TD}`}>{n.company}</td>
                       <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{n.note}</td>
                       <td className="px-4 py-2.5 text-right text-slate-500 tabular-nums">{n.rate != null ? `${n.rate}%` : "—"}</td>
                       {showMaturity && <td className="px-4 py-2.5 text-right text-slate-500 whitespace-nowrap">{n.maturity ? exactDate(n.maturity) : "—"}</td>}
@@ -113,7 +118,7 @@ export default function NotesExposure({ notes }: { notes: NotePosition[] }) {
                     </tr>
                   ))}
                   <tr className="border-b border-slate-100">
-                    <td colSpan={showMaturity ? 4 : 3} className="px-4 py-2 text-xs text-slate-400">{fund} subtotal</td>
+                    <td colSpan={showMaturity ? 4 : 3} className="px-4 py-2 text-xs text-slate-400"><span className="max-md:sticky max-md:left-4 max-md:inline-block">{fund} subtotal</span></td>
                     <td className="px-4 py-2 text-right text-xs font-semibold text-slate-600 tabular-nums">{fmtMoney(fp)}</td>
                     <td className="px-4 py-2 text-right text-xs font-semibold tabular-nums" style={{ color: "#3b6d11" }}>{fmtMoney(fa)}</td>
                     <td className="px-4 py-2 text-right text-xs font-semibold tabular-nums" style={{ color: NAVY }}>{fmtMoney(fv)}</td>

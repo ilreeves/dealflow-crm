@@ -263,10 +263,11 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+    // Full-screen sheet on phones (max-md); md+ unchanged.
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 max-md:p-0">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col max-md:max-w-none max-md:h-dvh max-md:max-h-none max-md:rounded-none">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+        <div className="flex items-center justify-between px-6 max-md:px-4 py-4 border-b border-slate-100 shrink-0">
           <h2 className="text-base font-semibold text-slate-900">
             {deal ? 'Edit Deal' : 'New Deal'}
           </h2>
@@ -276,7 +277,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
         </div>
 
         {/* Form */}
-        <form id="deal-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+        <form id="deal-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 max-md:px-4 py-4 space-y-4">
           {/* Stage */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Stage</label>
@@ -473,7 +474,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
         </form>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
+        <div className="px-6 max-md:px-4 py-4 border-t border-slate-100 flex justify-end gap-2 shrink-0">
           <button
             type="button"
             onClick={onClose}

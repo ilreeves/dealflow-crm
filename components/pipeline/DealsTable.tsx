@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Deal, STAGE_COLORS } from '@/lib/types'
 import { formatDate } from '@/lib/utils'
 import DealDetailModal from '@/components/deals/DealDetailModal'
+import { STICKY_COL, STICKY_TD } from '@/components/shared/Th'
 
 interface Props {
   deals: Deal[]
@@ -16,11 +17,14 @@ export default function DealsTable({ deals, onUpdated, onDeleted }: Props) {
 
   return (
     <>
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <table className="w-full text-sm">
+      {/* Phones: seven columns can't fit, so the table scrolls sideways with the
+          company column pinned (and cells kept on one line so rows stay even).
+          md+ is unchanged. */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden max-md:overflow-x-auto">
+        <table className="w-full text-sm max-md:whitespace-nowrap">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50">
-              <th className="text-left px-4 py-3 font-medium text-slate-600">Company</th>
+              <th className={`text-left px-4 py-3 font-medium text-slate-600 ${STICKY_COL} max-md:bg-slate-50`}>Company</th>
               <th className="text-left px-4 py-3 font-medium text-slate-600">Stage</th>
               <th className="text-left px-4 py-3 font-medium text-slate-600">Sector</th>
               <th className="text-left px-4 py-3 font-medium text-slate-600">Check Size</th>
@@ -41,9 +45,9 @@ export default function DealsTable({ deals, onUpdated, onDeleted }: Props) {
                 <tr
                   key={deal.id}
                   onClick={() => setSelected(deal)}
-                  className="border-b border-slate-100 last:border-0 hover:bg-slate-50 cursor-pointer transition-colors"
+                  className="border-b border-slate-100 last:border-0 hover:bg-slate-50 cursor-pointer transition-colors group"
                 >
-                  <td className="px-4 py-3 font-medium text-slate-900">{deal.name}</td>
+                  <td className={`px-4 py-3 font-medium text-slate-900 ${STICKY_TD}`}><span className="max-md:block max-md:max-w-[10rem] max-md:truncate">{deal.name}</span></td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text}`}>
                       {deal.stage}

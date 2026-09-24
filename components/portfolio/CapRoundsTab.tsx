@@ -89,7 +89,7 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
     <div className="space-y-4">
       {loadError && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">Couldn&apos;t load rounds, positions or marks — the figures below are incomplete ({loadError}).</p>}
       {/* Position stat cards */}
-      <div className="grid grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-4 max-md:grid-cols-2 gap-2.5">
         <Stat
           label="Invested"
           value={fmtMoney(totalInvested)}
@@ -121,14 +121,15 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
 
       {/* Valuation marks */}
       <div className="border border-slate-200 rounded-xl bg-white">
-        <div className="flex items-center justify-between px-4 py-2.5">
-          <div className="flex items-center gap-2">
+        {/* Phones: the hint drops under the title and the button keeps one line. */}
+        <div className="flex items-center justify-between max-md:gap-2 px-4 py-2.5">
+          <div className="flex items-center gap-2 max-md:flex-wrap max-md:gap-y-0 max-md:min-w-0">
             <TrendingUp className="w-4 h-4 text-slate-400" />
             <span className="text-sm font-medium text-slate-600">Valuation marks</span>
-            <span className="text-xs text-slate-400">interim fair value between rounds</span>
+            <span className="text-xs text-slate-400 max-md:basis-full max-md:pl-6">interim fair value between rounds</span>
           </div>
           {!addingMark && !editingMarkId && (
-            <button onClick={() => setAddingMark(true)} className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 hover:border-slate-300 transition">
+            <button onClick={() => setAddingMark(true)} className="flex items-center gap-1 max-md:shrink-0 max-md:whitespace-nowrap text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 hover:border-slate-300 transition">
               <Plus className="w-3.5 h-3.5" /> Add mark
             </button>
           )}
@@ -150,7 +151,7 @@ export default function CapRoundsTab({ companyId }: { companyId: string }) {
                   <span className="font-medium text-slate-800 shrink-0">{fmtMoney(m.valuation)}</span>
                   <span className="text-xs px-2 py-0.5 rounded-md shrink-0" style={{ backgroundColor: "#e6eef1", color: "#023a51" }}>{m.basis || "mark"}</span>
                   <span className="flex-1 min-w-0 truncate text-xs text-slate-500">{m.notes}</span>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
+                  <div className="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 transition shrink-0">
                     <button onClick={() => { setEditingMarkId(m.id); setAddingMark(false) }} className="p-1 text-slate-400 hover:text-slate-700"><Pencil className="w-3.5 h-3.5" /></button>
                     <button onClick={() => handleDeleteMark(m.id)} className="p-1 text-slate-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
@@ -223,7 +224,7 @@ function MarkEditor({
 
   return (
     <div className="p-4 space-y-3 bg-slate-50">
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 max-md:grid-cols-2 gap-3">
         <Field label="As-of date"><input type="date" value={f.as_of_date} onChange={(e) => set("as_of_date", e.target.value)} className={inputCls} /></Field>
         <Field label="Valuation *"><input placeholder="$ implied post-money" value={f.valuation} onChange={(e) => set("valuation", e.target.value)} className={inputCls} /></Field>
         <Field label="Basis">

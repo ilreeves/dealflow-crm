@@ -65,7 +65,11 @@ export default async function ActivityPage() {
   const catalystActivities = rowsOrThrow(catalystRes, 'catalyst activity') as CatalystActivity[]
 
   return (
-    <div className="flex flex-col h-full">
+    // Phones (max-md): not h-full, so the page grows to its content and <main>
+    // is the one scroller — both feeds stack at natural height instead of each
+    // being a small nested scroll box. md+ keeps the fixed-height column with
+    // each feed scrolling independently.
+    <div className="flex flex-col h-full max-md:h-auto">
       <PageHeader title="Activity" subtitle="Recent changes across deals and catalysts" />
 
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-6 px-4 md:px-6 py-6">

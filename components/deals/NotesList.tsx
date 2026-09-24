@@ -148,7 +148,7 @@ export default function NotesList({ dealId }: Props) {
                     <span className="text-xs text-slate-400 ml-1">(edited)</span>
                   )}
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                <div className="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 transition">
                   {editingId === note.id ? (
                     <>
                       <button

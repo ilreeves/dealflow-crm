@@ -36,7 +36,7 @@ export default function PageHeader({
             rather than pushing them off the edge. */}
         <div className={`min-w-0 shrink-0 ${actions ? 'sm:max-w-[50%]' : ''}`}>
           <h1 className="text-lg font-semibold text-slate-900 truncate">{title}</h1>
-          {subtitle && <p className="text-sm text-slate-500 truncate">{subtitle}</p>}
+          {subtitle && <p className="text-sm text-slate-500 md:truncate">{subtitle}</p>}
         </div>
         {actions && <div className="min-w-0 flex flex-wrap items-center sm:justify-end gap-2">{actions}</div>}
       </div>

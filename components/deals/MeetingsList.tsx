@@ -197,7 +197,7 @@ function MeetingNotes({ meetingId }: { meetingId: string }) {
               </div>
               <button
                 onClick={() => handleDelete(note.id)}
-                className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-600 rounded transition shrink-0"
+                className="md:opacity-0 md:group-hover:opacity-100 p-1 text-slate-400 hover:text-red-600 rounded transition shrink-0"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -300,7 +300,7 @@ function MeetingFiles({ meetingId }: { meetingId: string }) {
             <div key={file.id} className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-slate-100 bg-white hover:bg-slate-50 group transition">
               <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <span className="flex-1 text-sm text-slate-700 truncate">{file.name}</span>
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+              <div className="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 transition">
                 <button onClick={() => handleDownload(file)} className="p-1 text-slate-400 hover:text-slate-700 rounded transition">
                   <Download className="w-3.5 h-3.5" />
                 </button>
