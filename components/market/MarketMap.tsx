@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Search, Plus, Map as MapIcon, X, ExternalLink, Pencil } from 'lucide-react'
+import { Search, Plus, Map as MapIcon, X, ExternalLink, Pencil, Check, Loader2 } from 'lucide-react'
 import { Program } from '@/lib/types'
 import {
   MAP_COLUMNS, OWNER_LABELS, ProgramOwner, MapProgram, buildMap, toMapProgram, knownIndications,
   isDrugModality, phaseColumn,
 } from '@/lib/programs'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 import PageHeader from '@/components/shared/PageHeader'
 import InfoTip from '@/components/shared/InfoTip'
 import PhaseBadge from '@/components/market/PhaseBadge'
@@ -316,6 +317,16 @@ export default function MarketMap({ initialPrograms, portfolio, deals }: Props) 
         <ProgramDetail
           p={selected}
           onClose={() => setSelected(null)}
+          onMarkReviewed={async () => {
+            const { data, error } = await createClient().from('programs')
+              .update({ needs_review: false }).eq('id', selected.id).select().single()
+            if (error || !data) return error?.message ?? 'no row returned'
+            setPrograms((prev) => prev.map((r) => (r.id === data.id ? (data as Program) : r)))
+            // Close on success: reviewing is click chip → mark → next chip, and
+            // with the Needs-review filter on, the chip drops off the map.
+            setSelected(null)
+            return null
+          }}
           onEdit={() => {
             const raw = programs.find((x) => x.id === selected.id)
             setSelected(null)
@@ -376,7 +387,21 @@ function AreaRows({ area, count, children }: { area: string; count: number; chil
   )
 }
 
-function ProgramDetail({ p, onClose, onEdit }: { p: MapProgram; onClose: () => void; onEdit: () => void }) {
+function ProgramDetail({ p, onClose, onEdit, onMarkReviewed }: {
+  p: MapProgram
+  onClose: () => void
+  onEdit: () => void
+  /** Resolves to an error message, or null on success. */
+  onMarkReviewed: () => Promise<string | null>
+}) {
+  const [marking, setMarking] = useState(false)
+  const [markError, setMarkError] = useState('')
+  async function markReviewed() {
+    setMarking(true)
+    setMarkError('')
+    const err = await onMarkReviewed()
+    if (err) { setMarkError(`Couldn't mark reviewed: ${err}`); setMarking(false) }
+  }
   const rows: [string, React.ReactNode][] = [
     ['Indication', `${p.indication} · ${p.therapeutic_area}`],
     ['Specialty', p.specialty],
@@ -400,7 +425,20 @@ function ProgramDetail({ p, onClose, onEdit }: { p: MapProgram; onClose: () => v
         </div>
         <div className="px-5 py-4 space-y-2.5 max-md:flex-1 max-md:overflow-y-auto">
           {p.needs_review && (
-            <p className="text-xs rounded-lg px-3 py-2 bg-amber-50 text-amber-800 border border-amber-200">Drafted from research — not yet reviewed.</p>
+            <div className="flex items-center justify-between gap-3 text-xs rounded-lg pl-3 pr-1.5 py-1.5 bg-amber-50 text-amber-800 border border-amber-200">
+              <span>Drafted from research — not yet reviewed.</span>
+              <button
+                onClick={markReviewed}
+                disabled={marking}
+                className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-md bg-white border border-amber-300 text-amber-900 font-medium hover:bg-amber-100 transition disabled:opacity-50"
+              >
+                {marking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                Mark reviewed
+              </button>
+            </div>
+          )}
+          {markError && (
+            <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{markError}</p>
           )}
           {rows.filter(([, v]) => v).map(([label, v]) => (
             <div key={label} className="flex gap-3 text-sm">
