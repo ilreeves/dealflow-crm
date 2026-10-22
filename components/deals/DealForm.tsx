@@ -12,7 +12,7 @@ import { todayISO } from '@/lib/runway'
 import { logError } from '@/lib/log'
 import { safeStorageName } from '@/lib/storage'
 import { sectorsPayload } from '@/lib/sectors'
-import SecondarySectorsField from '@/components/shared/SecondarySectorsField'
+import SecondarySectorsField, { useHasPrograms } from '@/components/shared/SecondarySectorsField'
 
 interface Props {
   deal?: Deal
@@ -117,6 +117,9 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
     })
   }, [supabase])
 
+  // With programs, the additional sectors are derived (DB trigger) — never sent from here.
+  const hasPrograms = useHasPrograms('deal_id', deal?.id) === true
+
   function setField(key: string, value: unknown) {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
@@ -149,7 +152,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
       website: form.website || null,
       sharepoint_link: form.sharepoint_link || null,
       contact_email: form.contact_email || null,
-      ...sectorsPayload(form.sector, form.secondary_sectors),
+      ...(hasPrograms ? { sector: form.sector || null } : sectorsPayload(form.sector, form.secondary_sectors)),
       city: form.city || null,
       state: form.state || null,
       country: form.country || null,
@@ -396,6 +399,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
                     value={form.secondary_sectors}
                     options={fieldOptions}
                     onChange={(next) => setForm((prev) => ({ ...prev, secondary_sectors: next }))}
+                    derived={hasPrograms}
                   />
                 )}
               </div>

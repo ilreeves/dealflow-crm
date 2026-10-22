@@ -261,7 +261,7 @@ function OverviewTab({ company }: { company: PortfolioCompany }) {
           website: company.website,
         }, deckUrl, label)}
       />
-      <ProgramsSection entityType="portfolio" entityId={company.id} entityName={company.name} />
+      <ProgramsSection entityType="portfolio" entityId={company.id} entityName={company.name} primarySector={company.sector} />
       <ClinicalContextSection entityType="portfolio" entityId={company.id} name={company.name} drugNames={company.drug_names} ctSponsorName={company.ct_sponsor_name} />
       <KnownCompetitors entityType="portfolio" entityId={company.id} />
       {company.description && (

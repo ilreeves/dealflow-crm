@@ -5,7 +5,6 @@ import BreakdownTable, { BreakdownRow } from '@/components/analytics/BreakdownTa
 import CollapsibleSection from '@/components/analytics/CollapsibleSection'
 import PageHeader from '@/components/shared/PageHeader'
 import InfoTip from '@/components/shared/InfoTip'
-import { allSectors } from '@/lib/sectors'
 // One variance convention app-wide. A local helper here painted +2.6% green
 // while the Revenue page painted the same figure navy; lib/revenue owns the rule.
 import { varianceBandColor, VARIANCE_BAND_PCT, SEVERE_MISS_PCT } from '@/lib/revenue'
@@ -18,11 +17,11 @@ export const dynamic = 'force-dynamic'
 
 export default async function AnalyticsPage() {
   const supabase = await createClient()
-  const [dealsRes, activityRes, catalystRes, portfolioRes, legacyRes, listRes, { data: revenueData }, { data: pitchCountData }] = await Promise.all([
-    supabase.from('deals').select('id,name,stage,category,source,sector,secondary_sectors,clinical_stage,series,stage_entered_at,created_at'),
+  const [dealsRes, activityRes, catalystRes, portfolioRes, legacyRes, listRes, { data: revenueData }, { data: pitchCountData }, programsRes] = await Promise.all([
+    supabase.from('deals').select('id,name,stage,category,source,sector,clinical_stage,series,stage_entered_at,created_at'),
     supabase.from('deal_activity').select('deal_id,details,created_at').eq('action', 'Stage changed').order('created_at', { ascending: true }),
     supabase.from('catalysts').select('company_name,catalyst_date,original_date,status,resolved_date'),
-    supabase.from('portfolio_companies').select('id,name,sector,secondary_sectors,category,series,clinical_stage,status'),
+    supabase.from('portfolio_companies').select('id,name,sector,category,series,clinical_stage,status'),
     supabase.from('legacy_companies').select('company_name'),
     supabase.from('list_options').select('list_key,value,sort_order').order('sort_order'),
     // Returns null data if the revenue migration hasn't been run — the section
@@ -31,6 +30,7 @@ export default async function AnalyticsPage() {
     // Soft, same reasoning: if the pitch-funnel migration hasn't run, this
     // errors and the funnel skips rendering instead of taking the page down.
     supabase.from('monthly_pitch_counts').select('month,pitches'),
+    supabase.from('programs').select('company_id,intervention,indication,specialty').eq('status', 'Active').not('company_id', 'is', null),
   ])
 
   const deals = rowsOrThrow(dealsRes, 'deals') as Deal[]
@@ -59,7 +59,7 @@ export default async function AnalyticsPage() {
 
   // Sector breakdowns: deals and portfolio as separate expandable tables
   const legacyNames = new Set((rowsOrThrow(legacyRes, 'legacy companies') as { company_name: string }[]).map((l) => l.company_name))
-  const portfolioCompaniesAll = rowsOrThrow(portfolioRes, 'portfolio companies') as { id: string; name: string; sector: string | null; secondary_sectors: string[] | null; category: string | null; series: string | null; clinical_stage: string | null; status: string | null }[]
+  const portfolioCompaniesAll = rowsOrThrow(portfolioRes, 'portfolio companies') as { id: string; name: string; sector: string | null; category: string | null; series: string | null; clinical_stage: string | null; status: string | null }[]
   // Legacy comes from two places: the legacy_companies list and a Legacy/Exited
   // status on the company itself. Exclude both everywhere on this page.
   const excludedNames = new Set(legacyNames)
@@ -68,17 +68,15 @@ export default async function AnalyticsPage() {
   }
   const portfolioCompanies = portfolioCompaniesAll.filter((pc) => !excludedNames.has(pc.name))
 
-  // A company with additional sectors counts under EACH of them (so the rows
-  // can sum to more than the company total); outside its primary it's tagged
-  // "also" so the double-count is visible when a row is expanded.
-  function sectorRows(items: { name: string; sector: string | null; secondary_sectors?: string[] | null; sub: string }[]): BreakdownRow[] {
+  // Companies count ONCE, under their primary sector — the deliberate
+  // "what kind of company is this" call. Where the science actually sits is
+  // the per-program view below (programsBySpecialty).
+  function sectorRows(items: { name: string; sector: string | null; sub: string }[]): BreakdownRow[] {
     const map: Record<string, { name: string; stage: string }[]> = {}
     for (const it of items) {
-      const sectors = allSectors(it)
-      for (const [i, key] of (sectors.length ? sectors : ['Unknown']).entries()) {
-        if (!map[key]) map[key] = []
-        map[key].push({ name: it.name, stage: i === 0 ? it.sub : [it.sub, 'also'].filter(Boolean).join(' · ') })
-      }
+      const key = it.sector?.trim() || 'Unknown'
+      if (!map[key]) map[key] = []
+      map[key].push({ name: it.name, stage: it.sub })
     }
     return Object.entries(map)
       .filter(([k]) => k !== 'Unknown')
@@ -90,10 +88,29 @@ export default async function AnalyticsPage() {
       }))
   }
 
-  const dealSectorRows = sectorRows(deals.map((d) => ({ name: d.name, sector: d.sector, secondary_sectors: d.secondary_sectors, sub: d.stage })))
-  const portfolioSectorRows = sectorRows(portfolioCompanies.map((pc) => ({ name: pc.name, sector: pc.sector, secondary_sectors: pc.secondary_sectors, sub: pc.category ?? '' })))
+  const dealSectorRows = sectorRows(deals.map((d) => ({ name: d.name, sector: d.sector, sub: d.stage })))
+  const portfolioSectorRows = sectorRows(portfolioCompanies.map((pc) => ({ name: pc.name, sector: pc.sector, sub: pc.category ?? '' })))
   const maxDealSector = Math.max(...dealSectorRows.map((r) => r.count), 1)
   const maxPortfolioSector = Math.max(...portfolioSectorRows.map((r) => r.count), 1)
+
+  // Active programs of current (non-Legacy) portfolio companies, by ABMS
+  // specialty. Counts PROGRAMS, so a multi-asset company appears once per
+  // program — Arrivo's RABI-767 lands under Gastroenterology even though the
+  // company's primary sector is Psychiatry & Neurology.
+  const currentCompanyName = new Map(portfolioCompanies.map((pc) => [pc.id, pc.name]))
+  const programsBySpecialty: BreakdownRow[] = (() => {
+    const map: Record<string, { name: string; stage: string }[]> = {}
+    for (const p of rowsOrThrow(programsRes, 'programs') as { company_id: string; intervention: string; indication: string; specialty: string | null }[]) {
+      const company = currentCompanyName.get(p.company_id)
+      if (!company || !p.specialty) continue
+      if (!map[p.specialty]) map[p.specialty] = []
+      map[p.specialty].push({ name: company, stage: `${p.intervention} · ${p.indication}` })
+    }
+    return Object.entries(map)
+      .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+      .map(([label, companies]) => ({ label, count: companies.length, companies: companies.sort((a, b) => a.name.localeCompare(b.name)) }))
+  })()
+  const maxProgramSpecialty = Math.max(...programsBySpecialty.map((r) => r.count), 1)
 
   // Series + clinical stage breakdowns (active deals), with company lists
   function buildBreakdown(field: 'series' | 'clinical_stage', order: string[]): BreakdownRow[] {
@@ -682,6 +699,11 @@ export default async function AnalyticsPage() {
         </div>
         {/* Portfolio by sector */}
         <BreakdownTable title="Portfolio Holdings by Sector" rows={portfolioSectorRows} max={maxPortfolioSector} color="#023a51" />
+
+        {/* Portfolio programs by specialty */}
+        {programsBySpecialty.length > 0 && (
+          <BreakdownTable title="Portfolio Programs by Specialty" rows={programsBySpecialty} max={maxProgramSpecialty} color="#5ba200" />
+        )}
 
         {/* Portfolio by clinical stage */}
         <BreakdownTable title="Portfolio by Clinical Stage" rows={portfolioClinicalRows} max={maxPortfolioClinical} color="#e98925" />

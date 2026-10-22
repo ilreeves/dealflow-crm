@@ -412,7 +412,7 @@ function OverviewTab({ deal }: { deal: Deal }) {
         }, deckUrl, label)}
       />
 
-      <ProgramsSection entityType="deal" entityId={deal.id} entityName={deal.name} />
+      <ProgramsSection entityType="deal" entityId={deal.id} entityName={deal.name} primarySector={deal.sector} />
 
       <ClinicalContextSection entityType="deal" entityId={deal.id} name={deal.name} drugNames={deal.drug_names} ctSponsorName={deal.ct_sponsor_name} />
 

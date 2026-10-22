@@ -16,8 +16,8 @@ import ProgramEditModal from '@/components/market/ProgramEditModal'
 
 interface Props {
   initialPrograms: Program[]
-  portfolio: { id: string; name: string; status: string | null }[]
-  deals: { id: string; name: string; stage: string }[]
+  portfolio: { id: string; name: string; status: string | null; sector: string | null }[]
+  deals: { id: string; name: string; stage: string; sector: string | null }[]
 }
 
 // Chip look per owner. The owner toggles in the header reuse these swatches,
@@ -50,6 +50,7 @@ export default function MarketMap({ initialPrograms, portfolio, deals }: Props) 
   const [showDiscontinued, setShowDiscontinued] = useState(false)
   const [modality, setModality] = useState<ModalityFilter>('all')
   const [area, setArea] = useState('')
+  const [specialty, setSpecialty] = useState('')
   const [reviewOnly, setReviewOnly] = useState(false)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<MapProgram | null>(null)
@@ -73,14 +74,16 @@ export default function MarketMap({ initialPrograms, portfolio, deals }: Props) 
   }, [all, showDiscontinued])
   const reviewCount = useMemo(() => all.filter((p) => p.needs_review).length, [all])
   const areas = useMemo(() => Array.from(new Set(all.map((p) => p.therapeutic_area))).sort(), [all])
+  const specialties = useMemo(() => Array.from(new Set(all.map((p) => p.specialty).filter((s): s is string => !!s))).sort(), [all])
 
   const filtered = useMemo(() => all.filter((p) =>
     owners.has(p.owner) &&
     (showDiscontinued || p.status === 'Active') &&
     (modality === 'all' || (modality === 'drug') === isDrugModality(p.modality)) &&
     (!area || p.therapeutic_area === area) &&
+    (!specialty || p.specialty === specialty) &&
     (!reviewOnly || p.needs_review),
-  ), [all, owners, showDiscontinued, modality, area, reviewOnly])
+  ), [all, owners, showDiscontinued, modality, area, specialty, reviewOnly])
 
   // Search keeps whole indication rows (so you still see the field around a
   // match) and rings the matching chips.
@@ -116,9 +119,11 @@ export default function MarketMap({ initialPrograms, portfolio, deals }: Props) 
     })
   }
 
-  const portfolioOptions = useMemo(() => portfolio.map((p) => ({ id: p.id, name: p.name })), [portfolio])
-  const dealOptions = useMemo(() => deals.filter((d) => d.stage !== 'Invested').map((d) => ({ id: d.id, name: `${d.name}${d.stage === 'Passed' ? ' (passed)' : ''}` })), [deals])
+  const portfolioOptions = useMemo(() => portfolio.map((p) => ({ id: p.id, name: p.name, sector: p.sector })), [portfolio])
+  const dealOptions = useMemo(() => deals.filter((d) => d.stage !== 'Invested').map((d) => ({ id: d.id, name: `${d.name}${d.stage === 'Passed' ? ' (passed)' : ''}`, sector: d.sector })), [deals])
   const indicationSuggestions = useMemo(() => knownIndications(programs), [programs])
+  // Solas programs only — a competitor's specialty follows ours, never another competitor's.
+  const specialtyPeers = useMemo(() => programs.filter((p) => !p.company_name).map((p) => ({ indication: p.indication, modality: p.modality, specialty: p.specialty, fromPortfolio: !!p.company_id })), [programs])
 
   return (
     <div className="flex flex-col h-full">
@@ -182,6 +187,10 @@ export default function MarketMap({ initialPrograms, portfolio, deals }: Props) 
           <select value={area} onChange={(e) => setArea(e.target.value)} className={selectCls} aria-label="Therapeutic area">
             <option value="">All therapeutic areas</option>
             {areas.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <select value={specialty} onChange={(e) => setSpecialty(e.target.value)} className={selectCls} aria-label="Specialty">
+            <option value="">All specialties</option>
+            {specialties.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
           <label className="flex items-center gap-1.5 text-xs text-slate-600 px-1 cursor-pointer">
             <input type="checkbox" checked={showDiscontinued} onChange={(e) => setShowDiscontinued(e.target.checked)} className="rounded border-slate-300" />
@@ -321,6 +330,7 @@ export default function MarketMap({ initialPrograms, portfolio, deals }: Props) 
           portfolioOptions={portfolioOptions}
           dealOptions={dealOptions}
           indicationSuggestions={indicationSuggestions}
+          peers={specialtyPeers}
           onClose={() => setEditing(null)}
           onSaved={(p) => setPrograms((prev) => prev.some((r) => r.id === p.id) ? prev.map((r) => r.id === p.id ? p : r) : [...prev, p])}
           onDeleted={(id) => setPrograms((prev) => prev.filter((r) => r.id !== id))}
@@ -369,6 +379,7 @@ function AreaRows({ area, count, children }: { area: string; count: number; chil
 function ProgramDetail({ p, onClose, onEdit }: { p: MapProgram; onClose: () => void; onEdit: () => void }) {
   const rows: [string, React.ReactNode][] = [
     ['Indication', `${p.indication} · ${p.therapeutic_area}`],
+    ['Specialty', p.specialty],
     ['Phase', <span key="ph" className="inline-flex items-center gap-1.5"><PhaseBadge phase={p.phase} /><span className="text-xs text-slate-400">{MAP_COLUMNS[phaseColumn(p.phase)].label}</span></span>],
     ['Modality', p.modality],
     ['Mechanism', p.mechanism],

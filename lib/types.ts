@@ -544,6 +544,8 @@ export interface Program {
   modality: string
   indication: string
   therapeutic_area: string
+  /** ABMS specialty that treats / buys it — same list as a company's sector. */
+  specialty: string | null
   phase: string
   status: 'Active' | 'Discontinued'
   source: string | null

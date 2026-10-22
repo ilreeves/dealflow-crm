@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { X, Loader2, Trash2 } from 'lucide-react'
 import { Program } from '@/lib/types'
 import { MODALITIES, THERAPEUTIC_AREAS, phasesFor, isDrugModality } from '@/lib/programs'
+import { suggestSpecialty, SpecialtyPeer } from '@/lib/specialties'
+import { ABMS_SPECIALTIES } from '@/lib/listOptions'
 import { createClient } from '@/lib/supabase/client'
 
 export type ProgramOwnerRef =
@@ -11,7 +13,7 @@ export type ProgramOwnerRef =
   | { kind: 'deal'; id: string }
   | { kind: 'external'; name: string }
 
-export interface OwnerOption { id: string; name: string }
+export interface OwnerOption { id: string; name: string; sector: string | null }
 
 interface Props {
   /** Existing program to edit, or null to add one. */
@@ -23,8 +25,12 @@ interface Props {
   /** Owner choices for the map's "Add program" (ignored when fixedOwner is set). */
   portfolioOptions?: OwnerOption[]
   dealOptions?: OwnerOption[]
+  /** Pinned owner's primary sector — seeds the specialty suggestion. */
+  ownerSector?: string | null
   /** Indications already in use — suggested so new rows join existing map rows. */
   indicationSuggestions: string[]
+  /** Existing programs; a competitor's specialty follows Solas programs in the same indication. */
+  peers?: SpecialtyPeer[]
   onClose: () => void
   onSaved: (p: Program) => void
   onDeleted: (id: string) => void
@@ -45,7 +51,7 @@ function encodeOwner(o: ProgramOwnerRef | undefined): string {
 }
 
 export default function ProgramEditModal({
-  program, fixedOwner, ownerName, portfolioOptions = [], dealOptions = [], indicationSuggestions, onClose, onSaved, onDeleted,
+  program, fixedOwner, ownerName, ownerSector = null, portfolioOptions = [], dealOptions = [], indicationSuggestions, peers = [], onClose, onSaved, onDeleted,
 }: Props) {
   const supabase = createClient()
   const initialOwner = fixedOwner ?? (program ? ownerOf(program) : undefined)
@@ -57,6 +63,7 @@ export default function ProgramEditModal({
     modality: program?.modality ?? 'Small molecule',
     indication: program?.indication ?? '',
     therapeutic_area: program?.therapeutic_area ?? '',
+    specialty: program?.specialty ?? '',
     phase: program?.phase ?? 'Preclinical',
     status: program?.status ?? 'Active',
     source: program?.source ?? '',
@@ -67,6 +74,21 @@ export default function ProgramEditModal({
   const [error, setError] = useState('')
 
   const phases = phasesFor(form.modality)
+
+  // Specialty follows a suggestion (owner's sector → Solas peers → area
+  // default) until the user picks one themselves; after that it's left alone.
+  // An existing row's specialty counts as picked.
+  const [specialtyTouched, setSpecialtyTouched] = useState(!!program?.specialty)
+  const currentOwnerSector = (): string | null => {
+    if (ownerValue === 'external') return null
+    if (fixedOwner) return ownerSector
+    const [kind, id] = ownerValue.split(':')
+    return (kind === 'portfolio' ? portfolioOptions : dealOptions).find((o) => o.id === id)?.sector ?? null
+  }
+  const suggested = form.therapeutic_area
+    ? suggestSpecialty(form, currentOwnerSector(), peers)
+    : ''
+  const specialty = specialtyTouched ? form.specialty : suggested
 
   // Switching between a drug and a device modality changes the ladder; keep
   // the phase only if it exists on the new one (Preclinical is on both).
@@ -104,6 +126,7 @@ export default function ProgramEditModal({
       modality: form.modality,
       indication: form.indication.trim(),
       therapeutic_area: form.therapeutic_area,
+      specialty: specialty || null,
       phase: form.phase,
       status: form.status,
       source: form.source.trim() || null,
@@ -215,6 +238,22 @@ export default function ProgramEditModal({
                 {THERAPEUTIC_AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">
+              Specialty <span className="text-slate-400">(who treats it — rolls up to the company&apos;s sectors)</span>
+            </label>
+            <select
+              value={specialty}
+              onChange={(e) => { setSpecialtyTouched(true); setForm((f) => ({ ...f, specialty: e.target.value })) }}
+              disabled={!form.therapeutic_area}
+              className={`${input} disabled:opacity-50`}
+            >
+              {!specialty && <option value="">{form.therapeutic_area ? 'Choose…' : 'Pick a therapeutic area first'}</option>}
+              {specialty && !(ABMS_SPECIALTIES as readonly string[]).includes(specialty) && <option value={specialty}>{specialty}</option>}
+              {ABMS_SPECIALTIES.map((s) => <option key={s} value={s}>{s}{s === suggested && specialtyTouched && s !== specialty ? ' (suggested)' : ''}</option>)}
+            </select>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

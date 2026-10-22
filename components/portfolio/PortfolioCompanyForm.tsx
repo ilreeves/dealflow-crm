@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { fetchListOptions, ABMS_SPECIALTIES, FALLBACK_LISTS, ListKey } from '@/lib/listOptions'
 import { safeStorageName } from '@/lib/storage'
 import { sectorsPayload } from '@/lib/sectors'
-import SecondarySectorsField from '@/components/shared/SecondarySectorsField'
+import SecondarySectorsField, { useHasPrograms } from '@/components/shared/SecondarySectorsField'
 
 interface Props {
   company?: PortfolioCompany
@@ -55,6 +55,9 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
     sharepoint_link: company?.sharepoint_link ?? '',
   })
 
+  // With programs, the additional sectors are derived (DB trigger) — never sent from here.
+  const hasPrograms = useHasPrograms('company_id', company?.id) === true
+
   function set(key: string, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
@@ -74,7 +77,7 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
 
     const payload = {
       name: form.name.trim(),
-      ...sectorsPayload(form.sector, form.secondary_sectors),
+      ...(hasPrograms ? { sector: form.sector || null } : sectorsPayload(form.sector, form.secondary_sectors)),
       category: form.category || null,
       status: form.status || 'Active',
       funds: form.funds.length ? form.funds : null,
@@ -232,6 +235,7 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
                   value={form.secondary_sectors}
                   options={ABMS_SPECIALTIES}
                   onChange={(next) => setForm((prev) => ({ ...prev, secondary_sectors: next }))}
+                  derived={hasPrograms}
                 />
               )}
             </div>

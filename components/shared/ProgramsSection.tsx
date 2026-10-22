@@ -14,11 +14,13 @@ interface Props {
   entityType: 'deal' | 'portfolio'
   entityId: string
   entityName: string
+  /** The company's primary sector — seeds program specialties and drives the mismatch hint. */
+  primarySector: string | null
 }
 
 // A company's development programs (intervention × indication × phase) — the
 // rows the Market Map is built from.
-export default function ProgramsSection({ entityType, entityId, entityName }: Props) {
+export default function ProgramsSection({ entityType, entityId, entityName, primarySector }: Props) {
   const supabase = createClient()
   const column = entityType === 'portfolio' ? 'company_id' : 'deal_id'
   const [rows, setRows] = useState<Program[]>([])
@@ -27,6 +29,13 @@ export default function ProgramsSection({ entityType, entityId, entityName }: Pr
   // A failed load must not read as "No programs yet".
   const [loadError, setLoadError] = useState('')
   const [editing, setEditing] = useState<Program | 'new' | null>(null)
+
+  // The primary sector is a judgment call and is never rewritten from here —
+  // but if no ACTIVE program sits in it any more, say so (Arrivo: primary
+  // Psychiatry & Neurology after SP-624 in MDD was discontinued).
+  const active = rows.filter((r) => r.status === 'Active')
+  const activeSpecialties = Array.from(new Set(active.map((r) => r.specialty).filter((s): s is string => !!s)))
+  const primaryStale = !!primarySector && activeSpecialties.length > 0 && !activeSpecialties.includes(primarySector)
 
   useEffect(() => {
     let active = true
@@ -70,6 +79,11 @@ export default function ProgramsSection({ entityType, entityId, entityName }: Pr
         <p className="text-xs text-slate-400">No programs yet — add one to put {entityName} on the market map.</p>
       ) : (
         <div className="space-y-1.5">
+          {primaryStale && (
+            <p className="text-xs rounded-lg px-3 py-2 bg-amber-50 text-amber-800 border border-amber-200">
+              No active program is in {entityName}&apos;s primary sector ({primarySector}). Active programs are in {activeSpecialties.join(', ')} — consider updating the sector.
+            </p>
+          )}
           {rows.map((p) => (
             <button
               key={p.id}
@@ -79,7 +93,9 @@ export default function ProgramsSection({ entityType, entityId, entityName }: Pr
               <span className="min-w-0">
                 <span className={`text-sm font-medium ${p.status === 'Discontinued' ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{p.intervention}</span>
                 <span className="text-sm text-slate-500"> · {p.indication}</span>
-                {p.mechanism && <span className="block text-xs text-slate-400 mt-0.5 truncate">{p.mechanism}</span>}
+                {(p.specialty || p.mechanism) && (
+                  <span className="block text-xs text-slate-400 mt-0.5 truncate">{[p.specialty, p.mechanism].filter(Boolean).join(' · ')}</span>
+                )}
               </span>
               <span className="flex items-center gap-1.5 shrink-0">
                 {p.needs_review && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Review</span>}
@@ -96,6 +112,7 @@ export default function ProgramsSection({ entityType, entityId, entityName }: Pr
           program={editing === 'new' ? null : editing}
           fixedOwner={entityType === 'portfolio' ? { kind: 'portfolio', id: entityId } : { kind: 'deal', id: entityId }}
           ownerName={entityName}
+          ownerSector={primarySector}
           indicationSuggestions={indications}
           onClose={() => setEditing(null)}
           onSaved={(p) => setRows((prev) => prev.some((r) => r.id === p.id) ? prev.map((r) => r.id === p.id ? p : r) : [...prev, p])}

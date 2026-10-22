@@ -200,6 +200,7 @@ export async function copyDealProgramsToCompany(
     modality: p.modality,
     indication: p.indication,
     therapeutic_area: p.therapeutic_area,
+    specialty: p.specialty,
     phase: p.phase,
     status: p.status,
     source: p.source,

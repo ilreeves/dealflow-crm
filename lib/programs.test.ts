@@ -9,7 +9,7 @@ function prog(over: Partial<Program>): Program {
   return {
     id: Math.random().toString(36).slice(2), company_id: null, deal_id: null, company_name: "Ext Co",
     intervention: "X-1", mechanism: null, modality: "Small molecule", indication: "Heart failure",
-    therapeutic_area: "Cardiovascular", phase: "Phase 2", status: "Active", source: null, notes: null,
+    therapeutic_area: "Cardiovascular", specialty: null, phase: "Phase 2", status: "Active", source: null, notes: null,
     needs_review: false, created_by: null, created_at: "", updated_at: "", ...over,
   }
 }
