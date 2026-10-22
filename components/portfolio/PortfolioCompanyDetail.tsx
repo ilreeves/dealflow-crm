@@ -22,6 +22,8 @@ import FilesSection from '@/components/shared/FilesSection'
 import DecksSection from '@/components/shared/DecksSection'
 import ClinicalContextSection from '@/components/shared/ClinicalContextSection'
 import KnownCompetitors from '@/components/shared/KnownCompetitors'
+import ProgramsSection from '@/components/shared/ProgramsSection'
+import { allSectors, formatSectors } from '@/lib/sectors'
 import ChangeHistory from '@/components/shared/ChangeHistory'
 
 type Tab = 'overview' | 'fundraising' | 'rounds' | 'revenue' | 'runway' | 'catalysts' | 'files' | 'history'
@@ -129,7 +131,7 @@ export default function PortfolioCompanyDetail({ company: initial, onClose, onUp
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
                 <h2 className="text-lg font-semibold text-slate-900 truncate">{company.name}</h2>
-                {company.sector && <p className="text-sm text-slate-500 mt-0.5">{company.sector}</p>}
+                {company.sector && <p className="text-sm text-slate-500 mt-0.5">{formatSectors(company)}</p>}
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <button
@@ -232,7 +234,7 @@ function OverviewTab({ company }: { company: PortfolioCompany }) {
   const fields: OverviewField[] = [
     { icon: Globe, label: 'Website', value: company.website, href: company.website ?? undefined },
     { icon: Mail, label: 'Contact Email', value: company.contact_email, href: company.contact_email ? `mailto:${company.contact_email}` : undefined },
-    { icon: Building2, label: 'Sector', value: company.sector },
+    { icon: Building2, label: allSectors(company).length > 1 ? 'Sectors' : 'Sector', value: formatSectors(company) },
     { icon: Tag, label: 'Series', value: company.series },
     { icon: Tag, label: 'Clinical Stage', value: company.clinical_stage },
     { icon: Tag, label: 'Indication', value: company.indication },
@@ -259,6 +261,7 @@ function OverviewTab({ company }: { company: PortfolioCompany }) {
           website: company.website,
         }, deckUrl, label)}
       />
+      <ProgramsSection entityType="portfolio" entityId={company.id} entityName={company.name} />
       <ClinicalContextSection entityType="portfolio" entityId={company.id} name={company.name} drugNames={company.drug_names} ctSponsorName={company.ct_sponsor_name} />
       <KnownCompetitors entityType="portfolio" entityId={company.id} />
       {company.description && (

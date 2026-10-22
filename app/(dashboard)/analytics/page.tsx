@@ -5,6 +5,7 @@ import BreakdownTable, { BreakdownRow } from '@/components/analytics/BreakdownTa
 import CollapsibleSection from '@/components/analytics/CollapsibleSection'
 import PageHeader from '@/components/shared/PageHeader'
 import InfoTip from '@/components/shared/InfoTip'
+import { allSectors } from '@/lib/sectors'
 // One variance convention app-wide. A local helper here painted +2.6% green
 // while the Revenue page painted the same figure navy; lib/revenue owns the rule.
 import { varianceBandColor, VARIANCE_BAND_PCT, SEVERE_MISS_PCT } from '@/lib/revenue'
@@ -18,10 +19,10 @@ export const dynamic = 'force-dynamic'
 export default async function AnalyticsPage() {
   const supabase = await createClient()
   const [dealsRes, activityRes, catalystRes, portfolioRes, legacyRes, listRes, { data: revenueData }, { data: pitchCountData }] = await Promise.all([
-    supabase.from('deals').select('id,name,stage,category,source,sector,clinical_stage,series,stage_entered_at,created_at'),
+    supabase.from('deals').select('id,name,stage,category,source,sector,secondary_sectors,clinical_stage,series,stage_entered_at,created_at'),
     supabase.from('deal_activity').select('deal_id,details,created_at').eq('action', 'Stage changed').order('created_at', { ascending: true }),
     supabase.from('catalysts').select('company_name,catalyst_date,original_date,status,resolved_date'),
-    supabase.from('portfolio_companies').select('id,name,sector,category,series,clinical_stage,status'),
+    supabase.from('portfolio_companies').select('id,name,sector,secondary_sectors,category,series,clinical_stage,status'),
     supabase.from('legacy_companies').select('company_name'),
     supabase.from('list_options').select('list_key,value,sort_order').order('sort_order'),
     // Returns null data if the revenue migration hasn't been run — the section
@@ -58,7 +59,7 @@ export default async function AnalyticsPage() {
 
   // Sector breakdowns: deals and portfolio as separate expandable tables
   const legacyNames = new Set((rowsOrThrow(legacyRes, 'legacy companies') as { company_name: string }[]).map((l) => l.company_name))
-  const portfolioCompaniesAll = rowsOrThrow(portfolioRes, 'portfolio companies') as { id: string; name: string; sector: string | null; category: string | null; series: string | null; clinical_stage: string | null; status: string | null }[]
+  const portfolioCompaniesAll = rowsOrThrow(portfolioRes, 'portfolio companies') as { id: string; name: string; sector: string | null; secondary_sectors: string[] | null; category: string | null; series: string | null; clinical_stage: string | null; status: string | null }[]
   // Legacy comes from two places: the legacy_companies list and a Legacy/Exited
   // status on the company itself. Exclude both everywhere on this page.
   const excludedNames = new Set(legacyNames)
@@ -67,12 +68,17 @@ export default async function AnalyticsPage() {
   }
   const portfolioCompanies = portfolioCompaniesAll.filter((pc) => !excludedNames.has(pc.name))
 
-  function sectorRows(items: { name: string; sector: string | null; sub: string }[]): BreakdownRow[] {
+  // A company with additional sectors counts under EACH of them (so the rows
+  // can sum to more than the company total); outside its primary it's tagged
+  // "also" so the double-count is visible when a row is expanded.
+  function sectorRows(items: { name: string; sector: string | null; secondary_sectors?: string[] | null; sub: string }[]): BreakdownRow[] {
     const map: Record<string, { name: string; stage: string }[]> = {}
     for (const it of items) {
-      const key = it.sector?.trim() || 'Unknown'
-      if (!map[key]) map[key] = []
-      map[key].push({ name: it.name, stage: it.sub })
+      const sectors = allSectors(it)
+      for (const [i, key] of (sectors.length ? sectors : ['Unknown']).entries()) {
+        if (!map[key]) map[key] = []
+        map[key].push({ name: it.name, stage: i === 0 ? it.sub : [it.sub, 'also'].filter(Boolean).join(' · ') })
+      }
     }
     return Object.entries(map)
       .filter(([k]) => k !== 'Unknown')
@@ -84,8 +90,8 @@ export default async function AnalyticsPage() {
       }))
   }
 
-  const dealSectorRows = sectorRows(deals.map((d) => ({ name: d.name, sector: d.sector, sub: d.stage })))
-  const portfolioSectorRows = sectorRows(portfolioCompanies.map((pc) => ({ name: pc.name, sector: pc.sector, sub: pc.category ?? '' })))
+  const dealSectorRows = sectorRows(deals.map((d) => ({ name: d.name, sector: d.sector, secondary_sectors: d.secondary_sectors, sub: d.stage })))
+  const portfolioSectorRows = sectorRows(portfolioCompanies.map((pc) => ({ name: pc.name, sector: pc.sector, secondary_sectors: pc.secondary_sectors, sub: pc.category ?? '' })))
   const maxDealSector = Math.max(...dealSectorRows.map((r) => r.count), 1)
   const maxPortfolioSector = Math.max(...portfolioSectorRows.map((r) => r.count), 1)
 

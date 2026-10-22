@@ -19,6 +19,7 @@ import MobilePipeline from './MobilePipeline'
 import PassReasonModal from '@/components/deals/PassReasonModal'
 import DealDetailModal from '@/components/deals/DealDetailModal'
 import PageHeader from '@/components/shared/PageHeader'
+import { allSectors } from '@/lib/sectors'
 
 interface Props {
   initialDeals: Deal[]
@@ -66,7 +67,7 @@ export default function PipelineBoard({ initialDeals, deckViews }: Props) {
     const s = search.toLowerCase()
     return deals.filter((d) => {
       const matchesSearch = d.name.toLowerCase().includes(s) ||
-        (d.sector?.toLowerCase() ?? '').includes(s) ||
+        allSectors(d).some((x) => x.toLowerCase().includes(s)) ||
         (d.lead_partner?.toLowerCase() ?? '').includes(s)
       const matchesCategory = category === 'All' || d.category === category
       return matchesSearch && matchesCategory

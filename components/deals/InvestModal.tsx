@@ -5,6 +5,8 @@ import { X, Loader2, Plus, ArrowRightCircle, Building2 } from "lucide-react"
 import { Deal, PortfolioCompany, SECURITY_TYPES } from "@/lib/types"
 import { createClient } from "@/lib/supabase/client"
 import { logActivity } from "@/lib/activity"
+import { logError } from "@/lib/log"
+import { copyDealProgramsToCompany } from "@/lib/programs"
 // Shared parser so "$25M"-style shorthand works here too.
 import { parseNum, numError, fmtMoney, inputCls } from "@/lib/rounds"
 import { todayISO } from "@/lib/runway"
@@ -103,7 +105,7 @@ export default function InvestModal({ deal, actorName, onCancel, onDone }: Props
         }
       } else {
         const { data: co, error: e1 } = await supabase.from("portfolio_companies").insert({
-          name: deal.name, sector: deal.sector, category: deal.category, funds: [f.fund],
+          name: deal.name, sector: deal.sector, secondary_sectors: deal.secondary_sectors ?? [], category: deal.category, funds: [f.fund],
           series: deal.series, clinical_stage: deal.clinical_stage, website: deal.website,
           contact_email: deal.contact_email, description: deal.description,
           current_valuation: deal.current_valuation, current_fundraise: deal.current_fundraise,
@@ -175,6 +177,10 @@ export default function InvestModal({ deal, actorName, onCancel, onDone }: Props
       if (e4 || !updated) throw new Error(e4?.message || "Could not update deal")
       await logActivity(deal.id, deal.name, "Stage changed", `${deal.stage} → Invested`, actorName)
       await logActivity(deal.id, deal.name, "Added to portfolio", `Invested via ${f.fund}${invested != null ? ` — ${fmtMoney(invested)}` : ""}`, actorName)
+      // Carry the deal's programs (market map rows) onto the company. Best-effort:
+      // the investment has succeeded, so a failed copy is logged, not rolled back.
+      const copyErr = await copyDealProgramsToCompany(supabase, deal.id, companyId)
+      if (copyErr) logError("invest", `Couldn't copy programs for ${deal.name}: ${copyErr}`, supabase)
 
       setSaving(false)
       onDone(updated as Deal)

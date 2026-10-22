@@ -5,6 +5,7 @@ import { Deal } from '@/lib/types'
 import { formatDate } from '@/lib/utils'
 import { Building2, User, DollarSign, FlaskConical } from 'lucide-react'
 import DealDetailModal from '@/components/deals/DealDetailModal'
+import { formatSectors } from '@/lib/sectors'
 
 interface Props {
   deal: Deal
@@ -81,6 +82,9 @@ function DealCard({ deal, onUpdated, onDeleted, compact }: Props) {
             <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
               <Building2 className="w-3 h-3 shrink-0" />
               <span className="truncate">{deal.sector}</span>
+              {(deal.secondary_sectors?.length ?? 0) > 0 && (
+                <span className="shrink-0 text-slate-400" title={formatSectors(deal) ?? undefined}>+{deal.secondary_sectors.length}</span>
+              )}
             </div>
           )}
           {deal.lead_partner && (

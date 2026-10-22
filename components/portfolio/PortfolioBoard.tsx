@@ -9,6 +9,7 @@ import PortfolioCompanyDetail from './PortfolioCompanyDetail'
 import PortfolioDeckAlerts from './PortfolioDeckAlerts'
 import PageHeader from '@/components/shared/PageHeader'
 import FundTag from '@/components/shared/FundTag'
+import { allSectors, formatSectors } from '@/lib/sectors'
 
 interface Props {
   initialCompanies: PortfolioCompany[]
@@ -42,7 +43,7 @@ export default function PortfolioBoard({ initialCompanies, fundOrder }: Props) {
   const filtered = useMemo(() => {
     const s = search.toLowerCase()
     return companies.filter((c) =>
-      !s || c.name.toLowerCase().includes(s) || (c.sector ?? '').toLowerCase().includes(s)
+      !s || c.name.toLowerCase().includes(s) || allSectors(c).some((x) => x.toLowerCase().includes(s))
     )
   }, [companies, search])
   const activeFiltered = useMemo(() => filtered.filter((c) => !isLegacy(c)), [filtered])
@@ -293,7 +294,7 @@ function CompanyCard({ company, onClick }: { company: PortfolioCompany; onClick:
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-slate-900 truncate group-hover:text-[#023a51] transition">{company.name}</h3>
-          {company.sector && <p className="text-xs text-slate-500 mt-0.5">{company.sector}</p>}
+          {company.sector && <p className="text-xs text-slate-500 mt-0.5">{formatSectors(company)}</p>}
           {(company.status === 'Legacy' || company.status === 'Exited') && (
             <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-slate-200 text-slate-600">{company.status}</span>
           )}

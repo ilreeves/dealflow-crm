@@ -11,6 +11,8 @@ import { getActor } from '@/lib/useActorName'
 import { todayISO } from '@/lib/runway'
 import { logError } from '@/lib/log'
 import { safeStorageName } from '@/lib/storage'
+import { sectorsPayload } from '@/lib/sectors'
+import SecondarySectorsField from '@/components/shared/SecondarySectorsField'
 
 interface Props {
   deal?: Deal
@@ -71,6 +73,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
     sharepoint_link: deal?.sharepoint_link ?? '',
     contact_email: deal?.contact_email ?? '',
     sector: deal?.sector ?? '',
+    secondary_sectors: deal?.secondary_sectors ?? [] as string[],
     city: deal?.city ?? '',
     state: deal?.state ?? '',
     country: deal?.country ?? '',
@@ -146,7 +149,7 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
       website: form.website || null,
       sharepoint_link: form.sharepoint_link || null,
       contact_email: form.contact_email || null,
-      sector: form.sector || null,
+      ...sectorsPayload(form.sector, form.secondary_sectors),
       city: form.city || null,
       state: form.state || null,
       country: form.country || null,
@@ -385,6 +388,14 @@ export default function DealForm({ deal, onClose, onSaved }: Props) {
                     value={value}
                     onChange={(e) => setField(field.name, e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  />
+                )}
+                {field.name === 'sector' && (
+                  <SecondarySectorsField
+                    primary={form.sector}
+                    value={form.secondary_sectors}
+                    options={fieldOptions}
+                    onChange={(next) => setForm((prev) => ({ ...prev, secondary_sectors: next }))}
                   />
                 )}
               </div>

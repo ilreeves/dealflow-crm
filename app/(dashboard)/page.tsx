@@ -9,7 +9,7 @@ import { rowsOrThrow } from '@/lib/supabase/unwrap'
 // refetches the full row on mount. Keep this list in sync with what the
 // pipeline components actually display.
 const BOARD_COLUMNS =
-  'id,name,stage,sector,category,series,clinical_stage,lead_partner,source,check_size,' +
+  'id,name,stage,sector,secondary_sectors,category,series,clinical_stage,lead_partner,source,check_size,' +
   'current_fundraise,current_valuation,created_at,stage_entered_at,pass_reason,passed_at'
 
 export default async function PipelinePage() {

@@ -193,7 +193,7 @@ export const TABLES: Record<string, TableMeta> = {
   portfolio_companies: {
     one: 'company', many: 'companies', changed: 'edited',
     title: (r) => str(r.name) || 'Company',
-    keys: ['name', 'status', 'funds', 'series', 'sector', 'clinical_stage', 'track_revenue'],
+    keys: ['name', 'status', 'funds', 'series', 'sector', 'secondary_sectors', 'clinical_stage', 'track_revenue'],
   },
   portfolio_fundraise_rounds: {
     one: 'round', many: 'rounds', changed: 'edited',
@@ -257,7 +257,7 @@ function meta(table: string): TableMeta {
 }
 
 const FIELD_LABELS: Record<string, string> = {
-  name: 'Name', status: 'Status', funds: 'Funds', series: 'Series', sector: 'Sector', category: 'Category',
+  name: 'Name', status: 'Status', funds: 'Funds', series: 'Series', sector: 'Sector', secondary_sectors: 'Additional sectors', category: 'Category',
   clinical_stage: 'Clinical stage', track_revenue: 'Track revenue', cap_table_as_of: 'Cap table as of',
   round_name: 'Round', security_type: 'Security', date: 'Date', amount: 'Amount', lead_investor: 'Lead investor',
   round_size: 'Round size', pre_money: 'Pre-money', post_money: 'Post-money', price_per_share: 'Price / share',

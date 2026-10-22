@@ -1,5 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { Deal } from './types'
+import { logError } from './log'
+import { copyDealProgramsToCompany } from './programs'
 
 // ── Valuation resolution ─────────────────────────────────────────────────────
 // ONE definition of "what is this company worth right now" and "what is this
@@ -74,9 +76,10 @@ export async function addDealToPortfolio(supabase: SupabaseClient, dealRef: Pick
   if (!full) return { error: { message: 'deal no longer exists' } }
   const deal = full as Deal
 
-  const { error } = await supabase.from('portfolio_companies').insert({
+  const { data: created, error } = await supabase.from('portfolio_companies').insert({
     name: deal.name,
     sector: deal.sector,
+    secondary_sectors: deal.secondary_sectors ?? [],
     category: deal.category,
     sharepoint_link: deal.sharepoint_link,
     series: deal.series,
@@ -94,6 +97,12 @@ export async function addDealToPortfolio(supabase: SupabaseClient, dealRef: Pick
     indication: deal.indication,
     drug_names: deal.drug_names,
     ct_sponsor_name: deal.ct_sponsor_name,
-  })
+  }).select('id').single()
+  if (!error && created) {
+    // Carry the deal's programs (market map rows) across too. Best-effort —
+    // the company exists now, so a failed copy is logged rather than returned.
+    const copyErr = await copyDealProgramsToCompany(supabase, deal.id, (created as { id: string }).id)
+    if (copyErr) logError('portfolio', `Couldn't copy programs for ${deal.name}: ${copyErr}`, supabase)
+  }
   return { error }
 }

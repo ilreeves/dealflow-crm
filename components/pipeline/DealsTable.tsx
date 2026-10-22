@@ -5,6 +5,7 @@ import { Deal, STAGE_COLORS } from '@/lib/types'
 import { formatDate } from '@/lib/utils'
 import DealDetailModal from '@/components/deals/DealDetailModal'
 import { STICKY_COL, STICKY_TD } from '@/components/shared/Th'
+import { formatSectors } from '@/lib/sectors'
 
 interface Props {
   deals: Deal[]
@@ -53,7 +54,7 @@ export default function DealsTable({ deals, onUpdated, onDeleted }: Props) {
                       {deal.stage}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{deal.sector ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-600">{formatSectors(deal) ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-600">{deal.check_size ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-600">{deal.lead_partner ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-600">{deal.source ?? '—'}</td>

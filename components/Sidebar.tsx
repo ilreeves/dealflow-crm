@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, Settings, LogOut, Building2, Activity, BarChart2, CalendarDays, Search, TrendingUp, LineChart, Wallet, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Settings, LogOut, Building2, Activity, BarChart2, CalendarDays, Search, TrendingUp, LineChart, Wallet, Menu, X, Map as MapIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 
@@ -34,6 +34,7 @@ export default function Sidebar({ user }: SidebarProps) {
     { href: '/revenue', label: 'Revenue', icon: LineChart },
     { href: '/runway', label: 'Runway', icon: Wallet },
     { href: '/catalysts', label: 'Catalyst Calendar', icon: CalendarDays },
+    { href: '/market-map', label: 'Market Map', icon: MapIcon },
     { href: '/activity', label: 'Activity', icon: Activity },
     { href: '/analytics', label: 'Analytics', icon: BarChart2 },
     { href: '/settings', label: 'Settings', icon: Settings },

@@ -20,6 +20,8 @@ import InvestorIntrosTab from '@/components/shared/InvestorIntrosTab'
 import DecksSection from '@/components/shared/DecksSection'
 import ClinicalContextSection from '@/components/shared/ClinicalContextSection'
 import KnownCompetitors from '@/components/shared/KnownCompetitors'
+import ProgramsSection from '@/components/shared/ProgramsSection'
+import { allSectors, formatSectors } from '@/lib/sectors'
 import DealFundraisingTab from './DealFundraisingTab'
 import { useLatestRound } from '@/lib/useLatestRound'
 
@@ -189,7 +191,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
                     </span>
                   )}
                   {deal.sector && (
-                    <span className="text-xs text-slate-500">{deal.sector}</span>
+                    <span className="text-xs text-slate-500">{formatSectors(deal)}</span>
                   )}
                 </div>
               </div>
@@ -199,7 +201,7 @@ export default function DealDetailModal({ deal: initialDeal, onClose, onUpdated,
                     const fields = [
                       `Stage: ${deal.stage}`,
                       deal.category ? `Category: ${deal.category}` : null,
-                      deal.sector ? `Sector: ${deal.sector}` : null,
+                      deal.sector ? `Sector: ${formatSectors(deal, ', ')}` : null,
                       deal.clinical_stage ? `Clinical Stage: ${deal.clinical_stage}` : null,
                       deal.series ? `Series: ${deal.series}` : null,
                       deal.current_fundraise ? `Raising: ${deal.current_fundraise}` : null,
@@ -367,7 +369,7 @@ function OverviewTab({ deal }: { deal: Deal }) {
     { icon: Globe, label: 'Website', value: deal.website, href: deal.website ?? undefined },
     { icon: Link, label: 'SharePoint', value: deal.sharepoint_link, href: deal.sharepoint_link ?? undefined },
     { icon: Mail, label: 'Contact Email', value: deal.contact_email, href: deal.contact_email ? `mailto:${deal.contact_email}` : undefined },
-    { icon: Building2, label: 'Sector', value: deal.sector },
+    { icon: Building2, label: allSectors(deal).length > 1 ? 'Sectors' : 'Sector', value: formatSectors(deal) },
     { icon: MapPin, label: 'Location', value: [deal.city, deal.state, deal.country].filter(Boolean).join(', ') || null },
     { icon: Tag, label: 'Clinical Stage', value: deal.clinical_stage },
     { icon: Tag, label: 'Indication', value: deal.indication },
@@ -409,6 +411,8 @@ function OverviewTab({ deal }: { deal: Deal }) {
           website: deal.website,
         }, deckUrl, label)}
       />
+
+      <ProgramsSection entityType="deal" entityId={deal.id} entityName={deal.name} />
 
       <ClinicalContextSection entityType="deal" entityId={deal.id} name={deal.name} drugNames={deal.drug_names} ctSponsorName={deal.ct_sponsor_name} />
 

@@ -6,6 +6,8 @@ import { PortfolioCompany } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { fetchListOptions, ABMS_SPECIALTIES, FALLBACK_LISTS, ListKey } from '@/lib/listOptions'
 import { safeStorageName } from '@/lib/storage'
+import { sectorsPayload } from '@/lib/sectors'
+import SecondarySectorsField from '@/components/shared/SecondarySectorsField'
 
 interface Props {
   company?: PortfolioCompany
@@ -33,6 +35,7 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
   const [form, setForm] = useState({
     name: company?.name ?? '',
     sector: company?.sector ?? '',
+    secondary_sectors: company?.secondary_sectors ?? [] as string[],
     category: company?.category ?? '',
     status: company?.status ?? 'Active',
     funds: company?.funds ?? [] as string[],
@@ -71,7 +74,7 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
 
     const payload = {
       name: form.name.trim(),
-      sector: form.sector || null,
+      ...sectorsPayload(form.sector, form.secondary_sectors),
       category: form.category || null,
       status: form.status || 'Active',
       funds: form.funds.length ? form.funds : null,
@@ -221,6 +224,14 @@ export default function PortfolioCompanyForm({ company, onClose, onSaved }: Prop
                   value={(form as unknown as Record<string, string>)[field.name]}
                   onChange={(e) => set(field.name, e.target.value)}
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              )}
+              {field.name === 'sector' && (
+                <SecondarySectorsField
+                  primary={form.sector}
+                  value={form.secondary_sectors}
+                  options={ABMS_SPECIALTIES}
+                  onChange={(next) => setForm((prev) => ({ ...prev, secondary_sectors: next }))}
                 />
               )}
             </div>

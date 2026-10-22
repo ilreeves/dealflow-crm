@@ -4,9 +4,10 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search, Loader2, LayoutDashboard, Building2, CalendarDays } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { formatSectors } from '@/lib/sectors'
 
-interface DealHit { id: string; name: string; stage: string; sector: string | null; category: string | null }
-interface PortfolioHit { id: string; name: string; sector: string | null; category: string | null }
+interface DealHit { id: string; name: string; stage: string; sector: string | null; secondary_sectors: string[] | null; category: string | null }
+interface PortfolioHit { id: string; name: string; sector: string | null; secondary_sectors: string[] | null; category: string | null }
 interface CatalystHit { id: string; company_name: string; title: string; period: string | null; status: string | null }
 
 interface Results {
@@ -82,8 +83,8 @@ export default function GlobalSearch() {
     const t = setTimeout(async () => {
       const term = `*${escapeLike(clean)}*`
       const [d, p, c] = await Promise.all([
-        supabase.from('deals').select('id,name,stage,sector,category').or(`name.ilike.${term},sector.ilike.${term}`).limit(6),
-        supabase.from('portfolio_companies').select('id,name,sector,category').or(`name.ilike.${term},sector.ilike.${term}`).limit(6),
+        supabase.from('deals').select('id,name,stage,sector,secondary_sectors,category').or(`name.ilike.${term},sector.ilike.${term}`).limit(6),
+        supabase.from('portfolio_companies').select('id,name,sector,secondary_sectors,category').or(`name.ilike.${term},sector.ilike.${term}`).limit(6),
         supabase.from('catalysts').select('id,company_name,title,period,status').or(`company_name.ilike.${term},title.ilike.${term}`).limit(6),
       ])
       if (cancelled) return
@@ -140,7 +141,7 @@ export default function GlobalSearch() {
                 <Group label="Deals">
                   {deals.map((d) => (
                     <Row key={d.id} icon={<LayoutDashboard className="w-3.5 h-3.5 text-slate-400" />} onClick={() => go(`/?open=${d.id}`)}
-                      title={d.name} meta={[d.stage, d.category, d.sector].filter(Boolean).join(' · ')} />
+                      title={d.name} meta={[d.stage, d.category, formatSectors(d)].filter(Boolean).join(' · ')} />
                   ))}
                 </Group>
               )}
@@ -148,7 +149,7 @@ export default function GlobalSearch() {
                 <Group label="Portfolio Companies">
                   {portfolio.map((p) => (
                     <Row key={p.id} icon={<Building2 className="w-3.5 h-3.5 text-slate-400" />} onClick={() => go(`/portfolio?open=${p.id}`)}
-                      title={p.name} meta={[p.category, p.sector].filter(Boolean).join(' · ')} />
+                      title={p.name} meta={[p.category, formatSectors(p)].filter(Boolean).join(' · ')} />
                   ))}
                 </Group>
               )}

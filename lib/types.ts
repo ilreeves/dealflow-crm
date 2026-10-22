@@ -45,6 +45,8 @@ export interface Deal {
   name: string
   stage: DealStage
   sector: string | null
+  /** Further sectors beyond the primary `sector` (see lib/sectors.ts). */
+  secondary_sectors: string[]
   check_size: string | null
   clinical_stage: string | null
   lead_partner: string | null
@@ -184,6 +186,8 @@ export interface PortfolioCompany {
   id: string
   name: string
   sector: string | null
+  /** Further sectors beyond the primary `sector` (see lib/sectors.ts). */
+  secondary_sectors: string[]
   category: 'Devices' | 'Drugs' | null
   status: string | null
   funds: string[] | null
@@ -527,6 +531,29 @@ export interface InvestorContact {
 }
 
 // A manually-added known competitor for a deal or portfolio company
+// One development program: a company × intervention × indication at a phase.
+// Exactly one of company_id / deal_id / company_name is set (portfolio company,
+// deal, or external competitor). See lib/programs.ts for the phase ladders.
+export interface Program {
+  id: string
+  company_id: string | null
+  deal_id: string | null
+  company_name: string | null
+  intervention: string
+  mechanism: string | null
+  modality: string
+  indication: string
+  therapeutic_area: string
+  phase: string
+  status: 'Active' | 'Discontinued'
+  source: string | null
+  notes: string | null
+  needs_review: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface CompanyCompetitor {
   id: string
   entity_type: 'deal' | 'portfolio'
