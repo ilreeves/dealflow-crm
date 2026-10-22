@@ -70,6 +70,8 @@ export interface MapProgram extends Program {
   companyLabel: string
   /** Deep link to the owning deal / company modal; null for external companies. */
   href: string | null
+  /** Owned by a Legacy or Exited portfolio company — hidden from the map by default. */
+  legacy: boolean
 }
 
 export interface OwnerLookups {
@@ -87,16 +89,16 @@ export function toMapProgram(p: Program, lookups: OwnerLookups): MapProgram | nu
   if (p.company_id) {
     const co = lookups.portfolio.get(p.company_id)
     if (!co) return null
-    return { ...p, owner: 'portfolio', companyLabel: co.name, href: `/portfolio?open=${p.company_id}` }
+    return { ...p, owner: 'portfolio', companyLabel: co.name, href: `/portfolio?open=${p.company_id}`, legacy: co.status === 'Legacy' || co.status === 'Exited' }
   }
   if (p.deal_id) {
     const d = lookups.deals.get(p.deal_id)
     if (!d || d.stage === 'Invested') return null
-    return { ...p, owner: d.stage === 'Passed' ? 'passed' : 'pipeline', companyLabel: d.name, href: `/?open=${p.deal_id}` }
+    return { ...p, owner: d.stage === 'Passed' ? 'passed' : 'pipeline', companyLabel: d.name, href: `/?open=${p.deal_id}`, legacy: false }
   }
   const name = p.company_name?.trim()
   if (!name) return null
-  return { ...p, owner: 'external', companyLabel: name, href: null }
+  return { ...p, owner: 'external', companyLabel: name, href: null, legacy: false }
 }
 
 export interface IndicationRow {

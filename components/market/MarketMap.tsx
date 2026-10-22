@@ -46,9 +46,12 @@ function matches(p: MapProgram, q: string): boolean {
 
 export default function MarketMap({ initialPrograms, portfolio, deals }: Props) {
   const [programs, setPrograms] = useState<Program[]>(initialPrograms)
-  // Passed deals are context, not the market — off until asked for.
-  const [owners, setOwners] = useState<Set<ProgramOwner>>(new Set(['portfolio', 'pipeline', 'external']))
+  // Opens on Solas's own programs. Competitors and passed deals are context —
+  // one click away, but off until asked for. So are Legacy/Exited companies
+  // (Knopp now holds only a royalty) and discontinued programs.
+  const [owners, setOwners] = useState<Set<ProgramOwner>>(new Set(['portfolio', 'pipeline']))
   const [showDiscontinued, setShowDiscontinued] = useState(false)
+  const [showLegacy, setShowLegacy] = useState(false)
   const [modality, setModality] = useState<ModalityFilter>('all')
   const [area, setArea] = useState('')
   const [specialty, setSpecialty] = useState('')
@@ -70,21 +73,27 @@ export default function MarketMap({ initialPrograms, portfolio, deals }: Props) 
 
   const ownerCounts = useMemo(() => {
     const c: Record<ProgramOwner, number> = { portfolio: 0, pipeline: 0, external: 0, passed: 0 }
-    for (const p of all) if (showDiscontinued || p.status === 'Active') c[p.owner]++
+    for (const p of all) if ((showDiscontinued || p.status === 'Active') && (showLegacy || !p.legacy)) c[p.owner]++
     return c
-  }, [all, showDiscontinued])
-  const reviewCount = useMemo(() => all.filter((p) => p.needs_review).length, [all])
+  }, [all, showDiscontinued, showLegacy])
+  // Counts only what the layer toggles let through — with competitors off, the
+  // button shouldn't promise rows that clicking it can't show.
+  const reviewCount = useMemo(() => all.filter((p) =>
+    p.needs_review && owners.has(p.owner) &&
+    (showDiscontinued || p.status === 'Active') && (showLegacy || !p.legacy),
+  ).length, [all, owners, showDiscontinued, showLegacy])
   const areas = useMemo(() => Array.from(new Set(all.map((p) => p.therapeutic_area))).sort(), [all])
   const specialties = useMemo(() => Array.from(new Set(all.map((p) => p.specialty).filter((s): s is string => !!s))).sort(), [all])
 
   const filtered = useMemo(() => all.filter((p) =>
     owners.has(p.owner) &&
     (showDiscontinued || p.status === 'Active') &&
+    (showLegacy || !p.legacy) &&
     (modality === 'all' || (modality === 'drug') === isDrugModality(p.modality)) &&
     (!area || p.therapeutic_area === area) &&
     (!specialty || p.specialty === specialty) &&
     (!reviewOnly || p.needs_review),
-  ), [all, owners, showDiscontinued, modality, area, specialty, reviewOnly])
+  ), [all, owners, showDiscontinued, showLegacy, modality, area, specialty, reviewOnly])
 
   // Search keeps whole indication rows (so you still see the field around a
   // match) and rings the matching chips.
@@ -197,7 +206,11 @@ export default function MarketMap({ initialPrograms, portfolio, deals }: Props) 
             <input type="checkbox" checked={showDiscontinued} onChange={(e) => setShowDiscontinued(e.target.checked)} className="rounded border-slate-300" />
             Discontinued
           </label>
-          {reviewCount > 0 && (
+          <label className="flex items-center gap-1.5 text-xs text-slate-600 px-1 cursor-pointer">
+            <input type="checkbox" checked={showLegacy} onChange={(e) => setShowLegacy(e.target.checked)} className="rounded border-slate-300" />
+            Legacy companies
+          </label>
+          {(reviewCount > 0 || reviewOnly) && (
             <button
               onClick={() => setReviewOnly((v) => !v)}
               aria-pressed={reviewOnly}

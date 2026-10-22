@@ -61,6 +61,12 @@ describe("toMapProgram", () => {
     expect(pf.href).toBe("/portfolio?open=co1")
     expect(pl.href).toBe("/?open=d1")
     expect(ex.href).toBeNull()
+    expect(pf.legacy).toBe(false)
+  })
+
+  it("flags programs of Legacy / Exited portfolio companies", () => {
+    const legacyLookups: OwnerLookups = { ...lookups, portfolio: new Map([["co2", { name: "Knopp", status: "Legacy" }]]) }
+    expect(toMapProgram(prog({ company_id: "co2", company_name: null }), legacyLookups)?.legacy).toBe(true)
   })
 
   it("drops invested deals (the portfolio company carries them) and unknown parents", () => {
