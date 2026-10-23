@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { X, Loader2, Trash2 } from 'lucide-react'
 import { Program } from '@/lib/types'
-import { MODALITIES, THERAPEUTIC_AREAS, phasesFor, isDrugModality } from '@/lib/programs'
+import { MODALITIES, THERAPEUTIC_AREAS, phasesFor, isDrugModality, normalizeWebsite } from '@/lib/programs'
 import { suggestSpecialty, SpecialtyPeer } from '@/lib/specialties'
 import { ABMS_SPECIALTIES } from '@/lib/listOptions'
 import { createClient } from '@/lib/supabase/client'
@@ -57,6 +57,7 @@ export default function ProgramEditModal({
   const initialOwner = fixedOwner ?? (program ? ownerOf(program) : undefined)
   const [ownerValue, setOwnerValue] = useState(encodeOwner(initialOwner))
   const [externalName, setExternalName] = useState(initialOwner?.kind === 'external' ? initialOwner.name : '')
+  const [website, setWebsite] = useState(program?.website ?? '')
   const [form, setForm] = useState({
     intervention: program?.intervention ?? '',
     mechanism: program?.mechanism ?? '',
@@ -113,7 +114,10 @@ export default function ProgramEditModal({
   }
 
   const owner = ownerFields()
-  const canSave = !!owner && !!form.intervention.trim() && !!form.indication.trim() && !!form.therapeutic_area
+  const isExternal = ownerValue === 'external'
+  // Competitors need a website: one that can't be found doesn't go on the map.
+  const canSave = !!owner && !!form.intervention.trim() && !!form.indication.trim() && !!form.therapeutic_area &&
+    (!isExternal || !!website.trim())
 
   async function handleSave() {
     if (!canSave || !owner) return
@@ -131,6 +135,7 @@ export default function ProgramEditModal({
       status: form.status,
       source: form.source.trim() || null,
       notes: form.notes.trim() || null,
+      website: isExternal ? normalizeWebsite(website) : null,
       // A save from the app is a person standing behind the row.
       needs_review: false,
     }
@@ -200,7 +205,10 @@ export default function ProgramEditModal({
                 )}
               </select>
               {ownerValue === 'external' && (
-                <input autoFocus placeholder="Company name *" value={externalName} onChange={(e) => setExternalName(e.target.value)} className={`${input} mt-2`} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                  <input autoFocus placeholder="Company name *" value={externalName} onChange={(e) => setExternalName(e.target.value)} className={input} />
+                  <input type="url" placeholder="Website *" value={website} onChange={(e) => setWebsite(e.target.value)} className={input} />
+                </div>
               )}
             </div>
           )}

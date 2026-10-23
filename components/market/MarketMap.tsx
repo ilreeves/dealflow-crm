@@ -461,11 +461,15 @@ function ProgramDetail({ p, onClose, onEdit, onMarkReviewed }: {
           ))}
         </div>
         <div className="flex items-center gap-2 px-5 py-4 border-t border-slate-100 shrink-0">
-          {p.href && (
+          {p.href ? (
             <Link href={p.href} className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-50 transition">
               <ExternalLink className="w-3.5 h-3.5" /> Open company
             </Link>
-          )}
+          ) : p.website ? (
+            <a href={p.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-50 transition min-w-0">
+              <ExternalLink className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{p.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</span>
+            </a>
+          ) : null}
           <div className="flex-1" />
           <button onClick={onEdit} className="flex items-center gap-1.5 px-4 py-2 text-white text-sm font-medium rounded-lg transition" style={{ backgroundColor: '#023a51' }}>
             <Pencil className="w-3.5 h-3.5" /> Edit

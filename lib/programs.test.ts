@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import type { Program } from "./types"
 import {
-  DRUG_PHASES, DEVICE_PHASES, MAP_COLUMNS, phaseColumn, phasesFor, toMapProgram, buildMap, knownIndications,
+  DRUG_PHASES, DEVICE_PHASES, MAP_COLUMNS, phaseColumn, phasesFor, toMapProgram, buildMap, knownIndications, normalizeWebsite,
   type OwnerLookups, type MapProgram,
 } from "./programs"
 
@@ -9,7 +9,7 @@ function prog(over: Partial<Program>): Program {
   return {
     id: Math.random().toString(36).slice(2), company_id: null, deal_id: null, company_name: "Ext Co",
     intervention: "X-1", mechanism: null, modality: "Small molecule", indication: "Heart failure",
-    therapeutic_area: "Cardiovascular", specialty: null, phase: "Phase 2", status: "Active", source: null, notes: null,
+    therapeutic_area: "Cardiovascular", specialty: null, phase: "Phase 2", status: "Active", source: null, notes: null, website: null,
     needs_review: false, created_by: null, created_at: "", updated_at: "", ...over,
   }
 }
@@ -101,4 +101,10 @@ describe("buildMap", () => {
 it("knownIndications dedupes case-insensitively", () => {
   expect(knownIndications([{ indication: "Heart failure" }, { indication: "heart failure " }, { indication: "AF" }]))
     .toEqual(["AF", "Heart failure"])
+})
+
+it("normalizeWebsite adds https:// only when there's no scheme", () => {
+  expect(normalizeWebsite(" acme.com ")).toBe("https://acme.com")
+  expect(normalizeWebsite("http://acme.com")).toBe("http://acme.com")
+  expect(normalizeWebsite("  ")).toBeNull()
 })

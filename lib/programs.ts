@@ -167,6 +167,13 @@ export function buildMap(programs: MapProgram[]): AreaGroup[] {
     })
 }
 
+/** "acme.com" → "https://acme.com"; blank → null. Keeps whatever scheme was typed. */
+export function normalizeWebsite(raw: string): string | null {
+  const t = raw.trim()
+  if (!t) return null
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(t) ? t : `https://${t}`
+}
+
 /** Distinct indication spellings already in use — offered as suggestions so new rows land on existing map rows. */
 export function knownIndications(programs: Pick<Program, 'indication'>[]): string[] {
   const seen = new Map<string, string>()

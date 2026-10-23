@@ -550,6 +550,8 @@ export interface Program {
   status: 'Active' | 'Discontinued'
   source: string | null
   notes: string | null
+  /** Competitor's company website; null for Solas's own programs (they link to the CRM record). */
+  website: string | null
   needs_review: boolean
   created_by: string | null
   created_at: string
